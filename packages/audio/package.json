@@ -6,6 +6,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@julusian/midi": "^3.6.1",
     "@tussel/core": "workspace:*",
     "@tussel/ir": "workspace:*",
     "node-web-audio-api": "^1.0.8",

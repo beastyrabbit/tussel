@@ -53,5 +53,11 @@
   "dependencies": {
     "@tussel/cli": "workspace:*",
     "@tussel/dsl": "workspace:*"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@julusian/midi",
+      "esbuild"
+    ]
   }
 }

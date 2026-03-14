@@ -101,6 +101,7 @@ declare global {
   const loadcsound: typeof import('./index').loadcsound;
   const m: typeof import('./index').m;
   const mini: typeof import('./index').mini;
+  const mondo: typeof import('./index').mondo;
   const motion: typeof import('./index').motion;
   const mul: typeof import('./index').mul;
   const n: typeof import('./index').n;

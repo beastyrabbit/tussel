@@ -14,6 +14,15 @@ import {
 } from '@tussel/ir';
 import { inferMiniSteps, queryMini } from '@tussel/mini';
 
+export {
+  centsToRatio,
+  createEdoScale,
+  edoFrequency,
+  parseXenValue,
+  ratioToCents,
+  resolveEdoFrequency,
+} from './xen.js';
+
 export interface PlaybackEvent {
   begin: number;
   channel: string;
@@ -110,6 +119,7 @@ const PROPERTY_METHODS = new Set([
   'decay',
   'delay',
   'dict',
+  'edo',
   'end',
   'fm',
   'gain',

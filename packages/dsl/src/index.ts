@@ -204,6 +204,10 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('early', [value]);
   }
 
+  edo(value: unknown): PatternBuilder {
+    return this.method('edo', [value]);
+  }
+
   end(value: unknown): PatternBuilder {
     return this.method('end', [value]);
   }
@@ -815,6 +819,17 @@ export function mini(strings: TemplateStringsArray | string, ...values: unknown[
 
 export const m = mini;
 
+export function mondo(strings: TemplateStringsArray | string, ...values: unknown[]): PatternBuilder {
+  const source =
+    typeof strings === 'string'
+      ? strings
+      : strings.reduce(
+          (acc, chunk, index) => `${acc}${chunk}${index < values.length ? (values[index] ?? '') : ''}`,
+          '',
+        );
+  return patternCall('mondo', [source]);
+}
+
 export const rand = signalCall('rand');
 export const perlin = signalCall('perlin');
 export const cosine = signalCall('cosine');
@@ -866,6 +881,7 @@ const STRING_PATTERN_METHODS = [
   'degradeBy',
   'div',
   'drop',
+  'edo',
   'every',
   'early',
   'expand',
