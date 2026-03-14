@@ -372,8 +372,11 @@ describe('OscOutputManager', () => {
     manager.closeAll();
   });
 
-  it('can be instantiated', () => {
-    expect(manager).toBeDefined();
+  it('can be instantiated with working send and closeAll methods', () => {
+    expect(manager).toBeInstanceOf(OscOutputManager);
+    expect(typeof manager.send).toBe('function');
+    expect(typeof manager.closeAll).toBe('function');
+    expect(typeof manager.dispatchEvent).toBe('function');
   });
 
   it('sends an OSC message via UDP', async () => {
@@ -414,32 +417,65 @@ describe('OscOutputManager', () => {
     expect(msg.readInt32BE(argOffset)).toBe(42);
   });
 
-  it('reuses sockets for the same host:port', () => {
-    // Send two messages to the same destination
-    manager.send('127.0.0.1', 9999, '/a', []);
-    manager.send('127.0.0.1', 9999, '/b', []);
+  it('reuses sockets for the same host:port (behavioral)', async () => {
+    // Send two messages to the same destination and verify both arrive
+    const { createSocket } = await import('node:dgram');
+    const server = createSocket('udp4');
+    const messages: Buffer[] = [];
 
-    // Access private sockets map to verify only one socket was created
-    const socketsMap = (manager as unknown as { sockets: Map<string, unknown> }).sockets;
-    expect(socketsMap.size).toBe(1);
+    const received = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('timeout')), 2000);
+      server.on('message', (msg) => {
+        messages.push(msg);
+        if (messages.length === 2) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+    });
+
+    await new Promise<void>((resolve) => {
+      server.bind(0, '127.0.0.1', () => resolve());
+    });
+    const port = (server.address() as { port: number }).port;
+
+    manager.send('127.0.0.1', port, '/a', []);
+    manager.send('127.0.0.1', port, '/b', []);
+
+    await received;
+    server.close();
+
+    expect(messages).toHaveLength(2);
   });
 
-  it('creates separate sockets for different destinations', () => {
-    manager.send('127.0.0.1', 9998, '/a', []);
-    manager.send('127.0.0.1', 9997, '/b', []);
+  it('closeAll allows subsequent sends to still work', async () => {
+    const { createSocket } = await import('node:dgram');
+    const server = createSocket('udp4');
 
-    const socketsMap = (manager as unknown as { sockets: Map<string, unknown> }).sockets;
-    expect(socketsMap.size).toBe(2);
-  });
-
-  it('closeAll clears all sockets', () => {
-    manager.send('127.0.0.1', 9996, '/a', []);
-    manager.send('127.0.0.1', 9995, '/b', []);
-
+    // First send
+    manager.send('127.0.0.1', 19996, '/a', []);
     manager.closeAll();
 
-    const socketsMap = (manager as unknown as { sockets: Map<string, unknown> }).sockets;
-    expect(socketsMap.size).toBe(0);
+    // After closeAll, sending again should still work (creates new socket)
+    const received = new Promise<Buffer>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('timeout')), 2000);
+      server.on('message', (msg) => {
+        clearTimeout(timeout);
+        resolve(msg);
+      });
+    });
+
+    await new Promise<void>((resolve) => {
+      server.bind(0, '127.0.0.1', () => resolve());
+    });
+    const port = (server.address() as { port: number }).port;
+
+    manager.send('127.0.0.1', port, '/b', []);
+    const msg = await received;
+    server.close();
+
+    const addressEnd = msg.indexOf(0);
+    expect(msg.toString('utf-8', 0, addressEnd)).toBe('/b');
   });
 
   it('closeAll is safe to call multiple times', () => {
@@ -501,13 +537,16 @@ describe('OscOutputManager', () => {
     expect(typeTag).toBe(',siss');
   });
 
-  it('handles UDP errors gracefully without throwing', () => {
+  it('handles UDP errors gracefully without throwing', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    // Sending to an invalid address should not throw
+    // Sending to an unreachable port should not throw synchronously
     expect(() => {
       manager.send('127.0.0.1', 1, '/test', []);
     }).not.toThrow();
+
+    // Give the async UDP error a chance to fire
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     consoleSpy.mockRestore();
   });

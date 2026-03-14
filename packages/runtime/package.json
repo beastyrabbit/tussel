@@ -11,7 +11,6 @@
     "@tussel/dsl": "workspace:*",
     "@tussel/ir": "workspace:*",
     "@tussel/mini": "workspace:*",
-    "@tussel/testkit": "workspace:*",
     "ajv": "^8.18.0",
     "chokidar": "^5.0.0",
     "esbuild": "^0.27.4",

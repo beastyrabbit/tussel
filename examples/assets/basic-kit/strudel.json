@@ -1,11 +1,21 @@
 {
   "_base": ".",
   "bd": "bd.wav",
+  "cb": "cb.wav",
+  "cp": "cp.wav",
+  "cr": "cr.wav",
   "hh": "hh.wav",
+  "oh": "oh.wav",
   "rim": "rim.wav",
   "sd": "sd.wav",
+  "tom": "tom.wav",
   "crate_bd": "bd.wav",
+  "crate_cb": "cb.wav",
+  "crate_cp": "cp.wav",
+  "crate_cr": "cr.wav",
   "crate_hh": "hh.wav",
+  "crate_oh": "oh.wav",
   "crate_rim": "rim.wav",
-  "crate_sd": "sd.wav"
+  "crate_sd": "sd.wav",
+  "crate_tom": "tom.wav"
 }

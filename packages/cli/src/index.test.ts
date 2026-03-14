@@ -1,5 +1,7 @@
+import type { Command } from 'commander';
+import { CommanderError } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
-import { main } from './index.js';
+import { createProgram, main } from './index.js';
 
 function createDeps(): NonNullable<Parameters<typeof main>[1]> {
   return {
@@ -12,6 +14,22 @@ function createDeps(): NonNullable<Parameters<typeof main>[1]> {
     stdout: { write: vi.fn() },
     writeFile: vi.fn(),
   };
+}
+
+/** Build a program that throws CommanderError instead of calling process.exit. */
+function createThrowingProgram(
+  deps: ReturnType<typeof createDeps>,
+  outputCapture?: { writeOut?: ReturnType<typeof vi.fn>; writeErr?: ReturnType<typeof vi.fn> },
+): Command {
+  const program = createProgram(deps);
+  const writeErr = (outputCapture?.writeErr ?? vi.fn()) as (str: string) => void;
+  const writeOut = (outputCapture?.writeOut ?? vi.fn()) as (str: string) => void;
+  const cfg = { writeErr, writeOut };
+  program.exitOverride().configureOutput(cfg);
+  for (const cmd of program.commands) {
+    cmd.exitOverride().configureOutput(cfg);
+  }
+  return program;
 }
 
 describe('@tussel/cli', () => {
@@ -65,5 +83,105 @@ describe('@tussel/cli', () => {
     await main(['node', 'tussel', 'run', 'demo.scene.ts', '--backend', 'offline'], deps);
 
     expect(deps.runScene).toHaveBeenCalledWith('demo.scene.ts', true, 'offline', { entry: undefined });
+  });
+
+  it('rejects unknown commands', async () => {
+    const deps = createDeps();
+    const program = createThrowingProgram(deps);
+
+    await expect(program.parseAsync(['node', 'tussel', 'bogus'], { from: 'node' })).rejects.toThrow(
+      CommanderError,
+    );
+  });
+
+  it('rejects convert without the required --to flag', async () => {
+    const deps = createDeps();
+    const program = createThrowingProgram(deps);
+
+    await expect(
+      program.parseAsync(['node', 'tussel', 'convert', 'demo.scene.ts'], { from: 'node' }),
+    ).rejects.toThrow(CommanderError);
+
+    expect(deps.convertScene).not.toHaveBeenCalled();
+  });
+
+  it('rejects render without the required --out flag', async () => {
+    const deps = createDeps();
+    const program = createThrowingProgram(deps);
+
+    await expect(
+      program.parseAsync(['node', 'tussel', 'render', 'demo.scene.ts'], { from: 'node' }),
+    ).rejects.toThrow(CommanderError);
+
+    expect(deps.renderScene).not.toHaveBeenCalled();
+  });
+
+  it('propagates errors from deps when an invalid file path is given', async () => {
+    const deps = createDeps();
+    vi.mocked(deps.checkScene).mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+    await expect(
+      main(['node', 'tussel', 'check', 'nonexistent.scene.ts'], deps),
+    ).rejects.toThrow('ENOENT');
+  });
+
+  it('propagates errors from convertScene for invalid paths', async () => {
+    const deps = createDeps();
+    vi.mocked(deps.convertScene).mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+    await expect(
+      main(['node', 'tussel', 'convert', 'missing.scene.ts', '--to', 'scene-ts'], deps),
+    ).rejects.toThrow('ENOENT');
+  });
+
+  it('prints help text and exits with --help', async () => {
+    const deps = createDeps();
+    const writeOut = vi.fn();
+    const program = createThrowingProgram(deps, { writeOut });
+
+    await expect(
+      program.parseAsync(['node', 'tussel', '--help'], { from: 'node' }),
+    ).rejects.toThrow(CommanderError);
+
+    expect(writeOut).toHaveBeenCalledWith(expect.stringContaining('tussel'));
+  });
+
+  it('prints subcommand help text with <command> --help', async () => {
+    const deps = createDeps();
+    const writeOut = vi.fn();
+    const program = createThrowingProgram(deps, { writeOut });
+
+    await expect(
+      program.parseAsync(['node', 'tussel', 'run', '--help'], { from: 'node' }),
+    ).rejects.toThrow(CommanderError);
+
+    expect(writeOut).toHaveBeenCalledWith(expect.stringContaining('--backend'));
+  });
+
+  it('enables watch by default for the run command', async () => {
+    const deps = createDeps();
+
+    await main(['node', 'tussel', 'run', 'demo.scene.ts'], deps);
+
+    expect(deps.runScene).toHaveBeenCalledWith('demo.scene.ts', true, 'realtime', { entry: undefined });
+  });
+
+  it('forwards --watch when explicitly set to true', async () => {
+    const deps = createDeps();
+
+    await main(['node', 'tussel', 'run', 'demo.scene.ts', '--watch'], deps);
+
+    expect(deps.runScene).toHaveBeenCalledWith('demo.scene.ts', true, 'realtime', { entry: undefined });
+  });
+
+  it('rejects --no-watch as an unknown option', async () => {
+    const deps = createDeps();
+    const program = createThrowingProgram(deps);
+
+    await expect(
+      program.parseAsync(['node', 'tussel', 'run', 'demo.scene.ts', '--no-watch'], { from: 'node' }),
+    ).rejects.toThrow(CommanderError);
+
+    expect(deps.runScene).not.toHaveBeenCalled();
   });
 });

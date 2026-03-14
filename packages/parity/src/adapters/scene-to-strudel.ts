@@ -1,4 +1,5 @@
 import {
+  collectCustomParamNames as collectCustomParamNamesFromIR,
   type ExpressionValue,
   isExpressionNode,
   isPlainObject,
@@ -288,39 +289,5 @@ function renderSingleQuotedString(value: string): string {
 }
 
 function collectCustomParamNames(value: unknown, names = new Set<string>()): Set<string> {
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      collectCustomParamNames(entry, names);
-    }
-    return names;
-  }
-
-  if (isExpressionNode(value)) {
-    if (value.kind === 'call') {
-      if (!BUILTIN_CALLS.has(value.name)) {
-        names.add(value.name);
-      }
-      for (const entry of value.args) {
-        collectCustomParamNames(entry, names);
-      }
-      return names;
-    }
-
-    if (!BUILTIN_METHODS.has(value.name)) {
-      names.add(value.name);
-    }
-    collectCustomParamNames(value.target, names);
-    for (const entry of value.args) {
-      collectCustomParamNames(entry, names);
-    }
-    return names;
-  }
-
-  if (isPlainObject(value)) {
-    for (const entry of Object.values(value)) {
-      collectCustomParamNames(entry, names);
-    }
-  }
-
-  return names;
+  return collectCustomParamNamesFromIR(value, BUILTIN_CALLS, BUILTIN_METHODS, names);
 }

@@ -1,4 +1,4 @@
-import type { MetadataSpec, SceneInput, SceneSpec } from '@tussel/dsl';
+import type { DslSceneInput, MetadataSpec, SceneSpec } from '@tussel/dsl';
 import type { PatternBuilder, SignalBuilder } from './index';
 
 declare global {
@@ -117,7 +117,7 @@ declare global {
   const scramble: typeof import('./index').scramble;
   const samples: typeof import('./index').samples;
   const saw: SignalBuilder;
-  const scene: <TScene extends SceneInput>(input: TScene) => TScene;
+  const scene: <TScene extends DslSceneInput>(input: TScene) => TScene;
   const seq: typeof import('./index').seq;
   const setGamepadValue: typeof import('./index').setGamepadValue;
   const setInputValue: typeof import('./index').setInputValue;
@@ -150,4 +150,4 @@ declare global {
   const midi: typeof import('./index').midi;
 }
 
-export type { MetadataSpec, PatternBuilder, SceneInput, SceneSpec, SignalBuilder };
+export type { DslSceneInput, MetadataSpec, PatternBuilder, SceneSpec, SignalBuilder };

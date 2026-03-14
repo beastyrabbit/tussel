@@ -128,9 +128,8 @@ describe('waveform correctness', () => {
     const crossings = zeroCrossings(samples);
 
     // 440 Hz for ~0.48 s should produce about 440 * 0.48 = ~211 cycles = ~422 crossings
-    // Allow a generous tolerance due to envelope and FM-free oscillator startup
-    expect(crossings).toBeGreaterThan(350);
-    expect(crossings).toBeLessThan(500);
+    expect(crossings).toBeGreaterThan(380);
+    expect(crossings).toBeLessThan(470);
 
     // Peak amplitude should be significant (we set gain 0.8)
     const peak = maxAbsSample(samples.map((s) => s * 0x7fff));
@@ -175,8 +174,8 @@ describe('waveform correctness', () => {
 
     // Verify it has the right frequency: ~65 Hz => ~31 cycles in 0.46 s => ~62 crossings
     const crossings = zeroCrossings(samples);
-    expect(crossings).toBeGreaterThan(40);
-    expect(crossings).toBeLessThan(90);
+    expect(crossings).toBeGreaterThan(50);
+    expect(crossings).toBeLessThan(80);
   });
 
   // -----------------------------------------------------------------------
@@ -241,7 +240,7 @@ describe('waveform correctness', () => {
 
     // Verify frequency via zero crossings: saw at 65 Hz crosses zero ~65 times in 0.46 s
     const crossings = zeroCrossings(samples);
-    expect(crossings).toBeGreaterThan(20);
+    expect(crossings).toBeGreaterThan(40);
     expect(crossings).toBeLessThan(80);
   });
 
@@ -336,8 +335,8 @@ describe('waveform correctness', () => {
 
     // Ratio should be approximately 2:1
     const ratio = rmsFull / rmsHalf;
-    expect(ratio).toBeGreaterThan(1.5);
-    expect(ratio).toBeLessThan(2.8);
+    expect(ratio).toBeGreaterThan(1.7);
+    expect(ratio).toBeLessThan(2.5);
   });
 
   // -----------------------------------------------------------------------

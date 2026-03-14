@@ -197,12 +197,6 @@ describe('parseXenValue', () => {
     expect(parseXenValue('3/0')).toBeUndefined(); // division by zero gives Infinity
   });
 
-  it('handles 3/0 as undefined (division by zero returns Infinity which is not finite)', () => {
-    // 3/0 = Infinity, Number.isFinite(Infinity) = false? Actually 3/0 in JS = Infinity
-    // but we check den !== 0, so it should return undefined
-    expect(parseXenValue('3/0')).toBeUndefined();
-  });
-
   it('handles bare integers as raw ratios', () => {
     expect(parseXenValue('2')).toBe(2);
     expect(parseXenValue('3')).toBe(3);

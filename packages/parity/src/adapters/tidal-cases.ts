@@ -1,6 +1,6 @@
 import { loadFixtures } from '../load-fixtures.js';
 import type { ExternalFixtureSource, LoadedParityFixture, NormalizedEvent } from '../schema.js';
-import { queryTidalEvents } from './tidal-ffi.js';
+import { queryTidalEvents } from './tidal-via-strudel.js';
 
 export interface TidalCaseRecord {
   cps: number;

@@ -143,26 +143,6 @@ function round(value: number): number {
 
 export type SupportedFixtureSourceKind = ExternalSourceKind | NativeSourceKind;
 
-const _PROPERTY_METHODS = new Set([
-  'attack',
-  'bank',
-  'begin',
-  'clip',
-  'cut',
-  'decay',
-  'delay',
-  'end',
-  'gain',
-  'hpf',
-  'lpf',
-  'pan',
-  'release',
-  'room',
-  'size',
-  'speed',
-  'sustain',
-]);
-
 function canonicalizeScene(scene: SceneSpec): SceneSpec {
   const channels = Object.fromEntries(
     Object.entries(scene.channels)

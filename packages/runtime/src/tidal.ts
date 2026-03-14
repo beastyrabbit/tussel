@@ -14,33 +14,71 @@ const SET_CPS_LINE = /^setcps\s+(.+)$/i;
 const SET_BPM_LINE = /^setbpm\s+(.+)$/i;
 const SET_CPM_LINE = /^setcpm\s+(.+)$/i;
 
-const BASE_CALLS = new Set(['n', 'note', 's', 'sound']);
+const BASE_CALLS = new Set(['chord', 'n', 'note', 's', 'sound', 'value']);
 const METHOD_NAMES = new Set([
+  'almostAlways',
+  'almostNever',
+  'anchor',
   'attack',
   'bank',
   'begin',
+  'chunk',
   'clip',
+  'compress',
   'cut',
   'decay',
+  'degrade',
+  'degradeBy',
   'delay',
+  'dict',
   'early',
   'end',
+  'every',
   'fast',
+  'fastGap',
+  'fm',
   'gain',
   'hpf',
+  'hurry',
+  'jux',
+  'juxBy',
   'late',
+  'layer',
+  'linger',
   'lpf',
   'mask',
+  'off',
+  'offset',
+  'often',
   'pan',
+  'phaser',
+  'ply',
+  'rarely',
   'release',
   'rev',
   'room',
+  'scale',
+  'scaleTranspose',
+  'scramble',
+  'segment',
+  'shape',
+  'shuffle',
   'size',
   'slow',
+  'sometimes',
+  'sometimesBy',
   'speed',
   'struct',
+  'superimpose',
   'sustain',
+  'transpose',
+  'voicing',
+  'when',
+  'within',
+  'zoom',
 ]);
+
+const NO_ARG_METHODS = new Set(['degrade', 'rev', 'voicing']);
 
 export function translateTidalToSceneModule(source: string, options: { entry?: string } = {}): string {
   const program = translateTidalToStrudelProgram(source, options);
@@ -226,8 +264,8 @@ function applyPrefix(prefix: string, target: string, bindings: Map<string, strin
   if (!head || !METHOD_NAMES.has(head)) {
     throw new Error(`Unsupported tidal transform: ${prefix}`);
   }
-  if (head === 'rev') {
-    return `${target}.rev()`;
+  if (NO_ARG_METHODS.has(head)) {
+    return `${target}.${head}()`;
   }
   const argument = rest.join(' ').trim();
   if (!argument) {
@@ -255,8 +293,8 @@ function applyControl(target: string, control: string, bindings: Map<string, str
   if (!METHOD_NAMES.has(head)) {
     throw new Error(`Unsupported tidal control: ${control}`);
   }
-  if (head === 'rev') {
-    return `${target}.rev()`;
+  if (NO_ARG_METHODS.has(head)) {
+    return `${target}.${head}()`;
   }
   const argument = rest.join(' ').trim();
   if (!argument) {

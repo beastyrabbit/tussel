@@ -6,6 +6,7 @@ import { RealtimeAudioEngine, renderSceneToFile } from '@tussel/audio';
 import { type ExternalDispatchEvent, type PlaybackEvent, type QueryContext, queryScene } from '@tussel/core';
 import * as tusselDsl from '@tussel/dsl';
 import {
+  collectCustomParamNames as collectCustomParamNamesFromIR,
   type HydraSceneSpec,
   isExpressionNode,
   isPlainObject,
@@ -1026,38 +1027,7 @@ function collectDslImports(value: unknown, imports = new Set<string>(['defineSce
 }
 
 function collectCustomParamNames(value: unknown, names = new Set<string>()): Set<string> {
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      collectCustomParamNames(entry, names);
-    }
-    return names;
-  }
-
-  if (isExpressionNode(value)) {
-    if (value.kind === 'call') {
-      if (!BUILTIN_DSL_CALLS.has(value.name)) {
-        names.add(value.name);
-      }
-      for (const entry of value.args) {
-        collectCustomParamNames(entry, names);
-      }
-      return names;
-    }
-
-    if (!BUILTIN_PATTERN_METHODS.has(value.name)) {
-      names.add(value.name);
-    }
-    collectCustomParamNames(value.target, names);
-    for (const entry of value.args) {
-      collectCustomParamNames(entry, names);
-    }
-  } else if (isPlainObject(value)) {
-    for (const entry of Object.values(value)) {
-      collectCustomParamNames(entry, names);
-    }
-  }
-
-  return names;
+  return collectCustomParamNamesFromIR(value, BUILTIN_DSL_CALLS, BUILTIN_PATTERN_METHODS, names);
 }
 
 function typecheckFile(filePath: string): readonly ts.Diagnostic[] {

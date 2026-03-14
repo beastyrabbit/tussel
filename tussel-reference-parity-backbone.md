@@ -440,7 +440,7 @@ Add these new areas:
 - `packages/parity/src/compare-audio.ts`
 - `packages/parity/src/report.ts`
 - `packages/parity/src/adapters/tussel.ts`
-- `packages/parity/src/adapters/tidal-ffi.ts`
+- `packages/parity/src/adapters/tidal-via-strudel.ts`
 - `packages/parity/src/adapters/tidal-cases.ts`
 - `packages/parity/src/adapters/strudel.ts`
 - `reference/fixtures/level-1`
@@ -449,7 +449,7 @@ Add these new areas:
 - `reference/fixtures/level-4`
 - `reference/fixtures/level-5`
 - `reference/assets`
-- `tools/reference/tidal-ffi`
+- `tools/reference/tidal-via-strudel`
 - `tools/reference/tidal-cases`
 - `tools/reference/strudel-render`
 - `docs/parity-suite.md`

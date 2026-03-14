@@ -3,7 +3,7 @@ import { mkdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { renderStrudelAudio, resolveStrudelSourceCode } from './adapters/strudel.js';
-import { queryTidalEvents } from './adapters/tidal-ffi.js';
+import { queryTidalEvents } from './adapters/tidal-via-strudel.js';
 import {
   prepareTusselScene,
   queryTusselEvents,
@@ -186,7 +186,9 @@ async function verifyPinnedCommits(): Promise<void> {
 }
 
 export async function buildParity(): Promise<void> {
+  await doctorParity();
   await mkdir(path.resolve('.tussel-cache', 'parity'), { recursive: true });
+  await mkdir(path.resolve('.tussel-cache', 'parity', 'failures'), { recursive: true });
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {

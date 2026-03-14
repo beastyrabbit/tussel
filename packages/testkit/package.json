@@ -4,13 +4,5 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
-  },
-  "dependencies": {
-    "@tussel/audio": "workspace:*",
-    "@tussel/core": "workspace:*",
-    "@tussel/dsl": "workspace:*",
-    "@tussel/ir": "workspace:*",
-    "@tussel/mini": "workspace:*",
-    "@tussel/runtime": "workspace:*"
   }
 }

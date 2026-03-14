@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createFixtureDirectory, extractMarkdownLinks, writeFixtureFile } from '@tussel/testkit';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -7,7 +7,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 const tempDirs: string[] = [];
 
 afterEach(async () => {
-  // Clean up is handled by the OS for temp dirs, but track them for assertions
+  for (const dir of tempDirs) {
+    await rm(dir, { force: true, recursive: true }).catch(() => {});
+  }
   tempDirs.length = 0;
 });
 

@@ -1,6 +1,12 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { prepareTusselScene, queryTusselEvents } from './adapters/tussel.js';
+import { renderStrudelAudio } from './adapters/strudel.js';
+import { prepareTusselScene, queryTusselEvents, renderTusselAudio } from './adapters/tussel.js';
+import { compareAudioWithTolerance } from './compare-audio.js';
 import { buildLearningPageListenCases, getCoastlineListenCase } from './learning-pages.js';
+
+const strudelAvailable = existsSync(path.resolve('.ref/strudel/packages/core/index.mjs'));
 
 describe('learning page corpus', () => {
   it('extracts the Strudel learn/functions MiniRepl examples', () => {
@@ -68,10 +74,88 @@ describe('learning page corpus', () => {
     expect(successes.every(({ events }) => Array.isArray(events))).toBe(true);
   }, 30_000);
 
-  it.todo(
-    'keeps a supported subset of learning pages audio-parity clean (requires native audio renderer parity)',
-  );
+  // ---------------------------------------------------------------------------
+  // Skipped pages — features not yet implemented in Tussel
+  // ---------------------------------------------------------------------------
+
+  it.skip('learn/csound — Csound not implemented', () => {
+    /* Csound integration is not available in Tussel yet. */
+  });
+
+  it.skip('learn/hydra — Hydra not implemented', () => {
+    /* Hydra visual synth integration is not available in Tussel yet. */
+  });
+
+  it.skip('learn/xen — Xen API not complete', () => {
+    /* Xenharmonic (microtonal) API is incomplete in Tussel. */
+  });
+
+  it.skip('learn/mondo-notation — Mondo evaluator missing', () => {
+    /* Mondo notation evaluator has not been ported to Tussel. */
+  });
+
+  it.skip('learn/input-output — MIDI/OSC I/O not wired', () => {
+    /* MIDI and OSC input/output are not wired in the Tussel runtime. */
+  });
+
+  it.skip('learn/input-devices — Gamepad not wired', () => {
+    /* Gamepad and other input device APIs are not wired. */
+  });
+
+  it.skip('learn/devicemotion — Motion not wired', () => {
+    /* DeviceMotion API is not wired in Tussel. */
+  });
+
+  it.skip('learn/visual-feedback — No renderer', () => {
+    /* Visual feedback requires a renderer not available in Tussel. */
+  });
+
+  it.skip('learn/pwa — Out of scope', () => {
+    /* PWA functionality is out of scope for parity testing. */
+  });
 });
+
+// ---------------------------------------------------------------------------
+// Audio parity against Strudel oracle (requires .ref/strudel checkout)
+// ---------------------------------------------------------------------------
+
+describe.skipIf(!strudelAvailable)(
+  'learning page audio parity against Strudel oracle',
+  () => {
+    const cases = representativeLearningPageCases();
+
+    for (const listenCase of cases) {
+      it(`${listenCase.id} renders audio matching Strudel`, async () => {
+        const prepared = await prepareTusselScene('strudel-js', {
+          code: listenCase.code,
+          shape: 'script',
+        });
+
+        const [tusselWav, strudelWav] = await Promise.all([
+          renderTusselAudio(prepared, {
+            cps: listenCase.cps,
+            durationCycles: listenCase.durationCycles,
+          }),
+          renderStrudelAudio(listenCase.code, {
+            cps: listenCase.cps,
+            durationCycles: listenCase.durationCycles,
+          }),
+        ]);
+
+        const result = compareAudioWithTolerance(strudelWav, tusselWav, {
+          maxAbsoluteDelta: 100,
+          rmsDelta: 20,
+        });
+
+        expect(result.ok, formatAudioMismatch(listenCase.id, result)).toBe(true);
+      }, 60_000);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function representativeLearningPageCases() {
   // learn/mini-notation excluded: example-01 uses top-level await (TS1160)
@@ -88,6 +172,7 @@ function representativeLearningPageCases() {
     'learn/code',
     'learn/faq',
     'learn/getting-started',
+    // learn/strudel-vs-tidal excluded: uses $: / _$: channel assignment (not supported)
   ]);
 
   const selected = [];
@@ -109,4 +194,24 @@ function representativeLearningPageCases() {
     selected.push(listenCase);
   }
   return selected;
+}
+
+function formatAudioMismatch(
+  caseId: string,
+  result: { actualSilent?: boolean; expectedSilent?: boolean; maxAbsoluteDelta?: number; rmsDelta?: number },
+): string {
+  const parts = [`Audio parity failed for ${caseId}`];
+  if (result.expectedSilent) {
+    parts.push('Strudel oracle produced silence');
+  }
+  if (result.actualSilent) {
+    parts.push('Tussel produced silence');
+  }
+  if (result.maxAbsoluteDelta !== undefined) {
+    parts.push(`maxAbsoluteDelta=${result.maxAbsoluteDelta}`);
+  }
+  if (result.rmsDelta !== undefined) {
+    parts.push(`rmsDelta=${result.rmsDelta.toFixed(2)}`);
+  }
+  return parts.join('; ');
 }

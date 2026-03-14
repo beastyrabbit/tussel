@@ -352,6 +352,59 @@ function isValidIdentifier(value: string): boolean {
 
 const SIGNAL_IDENTIFIERS = new Set(['perlin', 'rand', 'saw', 'sine', 'square', 'tri', 'triangle']);
 
+export function collectCustomParamNames(
+  value: unknown,
+  builtinCalls: ReadonlySet<string>,
+  builtinMethods: ReadonlySet<string>,
+  names = new Set<string>(),
+): Set<string> {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      collectCustomParamNames(entry, builtinCalls, builtinMethods, names);
+    }
+    return names;
+  }
+
+  if (isExpressionNode(value)) {
+    if (value.kind === 'call') {
+      if (!builtinCalls.has(value.name)) {
+        names.add(value.name);
+      }
+      for (const entry of value.args) {
+        collectCustomParamNames(entry, builtinCalls, builtinMethods, names);
+      }
+      return names;
+    }
+
+    if (!builtinMethods.has(value.name)) {
+      names.add(value.name);
+    }
+    collectCustomParamNames(value.target, builtinCalls, builtinMethods, names);
+    for (const entry of value.args) {
+      collectCustomParamNames(entry, builtinCalls, builtinMethods, names);
+    }
+  } else if (isPlainObject(value)) {
+    for (const entry of Object.values(value)) {
+      collectCustomParamNames(entry, builtinCalls, builtinMethods, names);
+    }
+  }
+
+  return names;
+}
+
+export function coerceFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const numeric = Number(value.trim());
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+  }
+  return undefined;
+}
+
 export function assertSceneSpec(value: unknown): asserts value is SceneSpec {
   if (!isPlainObject(value)) {
     throw new Error('Scene must be an object');

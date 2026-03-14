@@ -377,9 +377,13 @@ describe('scheduler concurrent tick handling', () => {
 
     // The initial tick should have produced some triggers.
     // The re-entrant tick from inside onTrigger should have been blocked
-    // by the ticking guard, so total should equal what the first tick produced.
-    const firstTickTriggers = triggers.length;
-    expect(firstTickTriggers).toBeGreaterThan(0);
+    // by the ticking guard. We verify that tickCallCount equals triggers.length,
+    // meaning no extra triggers were added by the re-entrant call.
+    expect(triggers.length).toBeGreaterThan(0);
+    expect(tickCallCount).toBe(triggers.length);
+    // If re-entrancy was NOT blocked, tickCallCount would be > triggers.length
+    // because the inner tick would have produced additional onTrigger calls
+    // that would increment tickCallCount beyond what the first tick produced.
   });
 
   it('tick after stop produces no additional triggers', () => {

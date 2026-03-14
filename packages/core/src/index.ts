@@ -1,6 +1,7 @@
 import { Chord, Interval, Note, Scale } from '@tonaljs/tonal';
 import {
   type ChannelSpec,
+  coerceFiniteNumber,
   type ExpressionNode,
   type ExpressionValue,
   getInputValue,
@@ -12,7 +13,7 @@ import {
   resolveMotionInputKey,
   type SceneSpec,
 } from '@tussel/ir';
-import { inferMiniSteps, queryMini } from '@tussel/mini';
+import { inferMiniSteps, queryMini, queryMondo } from '@tussel/mini';
 
 export {
   centsToRatio,
@@ -236,7 +237,7 @@ export function collectExternalDispatches(
   const dispatches: ExternalDispatchEvent[] = [];
   const midiPort = resolveDispatchString(event.payload.midiport, 'default');
   const channelNumber = clampDispatchInteger(event.payload.midichan, 1, 16, 1);
-  const midiCc = coerceDispatchNumber(event.payload.midicc);
+  const midiCc = coerceFiniteNumber(event.payload.midicc);
 
   if (midiCc !== undefined) {
     dispatches.push({
@@ -330,37 +331,26 @@ function resolveDispatchString(value: unknown, fallback: string): string {
 }
 
 function clampDispatchInteger(value: unknown, min: number, max: number, fallback: number): number {
-  const numeric = coerceDispatchNumber(value);
+  const numeric = coerceFiniteNumber(value);
   if (numeric === undefined) {
     return fallback;
   }
   return Math.max(min, Math.min(max, Math.round(numeric)));
 }
 
-function coerceDispatchNumber(value: unknown): number | undefined {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : undefined;
-  }
-  if (typeof value === 'string') {
-    const numeric = Number(value.trim());
-    return Number.isFinite(numeric) ? numeric : undefined;
-  }
-  return undefined;
-}
-
 function resolveMidiCcValue(payload: Record<string, unknown>): number {
   return (
-    coerceDispatchNumber(payload.midivalue) ??
-    coerceDispatchNumber(payload.value) ??
-    normalizeMidiScalar(coerceDispatchNumber(payload.velocity)) ??
-    normalizeMidiScalar(coerceDispatchNumber(payload.gain)) ??
+    coerceFiniteNumber(payload.midivalue) ??
+    coerceFiniteNumber(payload.value) ??
+    normalizeMidiScalar(coerceFiniteNumber(payload.velocity)) ??
+    normalizeMidiScalar(coerceFiniteNumber(payload.gain)) ??
     102
   );
 }
 
 function resolveMidiVelocity(payload: Record<string, unknown>): number {
   return (
-    normalizeMidiScalar(coerceDispatchNumber(payload.velocity) ?? coerceDispatchNumber(payload.gain)) ?? 102
+    normalizeMidiScalar(coerceFiniteNumber(payload.velocity) ?? coerceFiniteNumber(payload.gain)) ?? 102
   );
 }
 
@@ -372,12 +362,12 @@ function normalizeMidiScalar(value: number | undefined): number | undefined {
 }
 
 function resolveMidiDispatchNote(payload: Record<string, unknown>): number | undefined {
-  const frequency = coerceDispatchNumber(payload.freq);
+  const frequency = coerceFiniteNumber(payload.freq);
   if (frequency !== undefined && frequency > 0) {
     return 69 + 12 * Math.log2(frequency / 440);
   }
 
-  const numericNote = coerceDispatchNumber(payload.note ?? payload.n);
+  const numericNote = coerceFiniteNumber(payload.note ?? payload.n);
   if (numericNote !== undefined) {
     return 60 + numericNote;
   }
@@ -448,6 +438,17 @@ function queryPattern(
       case 'chord':
       case 'value':
         return callPattern(value.name, value.args[0], begin, end, context);
+      case 'mondo': {
+        const mondoSource = typeof value.args[0] === 'string' ? value.args[0] : '';
+        const mondoEvents = queryMondo(mondoSource, begin, end);
+        return mondoEvents.map((event) => ({
+          begin: event.begin,
+          channel: context.channel,
+          duration: event.end - event.begin,
+          end: event.end,
+          payload: { s: event.value },
+        }));
+      }
       default:
         throwUnsupportedPattern('call', value.name);
     }

@@ -45,12 +45,3 @@ export class TusselSchedulerError extends TusselError {
     super(message, { ...options, code: options.code ?? 'TUSSEL_SCHEDULER_ERROR' });
   }
 }
-
-export class TusselNotImplementedError extends TusselError {
-  constructor(feature: string, options: TusselErrorOptions = {}) {
-    super(`${feature} is not yet implemented.`, {
-      ...options,
-      code: options.code ?? 'TUSSEL_NOT_IMPLEMENTED',
-    });
-  }
-}

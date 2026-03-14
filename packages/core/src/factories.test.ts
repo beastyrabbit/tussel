@@ -34,9 +34,9 @@ function query(node: unknown, begin = 0, end = 1) {
 // ---------------------------------------------------------------------------
 
 describe('factory: choose', () => {
-  it('selects one of the provided patterns per cycle', () => {
+  it('selects exactly one of the provided patterns per cycle', () => {
     const events = query(choose(note(0), note(1), note(2)));
-    expect(events.length).toBeGreaterThanOrEqual(1);
+    expect(events).toHaveLength(1);
     const n = events[0]?.payload.note;
     expect([0, 1, 2]).toContain(n);
   });
@@ -48,11 +48,12 @@ describe('factory: choose', () => {
   });
 
   it('may select different values across cycles', () => {
-    const events0 = query(choose(note(0), note(1), note(2)), 0, 1);
-    const events5 = query(choose(note(0), note(1), note(2)), 5, 6);
-    // At minimum, both should produce events
-    expect(events0.length).toBeGreaterThanOrEqual(1);
-    expect(events5.length).toBeGreaterThanOrEqual(1);
+    // Query a few cycles at once and verify that not all selections are identical
+    const events = query(choose(note(0), note(1), note(2)), 0, 10);
+    expect(events.length).toBeGreaterThanOrEqual(2);
+    const unique = new Set(events.map((e) => e.payload.note));
+    // With multiple cycles and 3 choices, we should see more than 1 unique value
+    expect(unique.size).toBeGreaterThan(1);
   });
 });
 

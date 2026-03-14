@@ -5,9 +5,23 @@ export function detectCps(code: string): number {
     return 1;
   }
   try {
-    // This only evaluates trusted local fixture and docs content.
-    const value = Function(`return (${rawValue});`)() as number;
-    return Number.isFinite(value) && value > 0 ? value : 1;
+    // Safely evaluate simple arithmetic from fixture content (e.g. "120/60", "0.5").
+    // Only allow digits, whitespace, parens, decimal points, and basic arithmetic.
+    if (!/^[\d\s()+\-*/.]+$/.test(rawValue)) {
+      return 1;
+    }
+    const divMatch = /^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)\s*$/.exec(rawValue);
+    if (divMatch) {
+      const result = Number(divMatch[1]) / Number(divMatch[2]);
+      return Number.isFinite(result) && result > 0 ? result : 1;
+    }
+    const mulMatch = /^\s*(\d+(?:\.\d+)?)\s*\*\s*(\d+(?:\.\d+)?)\s*$/.exec(rawValue);
+    if (mulMatch) {
+      const result = Number(mulMatch[1]) * Number(mulMatch[2]);
+      return Number.isFinite(result) && result > 0 ? result : 1;
+    }
+    const result = Number(rawValue);
+    return Number.isFinite(result) && result > 0 ? result : 1;
   } catch {
     return 1;
   }

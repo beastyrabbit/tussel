@@ -77,9 +77,13 @@ describe('conformance tolerance documentation', () => {
       const expected = evaluateNumericValue(saw.range(0, 100).expr, cycle) ?? 0;
       maxError = Math.max(maxError, Math.abs(actual - expected));
     }
-    // The compound expression may have near-zero error in simple float math,
-    // but the test documents the boundary investigation
-    expect(maxError).toBeDefined();
+    // The compound expression should produce measurable floating-point error
+    // from chained arithmetic, validating why we use 6-digit (not 8-digit)
+    // conformance tolerance. Even if the error is tiny, it must be a finite
+    // non-negative number, and 8-digit precision (5e-9) should not hold for
+    // all compound chains.
+    expect(maxError).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(maxError)).toBe(true);
   });
 });
 

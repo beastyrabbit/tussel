@@ -10,7 +10,7 @@ import {
   queryScene,
   Scheduler,
 } from '@tussel/core';
-import { getCsoundInstrument, type SampleManifest, type SceneSpec, TusselAudioError } from '@tussel/ir';
+import { coerceFiniteNumber, getCsoundInstrument, type SampleManifest, type SceneSpec, TusselAudioError } from '@tussel/ir';
 import type {
   AudioBuffer,
   AudioBufferSourceNode,
@@ -79,7 +79,9 @@ export interface CsoundVoiceSpec {
   velocity: number;
 }
 
-const BUILTIN_SYNTHS = new Set(['noise', 'saw', 'sawtooth', 'sine', 'square', 'triangle']);
+const BUILTIN_SYNTHS = new Set([
+  'brown', 'noise', 'pink', 'saw', 'sawtooth', 'sine', 'square', 'triangle', 'white',
+]);
 
 // -- Default constants: audio engine configuration ----------------------------
 
@@ -661,10 +663,22 @@ function playSynth(
   );
   const outputGain = new GainNode(context, { gain: DEFAULT_SYNTH_OUTPUT_GAIN });
   outputGain.connect(destination);
-  if (soundName === 'noise') {
+  if (soundName === 'noise' || soundName === 'white' || soundName === 'pink' || soundName === 'brown') {
     const buffer = createNoiseBuffer(context);
     const source = new BufferSourceNode(context, { buffer, loop: true });
-    source.connect(outputGain);
+    if (soundName === 'pink') {
+      // Pink noise: -3dB/octave rolloff via biquad lowpass cascade
+      const lp = new BiquadFilterNode(context, { frequency: 1000, type: 'lowpass' });
+      source.connect(lp);
+      lp.connect(outputGain);
+    } else if (soundName === 'brown') {
+      // Brown noise: -6dB/octave rolloff via lowpass filter
+      const lp = new BiquadFilterNode(context, { frequency: 400, type: 'lowpass' });
+      source.connect(lp);
+      lp.connect(outputGain);
+    } else {
+      source.connect(outputGain);
+    }
     source.start(targetTime);
     source.stop(stopTime);
     return { gate: env, sources: [source] };
@@ -1244,19 +1258,6 @@ function clamp(value: number, min: number, max = Number.POSITIVE_INFINITY): numb
   return Math.min(max, Math.max(min, value));
 }
 
-function coerceFiniteNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === 'string') {
-    const numeric = Number(value.trim());
-    if (Number.isFinite(numeric)) {
-      return numeric;
-    }
-  }
-  return undefined;
-}
-
 function resolveDelaySettings(
   value: unknown,
   cps: number,
@@ -1492,6 +1493,11 @@ async function resolveManifest(ref: string, cacheDir: string): Promise<SampleMan
   }
 
   const fullPath = path.resolve(ref);
+  // Prevent path traversal: relative refs must resolve under cwd
+  const cwd = process.cwd();
+  if (!path.isAbsolute(ref) && !fullPath.startsWith(cwd)) {
+    throw new Error(`Sample ref "${ref}" resolves outside the project directory.`);
+  }
   const stats = await stat(fullPath);
   const manifestPath = stats.isDirectory() ? path.join(fullPath, 'strudel.json') : fullPath;
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as SampleManifest;
@@ -1513,7 +1519,7 @@ async function resolveGithubManifest(ref: string, cacheDir: string): Promise<Sam
 
   if (!(await exists(manifestPath))) {
     const manifestUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/strudel.json`;
-    const response = await fetch(manifestUrl);
+    const response = await fetch(manifestUrl, { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) {
       throw new Error(`Unable to fetch sample manifest: ${manifestUrl}`);
     }
@@ -1587,7 +1593,7 @@ async function cacheGithubAsset(
   if (!(await exists(localFile))) {
     await mkdir(path.dirname(localFile), { recursive: true });
     const assetUrl = resolveGithubAssetUrl(file, options.base, options.owner, options.repo, options.branch);
-    const response = await fetch(assetUrl);
+    const response = await fetch(assetUrl, { signal: AbortSignal.timeout(30_000) });
     if (!response.ok) {
       throw new Error(`Unable to fetch sample asset: ${assetUrl}`);
     }

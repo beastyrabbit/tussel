@@ -8,7 +8,7 @@ import {
   type ExpressionValue,
   type ExprType,
   type HydraSceneSpec,
-  type SceneInput as IRSceneInput,
+  type SceneInput,
   isExpressionNode,
   isPlainObject,
   type MetadataSpec,
@@ -42,7 +42,7 @@ export type StructuralValue =
   | StructuralValue[]
   | { [key: string]: StructuralValue };
 
-export interface SceneInput {
+export interface DslSceneInput {
   channels?: Record<string, ChannelSpec | StructuralValue>;
   master?: SceneSpec['master'];
   metadata?: MetadataSpec;
@@ -327,6 +327,26 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
 
   midivalue(value: unknown): PatternBuilder {
     return this.method('midivalue', [value]);
+  }
+
+  midicmd(value: unknown): PatternBuilder {
+    return this.method('midicmd', [value]);
+  }
+
+  midibend(value: unknown): PatternBuilder {
+    return this.method('midibend', [value]);
+  }
+
+  miditouch(value: unknown): PatternBuilder {
+    return this.method('miditouch', [value]);
+  }
+
+  ccn(value: unknown): PatternBuilder {
+    return this.method('ccn', [value]);
+  }
+
+  ccv(value: unknown): PatternBuilder {
+    return this.method('ccv', [value]);
   }
 
   off(time: unknown, transform: unknown): PatternBuilder {
@@ -771,6 +791,14 @@ export function cc(control: unknown, port?: unknown): SignalBuilder {
   return signalCall('cc', port === undefined ? [control] : [control, port]);
 }
 
+export function midin(channel?: unknown): SignalBuilder {
+  return signalCall('midin', channel === undefined ? [] : [channel]);
+}
+
+export function midikeys(channel?: unknown): SignalBuilder {
+  return signalCall('midikeys', channel === undefined ? [] : [channel]);
+}
+
 export function gamepad(control: unknown, index?: unknown): SignalBuilder {
   return signalCall('gamepad', index === undefined ? [control] : [control, index]);
 }
@@ -1024,11 +1052,11 @@ export function areStringPrototypeExtensionsInstalled(): boolean {
   return getStringExtensionState().refCount > 0;
 }
 
-export function scene<TScene extends SceneInput>(input: TScene): TScene {
+export function scene<TScene extends DslSceneInput>(input: TScene): TScene {
   return input;
 }
 
-export function defineScene(input: SceneInput | SceneSpec): SceneSpec {
+export function defineScene(input: DslSceneInput | SceneSpec): SceneSpec {
   if (!isPlainObject(input)) {
     throw new TypeError('defineScene() expects a scene object with channels or a root expression.');
   }
@@ -1037,8 +1065,8 @@ export function defineScene(input: SceneInput | SceneSpec): SceneSpec {
   return normalized;
 }
 
-function normalizeSceneInput(input: SceneInput | SceneSpec): SceneSpec {
-  const sceneInput = normalizeValue(input) as IRSceneInput & Record<string, unknown>;
+function normalizeSceneInput(input: DslSceneInput | SceneSpec): SceneSpec {
+  const sceneInput = normalizeValue(input) as SceneInput & Record<string, unknown>;
   const transport = { ...(sceneInput.transport ?? {}) } as TransportSpec;
   const samples = (sceneInput.samples ?? []).map((entry) =>
     normalizeSampleSource(entry as SampleSourceSpec | string),
@@ -1090,7 +1118,7 @@ function normalizeRootFragment(root: ExpressionValue): {
   }
 
   if (isPlainObject(root) && 'channels' in root) {
-    const fragment = root as SceneInput;
+    const fragment = root as DslSceneInput;
     const channels: Record<string, ChannelSpec> = {};
     for (const [name, channel] of Object.entries(fragment.channels ?? {})) {
       channels[name] = normalizeChannelSpec(normalizeValue(channel));

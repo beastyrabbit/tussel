@@ -121,9 +121,6 @@ importers:
       '@tussel/mini':
         specifier: workspace:*
         version: link:../mini
-      '@tussel/testkit':
-        specifier: workspace:*
-        version: link:../testkit
       ajv:
         specifier: ^8.18.0
         version: 8.18.0
@@ -140,26 +137,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/testkit:
-    dependencies:
-      '@tussel/audio':
-        specifier: workspace:*
-        version: link:../audio
-      '@tussel/core':
-        specifier: workspace:*
-        version: link:../core
-      '@tussel/dsl':
-        specifier: workspace:*
-        version: link:../dsl
-      '@tussel/ir':
-        specifier: workspace:*
-        version: link:../ir
-      '@tussel/mini':
-        specifier: workspace:*
-        version: link:../mini
-      '@tussel/runtime':
-        specifier: workspace:*
-        version: link:../runtime
+  packages/testkit: {}
 
 packages:
 
