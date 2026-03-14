@@ -40,11 +40,11 @@ The following features from the original backlog are now implemented:
 
 - [ ] Csound actual synthesis — IR and DSL exist but `playCsound()` uses preset-based Web Audio fallbacks, not real Csound
 - [ ] Hydra visual rendering — DSL and metadata storage exist but no visual pipeline
-- [ ] MIDI port I/O — dispatch events are generated but not wired to actual MIDI ports
-- [ ] OSC network I/O — dispatch events are generated but not wired to network
+- [x] MIDI port I/O — MidiOutputManager dispatches note/CC events to hardware ports via `@julusian/midi`
+- [x] OSC network I/O — OscOutputManager sends OSC messages via UDP sockets
 - [ ] Gamepad/DeviceMotion input — DSL methods exist but inputs are not connected to device APIs
-- [ ] Xenharmonic/microtonal tuning — EDO support, Xen notation not started
-- [ ] Mondo notation — parser/evaluator largely unimplemented
+- [ ] Xenharmonic/microtonal tuning — EDO frequency/ratio support exists in core, DSL surface (`tune()`, `getFreq()`, `i()`) not started
+- [x] Mondo notation — parser implemented in `@tussel/mini`, evaluator wired into core engine (`case 'mondo'`)
 
 ### Audio QA
 

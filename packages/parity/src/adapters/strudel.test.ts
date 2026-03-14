@@ -5,10 +5,17 @@ import { queryStrudelEvents, renderStrudelAudio, resolveStrudelSourceCode } from
 
 const strudelAvailable = existsSync(path.resolve('.ref/strudel/packages/core/index.mjs'));
 
+if (!strudelAvailable) {
+  throw new Error(
+    'Strudel adapter tests require .ref/strudel checkout. ' +
+      'Run `git submodule update --init` or see docs/parity-suite.md.',
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests that require the .ref/strudel checkout
 // ---------------------------------------------------------------------------
-describe.skipIf(!strudelAvailable)('Strudel reference audio adapter', () => {
+describe('Strudel reference audio adapter', () => {
   it('keeps note-only patterns audible through Strudel defaults', async () => {
     const wav = await renderStrudelAudio(`note("a3 c#4 e4 a4")`, {
       cps: 1,
@@ -72,7 +79,7 @@ describe.skipIf(!strudelAvailable)('Strudel reference audio adapter', () => {
 // ---------------------------------------------------------------------------
 // Strudel event queries (require .ref/strudel)
 // ---------------------------------------------------------------------------
-describe.skipIf(!strudelAvailable)('Strudel event queries', () => {
+describe('Strudel event queries', () => {
   it('returns expected event count for a simple sound pattern', async () => {
     const events = await queryStrudelEvents(`sound("bd cp hh")`, {
       cps: 1,
@@ -119,7 +126,7 @@ describe.skipIf(!strudelAvailable)('Strudel event queries', () => {
     expect(events[1]!.payload.s).toBe('cp');
   });
 
-  it('populates note values in the event payload', async () => {
+  it('populates correct note pitch values in the event payload', async () => {
     const events = await queryStrudelEvents(`note("c4 e4 g4")`, {
       cps: 1,
       durationCycles: 1,
@@ -127,10 +134,9 @@ describe.skipIf(!strudelAvailable)('Strudel event queries', () => {
 
     expect(events).toHaveLength(3);
     // Strudel note values are MIDI-based; c4 = 60, e4 = 64, g4 = 67
-    // The adapter normalizes via the round function
-    expect(events[0]!.payload.note).toBeDefined();
-    expect(events[1]!.payload.note).toBeDefined();
-    expect(events[2]!.payload.note).toBeDefined();
+    expect(events[0]!.payload.note).toBe(60);
+    expect(events[1]!.payload.note).toBe(64);
+    expect(events[2]!.payload.note).toBe(67);
   });
 
   it('returns events sorted by begin time', async () => {
@@ -194,7 +200,7 @@ describe('resolveStrudelSourceCode', () => {
     expect(result).toBe(code);
   });
 
-  it('prefers code over path when both are absent', async () => {
+  it('throws when source has neither code nor path', async () => {
     await expect(
       resolveStrudelSourceCode({ shape: 'pattern' }),
     ).rejects.toThrow('requires either code or path');
@@ -211,12 +217,6 @@ describe('resolveStrudelSourceCode', () => {
     });
 
     expect(result).toContain('"@tussel/parity"');
-  });
-
-  it('throws when neither code nor path is provided', async () => {
-    await expect(
-      resolveStrudelSourceCode({ shape: 'pattern' }),
-    ).rejects.toThrow();
   });
 
   it('returns code unchanged without trimming or transformation', async () => {

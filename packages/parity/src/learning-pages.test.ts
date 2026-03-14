@@ -8,6 +8,32 @@ import { buildLearningPageListenCases, getCoastlineListenCase } from './learning
 
 const strudelAvailable = existsSync(path.resolve('.ref/strudel/packages/core/index.mjs'));
 
+if (!strudelAvailable) {
+  throw new Error(
+    'Learning-page parity suite requires .ref/strudel checkout. ' +
+      'Run `git submodule update --init` or see docs/parity-suite.md.',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Unsupported learning pages — documented as concrete feature gaps
+// ---------------------------------------------------------------------------
+// The following Strudel learning pages have NO parity coverage because the
+// underlying features are not implemented in Tussel. Each is tracked in
+// docs/audit-remediation-checklist.md. Do NOT add placeholder/skip tests
+// for these — they are absent until the feature ships.
+//
+//   learn/csound          — Csound synthesis not implemented (audit 1.1)
+//   learn/hydra           — Hydra visual integration not implemented (audit 1.3)
+//   learn/xen             — Xen DSL API incomplete (audit 1.5)
+//   learn/mondo-notation  — Mondo evaluator incomplete (audit 1.8)
+//   learn/input-output    — MIDI/OSC I/O not wired (audit 1.4)
+//   learn/input-devices   — Gamepad not wired (audit 1.4)
+//   learn/devicemotion    — Motion not wired (audit 1.4)
+//   learn/visual-feedback — No terminal renderer (audit 1.15)
+//   learn/pwa             — Out of scope for terminal daemon (audit 1.16)
+// ---------------------------------------------------------------------------
+
 describe('learning page corpus', () => {
   it('extracts the Strudel learn/functions MiniRepl examples', () => {
     const cases = buildLearningPageListenCases();
@@ -73,85 +99,42 @@ describe('learning page corpus', () => {
     expect(successes.every(({ prepared }) => Object.keys(prepared.scene.channels).length > 0)).toBe(true);
     expect(successes.every(({ events }) => Array.isArray(events))).toBe(true);
   }, 30_000);
-
-  // ---------------------------------------------------------------------------
-  // Skipped pages — features not yet implemented in Tussel
-  // ---------------------------------------------------------------------------
-
-  it.skip('learn/csound — Csound not implemented', () => {
-    /* Csound integration is not available in Tussel yet. */
-  });
-
-  it.skip('learn/hydra — Hydra not implemented', () => {
-    /* Hydra visual synth integration is not available in Tussel yet. */
-  });
-
-  it.skip('learn/xen — Xen API not complete', () => {
-    /* Xenharmonic (microtonal) API is incomplete in Tussel. */
-  });
-
-  it.skip('learn/mondo-notation — Mondo evaluator missing', () => {
-    /* Mondo notation evaluator has not been ported to Tussel. */
-  });
-
-  it.skip('learn/input-output — MIDI/OSC I/O not wired', () => {
-    /* MIDI and OSC input/output are not wired in the Tussel runtime. */
-  });
-
-  it.skip('learn/input-devices — Gamepad not wired', () => {
-    /* Gamepad and other input device APIs are not wired. */
-  });
-
-  it.skip('learn/devicemotion — Motion not wired', () => {
-    /* DeviceMotion API is not wired in Tussel. */
-  });
-
-  it.skip('learn/visual-feedback — No renderer', () => {
-    /* Visual feedback requires a renderer not available in Tussel. */
-  });
-
-  it.skip('learn/pwa — Out of scope', () => {
-    /* PWA functionality is out of scope for parity testing. */
-  });
 });
 
 // ---------------------------------------------------------------------------
-// Audio parity against Strudel oracle (requires .ref/strudel checkout)
+// Audio parity against Strudel oracle
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!strudelAvailable)(
-  'learning page audio parity against Strudel oracle',
-  () => {
-    const cases = representativeLearningPageCases();
+describe('learning page audio parity against Strudel oracle', () => {
+  const cases = representativeLearningPageCases();
 
-    for (const listenCase of cases) {
-      it(`${listenCase.id} renders audio matching Strudel`, async () => {
-        const prepared = await prepareTusselScene('strudel-js', {
-          code: listenCase.code,
-          shape: 'script',
-        });
+  for (const listenCase of cases) {
+    it(`${listenCase.id} renders audio matching Strudel`, async () => {
+      const prepared = await prepareTusselScene('strudel-js', {
+        code: listenCase.code,
+        shape: 'script',
+      });
 
-        const [tusselWav, strudelWav] = await Promise.all([
-          renderTusselAudio(prepared, {
-            cps: listenCase.cps,
-            durationCycles: listenCase.durationCycles,
-          }),
-          renderStrudelAudio(listenCase.code, {
-            cps: listenCase.cps,
-            durationCycles: listenCase.durationCycles,
-          }),
-        ]);
+      const [tusselWav, strudelWav] = await Promise.all([
+        renderTusselAudio(prepared, {
+          cps: listenCase.cps,
+          durationCycles: listenCase.durationCycles,
+        }),
+        renderStrudelAudio(listenCase.code, {
+          cps: listenCase.cps,
+          durationCycles: listenCase.durationCycles,
+        }),
+      ]);
 
-        const result = compareAudioWithTolerance(strudelWav, tusselWav, {
-          maxAbsoluteDelta: 100,
-          rmsDelta: 20,
-        });
+      const result = compareAudioWithTolerance(strudelWav, tusselWav, {
+        maxAbsoluteDelta: 100,
+        rmsDelta: 20,
+      });
 
-        expect(result.ok, formatAudioMismatch(listenCase.id, result)).toBe(true);
-      }, 60_000);
-    }
-  },
-);
+      expect(result.ok, formatAudioMismatch(listenCase.id, result)).toBe(true);
+    }, 60_000);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -185,8 +168,6 @@ function representativeLearningPageCases() {
     if (pageId === 'learn/stepwise' && listenCase.code.includes('fastcat(')) {
       continue;
     }
-    // Skip examples using top-level await — not supported by the Tussel runtime.
-    // These are explicitly excluded rather than silently skipped (see audit 0.8).
     if (listenCase.code.includes('await ')) {
       continue;
     }

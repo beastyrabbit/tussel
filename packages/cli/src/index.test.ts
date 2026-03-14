@@ -166,22 +166,11 @@ describe('@tussel/cli', () => {
     expect(deps.runScene).toHaveBeenCalledWith('demo.scene.ts', true, 'realtime', { entry: undefined });
   });
 
-  it('forwards --watch when explicitly set to true', async () => {
+  it('disables watch with --no-watch', async () => {
     const deps = createDeps();
 
-    await main(['node', 'tussel', 'run', 'demo.scene.ts', '--watch'], deps);
+    await main(['node', 'tussel', 'run', 'demo.scene.ts', '--no-watch'], deps);
 
-    expect(deps.runScene).toHaveBeenCalledWith('demo.scene.ts', true, 'realtime', { entry: undefined });
-  });
-
-  it('rejects --no-watch as an unknown option', async () => {
-    const deps = createDeps();
-    const program = createThrowingProgram(deps);
-
-    await expect(
-      program.parseAsync(['node', 'tussel', 'run', 'demo.scene.ts', '--no-watch'], { from: 'node' }),
-    ).rejects.toThrow(CommanderError);
-
-    expect(deps.runScene).not.toHaveBeenCalled();
+    expect(deps.runScene).toHaveBeenCalledWith('demo.scene.ts', false, 'realtime', { entry: undefined });
   });
 });

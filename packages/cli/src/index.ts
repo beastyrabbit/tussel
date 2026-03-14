@@ -44,7 +44,7 @@ export function createProgram(deps: CliDeps = defaultDeps): Command {
     .argument('<entry>', 'Entry file (*.script.ts, *.scene.ts, *.scene.json, *.strudel.*, *.tidal)')
     .option('--backend <backend>', 'Audio backend mode', 'realtime')
     .option('--entry <binding-or-root>', 'Select the root binding for external whole-script imports')
-    .option('--watch', 'Watch the entry and imported modules', true)
+    .option('--no-watch', 'Disable file watching (watch is enabled by default)')
     .action(
       async (entry: string, options: { backend: 'offline' | 'realtime'; entry?: string; watch: boolean }) => {
         await deps.runScene(entry, options.watch, options.backend, { entry: options.entry });
