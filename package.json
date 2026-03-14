@@ -24,6 +24,7 @@
     "parity:run": "pnpm parity run --save-artifacts",
     "prepare": "if [ -d .git ]; then lefthook install; else echo 'lefthook skipped: no git repo'; fi",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "user_audio_test": "pnpm exec tsx packages/cli/src/user-audio-test.ts",
     "user_listen_test": "pnpm exec tsx packages/parity/src/user-listen-test.ts"
@@ -43,6 +44,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
     "@types/node": "^25.5.0",
+    "@vitest/coverage-v8": "^4.1.0",
     "lefthook": "^2.1.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

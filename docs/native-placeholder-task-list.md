@@ -6,41 +6,48 @@ Current manual audio target:
 - [manual coastline user-audio file](../examples/manual-audio/coastline.user-audio.script.ts)
 - [original Strudel source](../examples/manual-listen/coastline.strudel.js)
 
-## Harmonic transforms
+## Completed
 
-- [ ] Implement `dict('ireal')` chord dictionary lookup with deterministic test fixtures.
-- [ ] Implement `voicing()` so chord and note stacks produce voiced note events instead of passing through unchanged.
-- [ ] Implement `set(pattern)` so numeric melody patterns can borrow pitches from another harmonic pattern.
-- [ ] Implement `mode("root:g2")` with deterministic scale/mode expansion.
-- [ ] Implement `offset()` as pitch transposition for `note`, `n`, and `chord`.
-- [ ] Implement `anchor()` as harmonic register anchoring for melodic note material.
+The following features from the original backlog are now implemented:
 
-## Structural transforms
+- [x] `dict('ireal')` chord dictionary lookup — consumed by `applyVoicing()` in core
+- [x] `voicing()` chord expansion — implemented in `applyVoicing()` in core
+- [x] `set(pattern)` pitch borrowing — implemented in `applySet()` in core
+- [x] `mode("root:g2")` scale/mode expansion — consumed by `applyVoicing()` in core
+- [x] `offset()` pitch transposition — implemented in `applyOffset()` in core
+- [x] `anchor()` harmonic register anchoring — consumed by `applyScale()` and `applyVoicing()` in core
+- [x] `chunk(size, transform)` — implemented in `applyChunk()` in core
+- [x] `rarely(transform)` — maps to `sometimesBy(0.25, ...)` in DSL
+- [x] `segment()` resegmentation — implemented in `applySegment()` in core
+- [x] `clip()` playback duration scaling — applied in `buildVoice()` in audio
+- [x] `shape()` waveshaping — applied via WaveShaperNode in `connectOutputChain()` in audio
+- [x] `delay()` delay line — implemented in `connectOutputChain()` in audio
+- [x] `room()` reverb/convolution — implemented in `connectOutputChain()` in audio
+- [x] `phaser()` modulation effect — implemented in `connectOutputChain()` in audio
+- [x] `lpq()` filter Q control — applied alongside `lpf()` in `connectOutputChain()` in audio
+- [x] `fm()` frequency modulation — implemented in `playSynth()` in audio
 
-- [ ] Implement `chunk(size, transform)` with reference-backed event tests and audible parity fixtures.
-- [ ] Implement `rarely(transform)` with deterministic gating behavior for offline and realtime runs.
-- [ ] Implement `segment()` so patterns are resegmented instead of leaving the property as metadata only.
-- [ ] Implement `size()` as a real master/space parameter or remove it from the native surface.
+## Remaining work
 
-## Sample and playback shaping
-
-- [ ] Implement `clip()` in native playback, not just as a stored property.
-- [ ] Implement `shape()` as native waveshaping or amplitude shaping.
-- [ ] Implement `delay()` as an actual audible delay line in the native audio graph.
-- [ ] Implement `room()` as a real space/reverb effect in the native audio graph.
-- [ ] Implement `phaser()` as an audible modulation effect.
-- [ ] Implement `lpq()` as native filter-Q control paired with `lpf()`.
-- [ ] Implement `fm()` as actual frequency modulation for synth voices.
-
-## Instruments and sample compatibility
+### Instruments and sample compatibility
 
 - [ ] Add a deterministic native fallback for `gm_epiano1:1`.
 - [ ] Add a deterministic native fallback for `gm_acoustic_bass`.
 - [ ] Add support for the `rd` / ride-style sample used in the original coastline source.
 - [ ] Make remote pack aliases compatible with local fallback packs for live speaker tests.
 
-## Audio focus and QA
+### Unimplemented features (from plan but not yet started)
+
+- [ ] Csound actual synthesis — IR and DSL exist but `playCsound()` uses preset-based Web Audio fallbacks, not real Csound
+- [ ] Hydra visual rendering — DSL and metadata storage exist but no visual pipeline
+- [ ] MIDI port I/O — dispatch events are generated but not wired to actual MIDI ports
+- [ ] OSC network I/O — dispatch events are generated but not wired to network
+- [ ] Gamepad/DeviceMotion input — DSL methods exist but inputs are not connected to device APIs
+- [ ] Xenharmonic/microtonal tuning — EDO support, Xen notation not started
+- [ ] Mondo notation — parser/evaluator largely unimplemented
+
+### Audio QA
 
 - [ ] Keep silence as a hard failure for every admitted audio fixture.
 - [ ] Require every new audible placeholder implementation to land with a 10+ second audio fixture.
-- [ ] Add a dedicated coastline native-vs-reference parity fixture once the placeholder operators above are real.
+- [ ] Add a dedicated coastline native-vs-reference parity fixture once remaining operators are real.

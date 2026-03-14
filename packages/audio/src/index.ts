@@ -8,7 +8,7 @@ import {
   queryScene,
   Scheduler,
 } from '@tussel/core';
-import { getCsoundInstrument, type SampleManifest, type SceneSpec } from '@tussel/ir';
+import { getCsoundInstrument, type SampleManifest, type SceneSpec, TusselAudioError } from '@tussel/ir';
 import type {
   AudioBuffer,
   AudioBufferSourceNode,
@@ -200,7 +200,11 @@ export class RealtimeAudioEngine {
       }
       applyCutGroup(this.cutGroups, event, voice, targetTime);
     } catch (error) {
-      console.error(pc.red(`audio trigger failed: ${(error as Error).message}`));
+      const audioError =
+        error instanceof TusselAudioError
+          ? error
+          : new TusselAudioError(`audio trigger failed: ${(error as Error).message}`, { cause: error });
+      console.error(pc.red(audioError.message));
     }
   }
 }
@@ -284,28 +288,39 @@ async function buildVoice(
   targetTime: number,
   cps: number,
 ): Promise<LoadedVoice | undefined> {
-  const csoundVoice = playCsound(context, mixGraph, event, targetTime, cps);
+  const clipValue = coerceFiniteNumber(event.payload.clip);
+  const clippedEvent =
+    clipValue !== undefined && clipValue !== 1
+      ? { ...event, duration: event.duration * Math.max(clipValue, 0) }
+      : event;
+
+  const csoundVoice = playCsound(context, mixGraph, clippedEvent, targetTime, cps);
   if (csoundVoice) {
     return csoundVoice;
   }
 
-  const soundName = resolveSoundName(event.payload);
+  const soundName = resolveSoundName(clippedEvent.payload);
   if (!soundName) {
     return undefined;
   }
 
   if (BUILTIN_SYNTHS.has(soundName)) {
-    return playSynth(context, mixGraph, soundName, event, targetTime, cps);
+    return playSynth(context, mixGraph, soundName, clippedEvent, targetTime, cps);
   }
 
-  const sample = await registry.getSample(context, soundName, event.payload.bank, event.payload.n);
+  const sample = await registry.getSample(
+    context,
+    soundName,
+    clippedEvent.payload.bank,
+    clippedEvent.payload.n,
+  );
   if (!sample) {
     if (soundName !== 'silence') {
       console.warn(pc.yellow(`sample not found: ${soundName}`));
     }
     return undefined;
   }
-  return playSample(context, mixGraph, sample, event, targetTime, cps);
+  return playSample(context, mixGraph, sample, clippedEvent, targetTime, cps);
 }
 
 export function resolveCsoundVoiceSpec(event: PlaybackEvent, cps: number): CsoundVoiceSpec | undefined {

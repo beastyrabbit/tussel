@@ -18,5 +18,23 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['packages/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['packages/*/src/**/*.ts'],
+      exclude: [
+        'packages/*/src/**/*.test.ts',
+        'packages/cli/src/user-audio-test.ts',
+        'packages/parity/src/user-listen-test.ts',
+        'packages/parity/src/cli.ts',
+      ],
+      reporter: ['text', 'text-summary', 'lcov'],
+      reportsDirectory: './coverage',
+      thresholds: {
+        statements: 50,
+        branches: 40,
+        functions: 40,
+        lines: 50,
+      },
+    },
   },
 });

@@ -1,4 +1,4 @@
-import type { AudioComparisonResult } from './schema.js';
+import type { AudioComparisonResult, AudioToleranceThresholds } from './schema.js';
 
 interface ParsedWav {
   channels: number;
@@ -81,6 +81,35 @@ export function isAudibleWav(buffer: Buffer | undefined): boolean {
     return false;
   }
   return !isSilentPcm(buffer.subarray(44));
+}
+
+export const DEFAULT_AUDIO_TOLERANCE: AudioToleranceThresholds = {
+  maxAbsoluteDelta: 100,
+  rmsDelta: 20,
+};
+
+export function compareAudioWithTolerance(
+  expected: Buffer,
+  actual: Buffer,
+  thresholds: AudioToleranceThresholds = DEFAULT_AUDIO_TOLERANCE,
+): AudioComparisonResult {
+  const result = compareAudio(expected, actual);
+  if (result.ok) {
+    return result;
+  }
+
+  const maxDeltaOk =
+    thresholds.maxAbsoluteDelta === undefined ||
+    (result.maxAbsoluteDelta ?? 0) <= thresholds.maxAbsoluteDelta;
+
+  const rmsOk = thresholds.rmsDelta === undefined || (result.rmsDelta ?? 0) <= thresholds.rmsDelta;
+
+  const bothNonSilent = !result.expectedSilent && !result.actualSilent;
+
+  return {
+    ...result,
+    ok: bothNonSilent && maxDeltaOk && rmsOk,
+  };
 }
 
 function isSilentPcm(data: Buffer): boolean {

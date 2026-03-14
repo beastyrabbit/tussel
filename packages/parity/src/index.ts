@@ -8,7 +8,7 @@ import {
   renderStableScene,
   renderTusselAudio,
 } from './adapters/tussel.js';
-import { compareAudio } from './compare-audio.js';
+import { compareAudio, compareAudioWithTolerance } from './compare-audio.js';
 import { compareEvents } from './compare-events.js';
 import { loadFixtures } from './load-fixtures.js';
 import { writeFailureArtifacts, writeSummary } from './report.js';
@@ -71,10 +71,10 @@ export async function runFixture(fixture: LoadedParityFixture): Promise<FixtureR
     fixture,
     ok: true,
   };
-  const durationCycles =
-    fixture.compare.audio === 'exact-pcm16'
-      ? minimumAudioDurationCycles(fixture.cps, fixture.durationCycles)
-      : fixture.durationCycles;
+  const hasAudioComparison = fixture.compare.audio === 'exact-pcm16' || fixture.compare.audio === 'tolerance';
+  const durationCycles = hasAudioComparison
+    ? minimumAudioDurationCycles(fixture.cps, fixture.durationCycles)
+    : fixture.durationCycles;
 
   if (fixture.compare.events === 'exact') {
     if (!fixture.sources.tidal) {
@@ -92,7 +92,7 @@ export async function runFixture(fixture: LoadedParityFixture): Promise<FixtureR
     result.ok &&= result.comparison.events.ok;
   }
 
-  if (fixture.compare.audio === 'exact-pcm16') {
+  if (hasAudioComparison) {
     if (!fixture.sources.strudel) {
       throw new Error(`Fixture ${fixture.id} is missing Strudel source for audio parity.`);
     }
@@ -106,7 +106,10 @@ export async function runFixture(fixture: LoadedParityFixture): Promise<FixtureR
       durationCycles,
       samplePack: fixture.samplePack,
     });
-    result.comparison.audio = compareAudio(result.expectedAudio, result.actualAudio);
+    result.comparison.audio =
+      fixture.compare.audio === 'tolerance'
+        ? compareAudioWithTolerance(result.expectedAudio, result.actualAudio, fixture.compare.audioTolerance)
+        : compareAudio(result.expectedAudio, result.actualAudio);
     result.ok &&= result.comparison.audio.ok;
   }
 

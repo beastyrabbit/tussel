@@ -25,8 +25,13 @@ describe('learning page corpus', () => {
   });
 
   it('imports and queries a representative slice of extracted examples', async () => {
-    const successes = [];
-    for (const listenCase of representativeLearningPageCases()) {
+    const cases = representativeLearningPageCases();
+    const successes: Array<{ events: unknown[]; prepared: Awaited<ReturnType<typeof prepareTusselScene>> }> =
+      [];
+    const ts1160Failures: string[] = [];
+    const otherFailures: Array<{ error: unknown; id: string }> = [];
+
+    for (const listenCase of cases) {
       try {
         const prepared = await prepareTusselScene('strudel-js', {
           code: listenCase.code,
@@ -38,13 +43,31 @@ describe('learning page corpus', () => {
         });
         successes.push({ events, prepared });
       } catch (error) {
-        if (!(error instanceof Error) || !error.message.includes('TS1160')) {
-          throw error;
+        if (error instanceof Error && error.message.includes('TS1160')) {
+          ts1160Failures.push(listenCase.id);
+        } else {
+          otherFailures.push({ error, id: listenCase.id });
         }
       }
     }
 
-    expect(successes.length).toBeGreaterThanOrEqual(8);
+    if (otherFailures.length > 0) {
+      const summary = otherFailures
+        .map(({ id, error }) => `${id}: ${error instanceof Error ? error.message : String(error)}`)
+        .join('\n');
+      throw new Error(`${otherFailures.length} learning page examples failed:\n${summary}`);
+    }
+
+    if (ts1160Failures.length > 0) {
+      console.warn(
+        `[learning-pages] ${ts1160Failures.length} examples skipped due to TS1160 (top-level await): ${ts1160Failures.join(', ')}`,
+      );
+    }
+
+    expect(
+      successes.length,
+      `Expected all ${cases.length} representative cases to succeed (minus ${ts1160Failures.length} TS1160 skips), but only ${successes.length} passed`,
+    ).toBeGreaterThanOrEqual(cases.length - ts1160Failures.length);
     expect(successes.every(({ prepared }) => Object.keys(prepared.scene.channels).length > 0)).toBe(true);
     expect(successes.every(({ events }) => Array.isArray(events))).toBe(true);
   }, 30_000);

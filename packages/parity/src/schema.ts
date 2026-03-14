@@ -5,9 +5,15 @@ export interface ExternalFixtureSource {
   shape: 'pattern' | 'script';
 }
 
+export interface AudioToleranceThresholds {
+  maxAbsoluteDelta?: number;
+  rmsDelta?: number;
+}
+
 export interface ParityFixture {
   compare: {
-    audio?: 'exact-pcm16';
+    audio?: 'exact-pcm16' | 'tolerance';
+    audioTolerance?: AudioToleranceThresholds;
     events: 'exact';
   };
   cps: number;

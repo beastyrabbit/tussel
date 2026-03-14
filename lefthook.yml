@@ -3,6 +3,8 @@ pre-commit:
   commands:
     biome:
       run: pnpm lint
+    test:
+      run: pnpm test
     gitleaks:
       run: |
         if command -v gitleaks >/dev/null 2>&1; then
