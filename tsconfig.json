@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023", "DOM"],
+    "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "noErrorTruncation": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "types": ["node", "vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@tussel/audio": ["packages/audio/src/index.ts"],
+      "@tussel/cli": ["packages/cli/src/index.ts"],
+      "@tussel/core": ["packages/core/src/index.ts"],
+      "@tussel/dsl": ["packages/dsl/src/index.ts"],
+      "@tussel/dsl/globals": ["packages/dsl/src/globals.d.ts"],
+      "@tussel/ir": ["packages/ir/src/index.ts"],
+      "@tussel/mini": ["packages/mini/src/index.ts"],
+      "@tussel/runtime": ["packages/runtime/src/index.ts"],
+      "@tussel/testkit": ["packages/testkit/src/index.ts"]
+    }
+  },
+  "include": ["global.d.ts", "packages/**/*.ts", "examples/**/*.ts", "examples/**/*.json", "vitest.config.ts"]
+}

@@ -1,0 +1,131 @@
+{
+  "channels": {
+    "air": {
+      "gain": 0.03,
+      "mute": false,
+      "node": {
+        "args": [0.01],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "late",
+        "target": {
+          "args": [2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "fast",
+          "target": {
+            "args": [5000],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "hpf",
+            "target": {
+              "args": ["noise ~ noise [~ noise]"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "s"
+            }
+          }
+        }
+      },
+      "orbit": "air"
+    },
+    "counter": {
+      "gain": 0.07,
+      "mute": false,
+      "node": {
+        "args": [0.01],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "late",
+        "target": {
+          "args": [
+            {
+              "args": [8],
+              "exprType": "signal",
+              "kind": "method",
+              "name": "slow",
+              "target": {
+                "args": [-0.8, 0.8],
+                "exprType": "signal",
+                "kind": "method",
+                "name": "range",
+                "target": {
+                  "args": [],
+                  "exprType": "signal",
+                  "kind": "call",
+                  "name": "sine"
+                }
+              }
+            }
+          ],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "pan",
+          "target": {
+            "args": [2],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "slow",
+            "target": {
+              "args": ["triangle"],
+              "exprType": "pattern",
+              "kind": "method",
+              "name": "s",
+              "target": {
+                "args": ["<7 5 4 2>"],
+                "exprType": "pattern",
+                "kind": "call",
+                "name": "n"
+              }
+            }
+          }
+        }
+      },
+      "orbit": "counter"
+    },
+    "pulse": {
+      "gain": 0.1,
+      "mute": false,
+      "node": {
+        "args": [0.01],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "late",
+        "target": {
+          "args": [0.2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "release",
+          "target": {
+            "args": [0.02],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "attack",
+            "target": {
+              "args": ["sine"],
+              "exprType": "pattern",
+              "kind": "method",
+              "name": "s",
+              "target": {
+                "args": ["0 2 4 7"],
+                "exprType": "pattern",
+                "kind": "call",
+                "name": "n"
+              }
+            }
+          }
+        }
+      },
+      "orbit": "pulse"
+    }
+  },
+  "master": {},
+  "metadata": {
+    "guide": "05-live-reload",
+    "title": "Live Reload"
+  },
+  "samples": [],
+  "transport": {
+    "cps": 0.7
+  }
+}

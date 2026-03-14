@@ -1,0 +1,107 @@
+{
+  "channels": {
+    "bass": {
+      "gain": 0.08,
+      "mute": false,
+      "node": {
+        "args": [
+          {
+            "args": [4],
+            "exprType": "signal",
+            "kind": "method",
+            "name": "slow",
+            "target": {
+              "args": [300, 1400],
+              "exprType": "signal",
+              "kind": "method",
+              "name": "range",
+              "target": {
+                "args": [],
+                "exprType": "signal",
+                "kind": "call",
+                "name": "sine"
+              }
+            }
+          }
+        ],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "lpf",
+        "target": {
+          "args": [2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "slow",
+          "target": {
+            "args": ["saw"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "s",
+            "target": {
+              "args": ["<0 3 5 7>/2"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "n"
+            }
+          }
+        }
+      },
+      "orbit": "bass"
+    },
+    "lead": {
+      "gain": 0.09,
+      "mute": false,
+      "node": {
+        "args": ["<1 1 0 1>/4"],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "mask",
+        "target": {
+          "args": [2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "fast",
+          "target": {
+            "args": ["square"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "s",
+            "target": {
+              "args": ["0 [2 4] <7 9>"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "n"
+            }
+          }
+        }
+      },
+      "orbit": "lead"
+    },
+    "texture": {
+      "gain": 0.025,
+      "mute": false,
+      "node": {
+        "args": [4500],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "hpf",
+        "target": {
+          "args": ["noise ~ [noise noise] ~"],
+          "exprType": "pattern",
+          "kind": "call",
+          "name": "s"
+        }
+      },
+      "orbit": "texture"
+    }
+  },
+  "master": {},
+  "metadata": {
+    "guide": "02-patterns-and-mini",
+    "title": "Patterns and Mini"
+  },
+  "samples": [],
+  "transport": {
+    "cps": 1
+  }
+}

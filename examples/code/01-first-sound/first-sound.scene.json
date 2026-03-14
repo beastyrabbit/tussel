@@ -1,0 +1,119 @@
+{
+  "channels": {
+    "air": {
+      "gain": 0.03,
+      "mute": false,
+      "node": {
+        "args": [2],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "fast",
+        "target": {
+          "args": [5000],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "hpf",
+          "target": {
+            "args": ["noise ~ noise [~ noise]"],
+            "exprType": "pattern",
+            "kind": "call",
+            "name": "s"
+          }
+        }
+      },
+      "orbit": "air"
+    },
+    "answer": {
+      "gain": 0.08,
+      "mute": false,
+      "node": {
+        "args": [
+          {
+            "args": [4],
+            "exprType": "signal",
+            "kind": "method",
+            "name": "slow",
+            "target": {
+              "args": [-0.6, 0.6],
+              "exprType": "signal",
+              "kind": "method",
+              "name": "range",
+              "target": {
+                "args": [],
+                "exprType": "signal",
+                "kind": "call",
+                "name": "sine"
+              }
+            }
+          }
+        ],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "pan",
+        "target": {
+          "args": [2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "fast",
+          "target": {
+            "args": ["triangle"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "s",
+            "target": {
+              "args": ["<7 4 2 0>"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "n"
+            }
+          }
+        }
+      },
+      "orbit": "answer"
+    },
+    "pulse": {
+      "gain": 0.12,
+      "mute": false,
+      "node": {
+        "args": [2],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "slow",
+        "target": {
+          "args": [0.25],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "release",
+          "target": {
+            "args": [0.02],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "attack",
+            "target": {
+              "args": ["sine"],
+              "exprType": "pattern",
+              "kind": "method",
+              "name": "s",
+              "target": {
+                "args": ["0 2 4 7"],
+                "exprType": "pattern",
+                "kind": "call",
+                "name": "n"
+              }
+            }
+          }
+        }
+      },
+      "orbit": "pulse"
+    }
+  },
+  "master": {},
+  "metadata": {
+    "guide": "01-first-sound",
+    "title": "First Sound"
+  },
+  "samples": [],
+  "transport": {
+    "cps": 0.75
+  }
+}

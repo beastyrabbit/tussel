@@ -1,0 +1,8 @@
+title = "tussel"
+
+[allowlist]
+description = "Example sample refs and docs"
+paths = [
+  '''examples/''',
+  '''\.ref/'''
+]

@@ -1,0 +1,14 @@
+{
+  "name": "@tussel/parity",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@tussel/audio": "workspace:*",
+    "@tussel/core": "workspace:*",
+    "@tussel/ir": "workspace:*",
+    "@tussel/runtime": "workspace:*"
+  }
+}

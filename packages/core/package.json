@@ -1,0 +1,13 @@
+{
+  "name": "@tussel/core",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@tonaljs/tonal": "^4.10.0",
+    "@tussel/ir": "workspace:*",
+    "@tussel/mini": "workspace:*"
+  }
+}

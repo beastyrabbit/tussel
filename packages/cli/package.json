@@ -1,0 +1,16 @@
+{
+  "name": "@tussel/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "tussel": "./bin/tussel.js"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@tussel/runtime": "workspace:*",
+    "commander": "^14.0.3",
+    "picocolors": "^1.1.1"
+  }
+}

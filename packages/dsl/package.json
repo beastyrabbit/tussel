@@ -1,0 +1,11 @@
+{
+  "name": "@tussel/dsl",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@tussel/ir": "workspace:*"
+  }
+}

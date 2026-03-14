@@ -1,0 +1,92 @@
+{
+  "channels": {
+    "bass": {
+      "gain": 0.08,
+      "mute": false,
+      "node": {
+        "args": [280],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "lpf",
+        "target": {
+          "args": [2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "slow",
+          "target": {
+            "args": ["saw"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "s",
+            "target": {
+              "args": ["0 ~ 3 5"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "n"
+            }
+          }
+        }
+      },
+      "orbit": "bass"
+    },
+    "drums": {
+      "gain": 0.2,
+      "mute": false,
+      "node": {
+        "args": ["crate"],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "bank",
+        "target": {
+          "args": ["bd ~ sd hh"],
+          "exprType": "pattern",
+          "kind": "call",
+          "name": "s"
+        }
+      },
+      "orbit": "drums"
+    },
+    "hats": {
+      "gain": 0.12,
+      "mute": false,
+      "node": {
+        "args": ["<1 1 0 1>/4"],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "mask",
+        "target": {
+          "args": [2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "fast",
+          "target": {
+            "args": ["crate"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "bank",
+            "target": {
+              "args": ["hh hh hh [hh ~]"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "s"
+            }
+          }
+        }
+      },
+      "orbit": "hats"
+    }
+  },
+  "master": {},
+  "metadata": {
+    "guide": "04-samples-and-cache",
+    "title": "Samples and Cache"
+  },
+  "samples": [
+    {
+      "ref": "./examples/assets/basic-kit"
+    }
+  ],
+  "transport": {
+    "cps": 0.85
+  }
+}

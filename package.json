@@ -1,0 +1,55 @@
+{
+  "name": "tussel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first TypeScript livecoding runtime inspired by Tidal and Strudel",
+  "bin": {
+    "tussel": "./bin/tussel"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "check": "pnpm lint && pnpm build && pnpm test",
+    "clean": "rm -rf .tussel-cache coverage",
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "parity": "pnpm exec tsx packages/parity/src/cli.ts",
+    "parity:build": "pnpm parity build",
+    "parity:doctor": "pnpm parity doctor",
+    "parity:level1": "pnpm parity run --level 1 --save-artifacts",
+    "parity:level2": "pnpm parity run --level 2 --save-artifacts",
+    "parity:level3": "pnpm parity run --level 3 --save-artifacts",
+    "parity:level4": "pnpm parity run --level 4 --save-artifacts",
+    "parity:level5": "pnpm parity run --level 5 --save-artifacts",
+    "parity:run": "pnpm parity run --save-artifacts",
+    "prepare": "if [ -d .git ]; then lefthook install; else echo 'lefthook skipped: no git repo'; fi",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "user_audio_test": "pnpm exec tsx packages/cli/src/user-audio-test.ts",
+    "user_listen_test": "pnpm exec tsx packages/parity/src/user-listen-test.ts"
+  },
+  "keywords": [
+    "algorave",
+    "livecoding",
+    "music",
+    "tidal",
+    "typescript"
+  ],
+  "license": "MIT",
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.6",
+    "@types/node": "^25.5.0",
+    "lefthook": "^2.1.4",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "@tussel/cli": "workspace:*",
+    "@tussel/dsl": "workspace:*"
+  }
+}

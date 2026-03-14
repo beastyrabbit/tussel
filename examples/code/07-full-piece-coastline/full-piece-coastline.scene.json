@@ -1,0 +1,261 @@
+{
+  "channels": {
+    "bass": {
+      "gain": 0.1,
+      "mute": false,
+      "node": {
+        "args": [
+          {
+            "args": [8],
+            "exprType": "signal",
+            "kind": "method",
+            "name": "slow",
+            "target": {
+              "args": [220, 720],
+              "exprType": "signal",
+              "kind": "method",
+              "name": "range",
+              "target": {
+                "args": [],
+                "exprType": "signal",
+                "kind": "call",
+                "name": "sine"
+              }
+            }
+          }
+        ],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "lpf",
+        "target": {
+          "args": [0.2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "release",
+          "target": {
+            "args": [0.01],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "attack",
+            "target": {
+              "args": ["saw"],
+              "exprType": "pattern",
+              "kind": "method",
+              "name": "s",
+              "target": {
+                "args": ["<0 0 3 5>/2"],
+                "exprType": "pattern",
+                "kind": "call",
+                "name": "n"
+              }
+            }
+          }
+        }
+      },
+      "orbit": "bass"
+    },
+    "drums": {
+      "gain": 0.2,
+      "mute": false,
+      "node": {
+        "args": ["<1 1 1 1>/4"],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "mask",
+        "target": {
+          "args": ["crate"],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "bank",
+          "target": {
+            "args": ["bd [hh hh] sd hh"],
+            "exprType": "pattern",
+            "kind": "call",
+            "name": "s"
+          }
+        }
+      },
+      "orbit": "drums"
+    },
+    "keys": {
+      "gain": {
+        "args": [4],
+        "exprType": "signal",
+        "kind": "method",
+        "name": "slow",
+        "target": {
+          "args": [0.05, 0.12],
+          "exprType": "signal",
+          "kind": "method",
+          "name": "range",
+          "target": {
+            "args": [],
+            "exprType": "signal",
+            "kind": "call",
+            "name": "perlin"
+          }
+        }
+      },
+      "mute": false,
+      "node": {
+        "args": [
+          {
+            "args": [8],
+            "exprType": "signal",
+            "kind": "method",
+            "name": "slow",
+            "target": {
+              "args": [-0.5, 0.5],
+              "exprType": "signal",
+              "kind": "method",
+              "name": "range",
+              "target": {
+                "args": [],
+                "exprType": "signal",
+                "kind": "call",
+                "name": "sine"
+              }
+            }
+          }
+        ],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "pan",
+        "target": {
+          "args": [2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "slow",
+          "target": {
+            "args": ["triangle"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "s",
+            "target": {
+              "args": ["<7 10 12 14>/4"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "n"
+            }
+          }
+        }
+      },
+      "orbit": "keys"
+    },
+    "melody": {
+      "gain": 0.07,
+      "mute": false,
+      "node": {
+        "args": [0.01],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "late",
+        "target": {
+          "args": [
+            {
+              "args": [6],
+              "exprType": "signal",
+              "kind": "method",
+              "name": "slow",
+              "target": {
+                "args": [-0.7, 0.7],
+                "exprType": "signal",
+                "kind": "method",
+                "name": "range",
+                "target": {
+                  "args": [],
+                  "exprType": "signal",
+                  "kind": "call",
+                  "name": "triangle"
+                }
+              }
+            }
+          ],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "pan",
+          "target": {
+            "args": ["<1 1 0 1>/4"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "mask",
+            "target": {
+              "args": [0.35],
+              "exprType": "pattern",
+              "kind": "method",
+              "name": "room",
+              "target": {
+                "args": [0.25],
+                "exprType": "pattern",
+                "kind": "method",
+                "name": "delay",
+                "target": {
+                  "args": [2],
+                  "exprType": "pattern",
+                  "kind": "method",
+                  "name": "fast",
+                  "target": {
+                    "args": ["square"],
+                    "exprType": "pattern",
+                    "kind": "method",
+                    "name": "s",
+                    "target": {
+                      "args": ["<12 10 7 [5 7]>"],
+                      "exprType": "pattern",
+                      "kind": "call",
+                      "name": "n"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "orbit": "melody"
+    },
+    "percussion": {
+      "gain": 0.12,
+      "mute": false,
+      "node": {
+        "args": [2],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "fast",
+        "target": {
+          "args": ["<1 0 1 1>/4"],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "mask",
+          "target": {
+            "args": ["crate"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "bank",
+            "target": {
+              "args": ["~ rim ~ [hh rim]"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "s"
+            }
+          }
+        }
+      },
+      "orbit": "percussion"
+    }
+  },
+  "master": {},
+  "metadata": {
+    "by": "eddyflux",
+    "title": "Full Piece Coastline",
+    "version": "1.0"
+  },
+  "samples": [
+    {
+      "ref": "./examples/assets/basic-kit"
+    }
+  ],
+  "transport": {
+    "cps": 0.75
+  }
+}

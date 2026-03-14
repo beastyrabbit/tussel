@@ -1,0 +1,107 @@
+{
+  "channels": {
+    "bass": {
+      "gain": 0.14,
+      "mute": false,
+      "node": {
+        "args": [220],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "lpf",
+        "target": {
+          "args": [2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "slow",
+          "target": {
+            "args": ["saw"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "s",
+            "target": {
+              "args": ["0 ~ 3 ~"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "n"
+            }
+          }
+        }
+      },
+      "orbit": "bass"
+    },
+    "drums": {
+      "gain": 0.03,
+      "mute": false,
+      "node": {
+        "args": [6000],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "hpf",
+        "target": {
+          "args": ["noise ~ noise noise"],
+          "exprType": "pattern",
+          "kind": "call",
+          "name": "s"
+        }
+      },
+      "orbit": "drums"
+    },
+    "lead": {
+      "gain": 0.09,
+      "mute": false,
+      "node": {
+        "args": [
+          {
+            "args": [4],
+            "exprType": "signal",
+            "kind": "method",
+            "name": "slow",
+            "target": {
+              "args": [-0.4, 0.4],
+              "exprType": "signal",
+              "kind": "method",
+              "name": "range",
+              "target": {
+                "args": [],
+                "exprType": "signal",
+                "kind": "call",
+                "name": "sine"
+              }
+            }
+          }
+        ],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "pan",
+        "target": {
+          "args": [2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "fast",
+          "target": {
+            "args": ["triangle"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "s",
+            "target": {
+              "args": ["0 2 4 7"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "n"
+            }
+          }
+        }
+      },
+      "orbit": "lead"
+    }
+  },
+  "master": {},
+  "metadata": {
+    "guide": "03-channels-and-scene-objects",
+    "title": "Channels and Scene Objects"
+  },
+  "samples": [],
+  "transport": {
+    "cps": 0.6
+  }
+}

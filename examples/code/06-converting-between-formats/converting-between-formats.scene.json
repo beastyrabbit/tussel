@@ -1,0 +1,82 @@
+{
+  "channels": {
+    "arp": {
+      "gain": 0.07,
+      "mute": false,
+      "node": {
+        "args": [
+          {
+            "args": [4],
+            "exprType": "signal",
+            "kind": "method",
+            "name": "slow",
+            "target": {
+              "args": [-0.6, 0.6],
+              "exprType": "signal",
+              "kind": "method",
+              "name": "range",
+              "target": {
+                "args": [],
+                "exprType": "signal",
+                "kind": "call",
+                "name": "triangle"
+              }
+            }
+          }
+        ],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "pan",
+        "target": {
+          "args": [2],
+          "exprType": "pattern",
+          "kind": "method",
+          "name": "fast",
+          "target": {
+            "args": ["square"],
+            "exprType": "pattern",
+            "kind": "method",
+            "name": "s",
+            "target": {
+              "args": ["0 2 4 7"],
+              "exprType": "pattern",
+              "kind": "call",
+              "name": "n"
+            }
+          }
+        }
+      },
+      "orbit": "arp"
+    },
+    "kit": {
+      "gain": 0.18,
+      "mute": false,
+      "node": {
+        "args": ["crate"],
+        "exprType": "pattern",
+        "kind": "method",
+        "name": "bank",
+        "target": {
+          "args": ["bd hh sd hh"],
+          "exprType": "pattern",
+          "kind": "call",
+          "name": "s"
+        }
+      },
+      "orbit": "kit"
+    }
+  },
+  "master": {},
+  "metadata": {
+    "guide": "06-converting-between-formats",
+    "title": "Converting Between Formats"
+  },
+  "samples": [
+    {
+      "ref": "./examples/assets/basic-kit"
+    }
+  ],
+  "transport": {
+    "cps": 0.5
+  }
+}
