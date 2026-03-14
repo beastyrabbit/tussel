@@ -983,7 +983,7 @@ export function uninstallStringPrototypeExtensions(): void {
   }
 
   for (const method of state.installedMethods) {
-    delete (String.prototype as unknown as Record<string, unknown>)[method];
+    Reflect.deleteProperty(String.prototype, method);
   }
   state.installedMethods.clear();
 }

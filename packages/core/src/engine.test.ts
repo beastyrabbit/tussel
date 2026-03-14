@@ -16,7 +16,8 @@ import {
   tri,
   value,
 } from '@tussel/dsl';
-import { describe, expect, it } from 'vitest';
+import type { SceneSpec } from '@tussel/ir';
+import { describe, expect, it, vi } from 'vitest';
 import { evaluateNumericValue } from './index.js';
 
 // ---------------------------------------------------------------------------
@@ -845,5 +846,68 @@ describe('signal fast/slow on signals', () => {
 
   it('slow(2) halves the signal frequency', () => {
     expect(evaluateNumericValue(saw.slow(2).expr, 0.5)).toBeCloseTo(0.25, 6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 26. Channel error boundaries (audit items 5.9)
+// ---------------------------------------------------------------------------
+describe('channel error boundaries', () => {
+  it('returns events from valid channels when another channel throws', () => {
+    const validNode = note('c').expr;
+    const brokenChannel = { node: null as any };
+    Object.defineProperty(brokenChannel, 'node', {
+      get() {
+        throw new Error('deliberate test explosion');
+      },
+      enumerable: true,
+      configurable: true,
+    });
+    const scene: SceneSpec = {
+      channels: {
+        good: { node: validNode },
+        broken: brokenChannel,
+      },
+      samples: [],
+      transport: { cps: 1 },
+    };
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const events = queryScene(scene, 0, 1, { cps: 1 });
+      expect(events.length).toBeGreaterThan(0);
+      expect(events.every((e) => e.channel === 'good')).toBe(true);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[tussel/core] channel "broken" evaluation failed'),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('does not crash queryScene when a channel evaluation throws', () => {
+    const brokenChannel = { node: null as any };
+    Object.defineProperty(brokenChannel, 'node', {
+      get() {
+        throw new TypeError('cannot read properties of kaboom');
+      },
+      enumerable: true,
+      configurable: true,
+    });
+    const scene: SceneSpec = {
+      channels: {
+        failing: brokenChannel,
+      },
+      samples: [],
+      transport: { cps: 1 },
+    };
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const events = queryScene(scene, 0, 1, { cps: 1 });
+      expect(events).toEqual([]);
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

@@ -27,6 +27,15 @@ interface ReferencePattern {
   queryArc: (begin: number, end: number) => ReferenceHap[];
 }
 
+function isReferencePattern(value: unknown): value is ReferencePattern {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    'queryArc' in value &&
+    typeof (value as ReferencePattern).queryArc === 'function'
+  );
+}
+
 interface ReferenceHap {
   duration: number;
   hasOnset?: () => boolean;
@@ -108,13 +117,12 @@ async function evaluatePattern(code: string): Promise<ReferencePattern> {
   const modules = await loadModules();
   await resetScope(modules);
   const evaluated = await modules.transpiler.evaluate(code);
-  const candidate = evaluated.pattern as ReferencePattern | undefined;
-  if (candidate && typeof candidate.queryArc === 'function') {
-    return candidate;
+  if (isReferencePattern(evaluated.pattern)) {
+    return evaluated.pattern;
   }
-  const direct = evaluated as unknown as ReferencePattern;
-  if (direct && typeof direct.queryArc === 'function') {
-    return direct;
+  // Some Strudel versions return the pattern as the top-level result
+  if (isReferencePattern(evaluated)) {
+    return evaluated;
   }
   throw new Error(`Strudel source did not evaluate to a pattern: ${code}`);
 }

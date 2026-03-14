@@ -1,5 +1,7 @@
-import { mkdir, stat } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { renderStrudelAudio, resolveStrudelSourceCode } from './adapters/strudel.js';
 import { queryTidalEvents } from './adapters/tidal-ffi.js';
 import {
@@ -133,6 +135,52 @@ export async function doctorParity(): Promise<void> {
       await stat(path.resolve(requiredPath));
     } catch {
       throw new Error(`Missing parity prerequisite: ${requiredPath}`);
+    }
+  }
+
+  await verifyPinnedCommits();
+}
+
+const execFileAsync = promisify(execFile);
+
+async function verifyPinnedCommits(): Promise<void> {
+  const pinnedPath = path.resolve('.ref', 'PINNED_COMMITS');
+  let pinnedContent: string;
+  try {
+    pinnedContent = await readFile(pinnedPath, 'utf-8');
+  } catch {
+    return;
+  }
+
+  const pinned = new Map<string, string>();
+  for (const line of pinnedContent.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
+    }
+    const [name, commit] = trimmed.split('=');
+    if (name && commit) {
+      pinned.set(name.trim(), commit.trim());
+    }
+  }
+
+  for (const [name, expectedCommit] of pinned) {
+    const refDir = path.resolve('.ref', name);
+    try {
+      await stat(refDir);
+    } catch {
+      continue;
+    }
+    try {
+      const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: refDir });
+      const actual = stdout.trim();
+      if (actual !== expectedCommit) {
+        console.warn(
+          `[parity] .ref/${name} is at ${actual.slice(0, 12)} but pinned to ${expectedCommit.slice(0, 12)}. Parity results may differ.`,
+        );
+      }
+    } catch {
+      // Not a git repo or git not available
     }
   }
 }

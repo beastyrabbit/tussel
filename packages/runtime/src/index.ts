@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { RealtimeAudioEngine, renderSceneToFile } from '@tussel/audio';
 import { type ExternalDispatchEvent, type PlaybackEvent, type QueryContext, queryScene } from '@tussel/core';
 import * as tusselDsl from '@tussel/dsl';
@@ -16,7 +16,7 @@ import {
   sceneSchema,
   stableJson,
 } from '@tussel/ir';
-import Ajv2020 from 'ajv/dist/2020.js';
+import { Ajv2020 } from 'ajv/dist/2020.js';
 import chokidar, { type FSWatcher } from 'chokidar';
 import { build as esbuild, type Plugin } from 'esbuild';
 import pc from 'picocolors';
@@ -53,12 +53,7 @@ export interface RunSceneOptions extends PrepareSceneOptions {
   onExternalDispatch?: (dispatch: ExternalDispatchEvent, targetTime: number) => void | Promise<void>;
 }
 
-interface AjvLike {
-  compile: (schema: object) => ((value: unknown) => boolean) & { errors?: unknown[] };
-  errorsText: (errors?: unknown[] | null) => string;
-}
-
-const ajv = new (Ajv2020 as unknown as { new (options?: Record<string, unknown>): AjvLike })({
+const ajv = new Ajv2020({
   allErrors: true,
 });
 const validateSceneJson = ajv.compile(sceneSchema);
@@ -78,7 +73,9 @@ const SETUP_CALL_NAMES = new Set([
   'setMotionValue',
 ]);
 const DEFAULT_STRUDEL_SAMPLE_NAMES = ['bd', 'hh', 'rim', 'sd'] as const;
-const DEFAULT_STRUDEL_SAMPLE_PACK = path.resolve('reference', 'assets', 'basic-kit');
+/** Resolve relative to this source file so the path is correct regardless of CWD. */
+const PACKAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const DEFAULT_STRUDEL_SAMPLE_PACK = path.resolve(PACKAGE_DIR, '..', '..', 'reference', 'assets', 'basic-kit');
 const workspaceAliasPlugin: Plugin = {
   name: 'tussel-workspace-alias',
   setup(build) {

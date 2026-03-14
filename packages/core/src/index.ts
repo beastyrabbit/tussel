@@ -62,12 +62,34 @@ export type ExternalDispatchEvent = MidiCcDispatchEvent | MidiNoteDispatchEvent 
 export interface SchedulerOptions {
   clearIntervalFn?: typeof clearInterval;
   getTime: () => number;
+  /**
+   * How often the scheduler's setInterval fires, in seconds.
+   * Default: 0.1 (100 ms). Lower values reduce latency at the cost of more
+   * frequent timer callbacks. Must be > 0.
+   */
   interval?: number;
+  /**
+   * Fixed lookahead offset added to event target times, in seconds.
+   * Default: 0.1 (100 ms). Compensates for the delay between scheduling
+   * and actual audio output. Higher values increase reliability on slow
+   * systems but add perceptible delay.
+   */
   latency?: number;
   onExternalDispatch?: (dispatch: ExternalDispatchEvent, targetTime: number) => void | Promise<void>;
   onTrigger: (event: PlaybackEvent, targetTime: number) => void | Promise<void>;
+  /**
+   * Extra lookahead beyond the interval to prevent gaps between ticks, in
+   * seconds. Default: 0.1 (100 ms). Together with `interval`, determines
+   * the total scheduling horizon: `interval + overlap`.
+   */
   overlap?: number;
   setIntervalFn?: typeof setInterval;
+  /**
+   * Duration of each scheduling window (tick quantum) in seconds.
+   * Default: 0.05 (50 ms). Controls how many cycles of audio are queried
+   * per tick. Smaller windows give finer granularity; larger windows
+   * reduce overhead.
+   */
   windowDuration?: number;
 }
 
@@ -124,6 +146,17 @@ const PROPERTY_METHODS = new Set([
 ]);
 
 const warnedUnsupportedPatterns = new Set<string>();
+const warnedChannelErrors = new Set<string>();
+
+function warnChannelError(channelName: string, error: unknown): void {
+  if (warnedChannelErrors.has(channelName)) {
+    return;
+  }
+  warnedChannelErrors.add(channelName);
+  console.warn(
+    `[tussel/core] channel "${channelName}" evaluation failed: ${(error as Error).message ?? error}`,
+  );
+}
 
 export function evaluateNumericValue(value: ExpressionValue | undefined, cycle: number): number | undefined {
   if (value === undefined) {
@@ -251,21 +284,26 @@ function queryChannel(
   end: number,
   context: QueryContext,
 ): PlaybackEvent[] {
-  const events = queryPattern(channel.node, begin, end, { ...context, channel: channelName });
-  return events.map((event) => {
-    const gain = evaluateNumericValue(channel.gain, event.begin);
-    const payload = { ...event.payload };
-    if (gain !== undefined) {
-      payload.gain = gain;
-    }
-    if (channel.orbit) {
-      payload.orbit = channel.orbit;
-    }
-    if (channel.mute) {
-      payload.mute = true;
-    }
-    return { ...event, payload };
-  });
+  try {
+    const events = queryPattern(channel.node, begin, end, { ...context, channel: channelName });
+    return events.map((event) => {
+      const gain = evaluateNumericValue(channel.gain, event.begin);
+      const payload = { ...event.payload };
+      if (gain !== undefined) {
+        payload.gain = gain;
+      }
+      if (channel.orbit) {
+        payload.orbit = channel.orbit;
+      }
+      if (channel.mute) {
+        payload.mute = true;
+      }
+      return { ...event, payload };
+    });
+  } catch (error) {
+    warnChannelError(channelName, error);
+    return [];
+  }
 }
 
 function assertQueryWindow(begin: number, end: number): void {

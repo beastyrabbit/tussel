@@ -1,9 +1,11 @@
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { LoadedParityFixture, ParityFixture } from './schema.js';
 
-const FIXTURE_ROOT = path.resolve('reference', 'fixtures');
+/** Resolve relative to source file so fixtures are found regardless of CWD. */
+const PACKAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const FIXTURE_ROOT = path.resolve(PACKAGE_DIR, '..', '..', 'reference', 'fixtures');
 
 export async function loadFixtures(
   options: { fixtureId?: string; level?: number } = {},

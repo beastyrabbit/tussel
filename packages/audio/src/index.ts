@@ -76,7 +76,28 @@ export interface CsoundVoiceSpec {
 }
 
 const BUILTIN_SYNTHS = new Set(['noise', 'saw', 'sawtooth', 'sine', 'square', 'triangle']);
+
+// -- Default constants: audio engine configuration ----------------------------
+
+/**
+ * Oscillator waveform used when a note is triggered without an explicit sound
+ * name (e.g. `note("c3")`).
+ *
+ * Valid values: any OscillatorType (`'sine'`, `'square'`, `'sawtooth'`, `'triangle'`).
+ * Triangle is chosen for its mellow, general-purpose timbre.
+ */
 const DEFAULT_NOTE_SYNTH = 'triangle';
+
+/**
+ * ADSR envelope applied to sample playback.
+ *
+ * - attack / decay / release: seconds (range 0.001 - 4).
+ * - peak: linear gain multiplier (range 0 - 2).
+ * - sustain: fraction of peak (range 0 - 1).
+ *
+ * Near-zero attack/decay give an immediate onset suitable for percussive
+ * samples. Sustain of 1 means no level drop after decay. Empirically tuned.
+ */
 const DEFAULT_SAMPLE_ENVELOPE: EnvelopeDefaults = {
   attack: 0.001,
   decay: 0.001,
@@ -84,6 +105,17 @@ const DEFAULT_SAMPLE_ENVELOPE: EnvelopeDefaults = {
   release: 0.01,
   sustain: 1,
 };
+
+/**
+ * ADSR envelope applied to synthesizer oscillator voices.
+ *
+ * - attack / decay / release: seconds (range 0.001 - 4).
+ * - peak: linear gain multiplier (range 0 - 2).
+ * - sustain: fraction of peak (range 0 - 1).
+ *
+ * Slightly longer decay (0.05 s) and lower sustain (0.6) than the sample
+ * envelope for a natural pluck-like contour. Empirically tuned.
+ */
 const DEFAULT_SYNTH_ENVELOPE: EnvelopeDefaults = {
   attack: 0.001,
   decay: 0.05,
@@ -91,19 +123,77 @@ const DEFAULT_SYNTH_ENVELOPE: EnvelopeDefaults = {
   release: 0.01,
   sustain: 0.6,
 };
+
+/** Output gain for built-in synth voices (range 0-1). Below unity to leave headroom when layering. Empirically tuned. */
 const DEFAULT_SYNTH_OUTPUT_GAIN = 0.3;
+
+/** Default delay time in cycles (converted to seconds via cycles/cps). Range: >0. Quarter-cycle is musically common. */
 const DEFAULT_DELAY_CYCLES = 0.25;
+
+/** Fraction of delayed signal fed back into delay line. Range: 0 - MAX_DELAY_FEEDBACK. Empirically tuned. */
 const DEFAULT_DELAY_FEEDBACK = 0.35;
+
+/** Maximum delay time in seconds. Caps DelayNode.maxDelayTime to avoid excessive memory. */
 const DEFAULT_DELAY_MAX_SECONDS = 4;
+
+/** FM synthesis modulation depth multiplier. Applied as carrierFreq * depth * DEFAULT_FM_DEPTH. Empirically tuned. */
 const DEFAULT_FM_DEPTH = 4;
+
+/** Ratio of FM modulator frequency to carrier. 0.5 (octave below) gives rich harmonics without dissonance. Empirically tuned. */
 const DEFAULT_FM_RATIO = 0.5;
+
+/** Feedback gain for phaser all-pass chain. Range: 0 - 0.85. Empirically tuned for a subtle effect. */
 const DEFAULT_PHASER_FEEDBACK = 0.35;
+
+/** LFO rate in Hz for phaser sweep (~5.5 s cycle). Empirically tuned for gentle modulation. */
 const DEFAULT_PHASER_RATE = 0.18;
+
+/** Default reverb room size (seconds of tail). Range: 0.05 - 8. Value of 2 gives a medium room. Empirically tuned. */
 const DEFAULT_ROOM_SIZE = 2;
+
+/** Output gain for Csound-emulated voices (range 0-1). Lower than synth gain to compensate for hotter presets. Empirically tuned. */
 const DEFAULT_CSOUND_OUTPUT_GAIN = 0.25;
+
+// -- Extracted audio constants ------------------------------------------------
+
+/** Near-zero gain for end of release ramp. Avoids issues with linearRampToValueAtTime(0) while being inaudible. */
+const ENVELOPE_RELEASE_FLOOR = 0.0001;
+
+/** Human hearing range upper bound in Hz. Used to clamp filter frequencies. */
+const MAX_AUDIBLE_FREQUENCY_HZ = 20_000;
+
+/** Max delay feedback. Must stay below 1.0 to prevent runaway self-oscillation. */
+const MAX_DELAY_FEEDBACK = 0.98;
+
+/** Maximum MIDI value (7-bit, 0-indexed). Used for velocity, note, and CC conversions. */
+const MIDI_MAX_VALUE = 127;
+
+/** Human hearing range lower bound in Hz. Used to clamp filter frequencies. */
+const MIN_AUDIBLE_FREQUENCY_HZ = 20;
+
+/** Minimum CPS divisor to prevent division by zero when converting cycles to seconds. */
+const MIN_CPS_DIVISOR = 0.01;
+
+/** Minimum delay time in seconds. Prevents comb-filter artifacts from very short delays. */
+const MIN_DELAY_TIME_SECONDS = 0.02;
+
+/** Minimum note/sample duration in seconds. Prevents clicks from near-zero-length events. Empirically tuned. */
+const MIN_NOTE_DURATION_SECONDS = 0.05;
+
+/** Minimum playback duration in seconds. Prevents degenerate playback windows. */
+const MIN_PLAYBACK_DURATION_SECONDS = 0.01;
+
+/** Minimum playback rate for sample sources. Prevents stalling from zero rate. */
+const MIN_PLAYBACK_RATE = 1e-3;
+
+/** Duration of pre-generated white-noise buffer (seconds). One second is enough randomness to loop naturally. */
 const NOISE_BUFFER_SECONDS = 1;
+
+/** Padding after release phase (seconds). Ensures gain envelope fully decays before source stops. Empirically tuned. */
+const STOP_TIME_PADDING_SECONDS = 0.01;
 const impulseResponseCache = new WeakMap<AnyContext, Map<string, AudioBuffer>>();
 const reversedBufferCache = new WeakMap<AudioBuffer, AudioBuffer>();
+const warnedMissingSamples = new Set<string>();
 const warnedUnknownCsoundInstruments = new Set<string>();
 
 export interface RealtimeAudioEngineOptions {
@@ -263,20 +353,29 @@ export async function ensureSamplePackLocal(
   return manifest.rootDir;
 }
 
+/**
+ * Extended options accepted by node-web-audio-api's AudioContext constructor.
+ * The upstream DOM lib omits `sinkId` but the runtime supports it to create
+ * a context with no audio output device.
+ */
+interface SinklessAudioContextOptions extends AudioContextOptions {
+  sinkId: { type: 'none' };
+}
+
 async function createRealtimeContext(sinkless: boolean): Promise<AudioContext> {
   try {
     if (sinkless) {
       return new RealtimeAudioContext({
         latencyHint: 'playback',
         sinkId: { type: 'none' },
-      } as unknown as AudioContextOptions);
+      } as SinklessAudioContextOptions);
     }
     return new RealtimeAudioContext({ latencyHint: 'playback' });
   } catch {
     return new RealtimeAudioContext({
       latencyHint: 'playback',
       sinkId: { type: 'none' },
-    } as unknown as AudioContextOptions);
+    } as SinklessAudioContextOptions);
   }
 }
 
@@ -315,8 +414,13 @@ async function buildVoice(
     clippedEvent.payload.n,
   );
   if (!sample) {
-    if (soundName !== 'silence') {
-      console.warn(pc.yellow(`sample not found: ${soundName}`));
+    if (soundName !== 'silence' && !warnedMissingSamples.has(soundName)) {
+      warnedMissingSamples.add(soundName);
+      const audioError = new TusselAudioError(`sample not found: ${soundName}`, {
+        code: 'TUSSEL_AUDIO_SAMPLE_NOT_FOUND',
+        details: { soundName },
+      });
+      console.warn(pc.yellow(audioError.message));
     }
     return undefined;
   }
@@ -344,7 +448,7 @@ export function resolveCsoundVoiceSpec(event: PlaybackEvent, cps: number): Csoun
   const frequency = resolveFrequency(event.payload);
   const gain = clampNumber(event.payload.gain, 0, 1, 0.8);
   const velocityBase = clampNumber(event.payload.velocity, 0, 1, 0.9);
-  const duration = Math.max(event.duration / Math.max(cps, 0.01), 0.01);
+  const duration = Math.max(event.duration / Math.max(cps, MIN_CPS_DIVISOR), MIN_PLAYBACK_DURATION_SECONDS);
   const controls = Object.entries({
     ...event.payload,
     frequency,
@@ -363,7 +467,7 @@ export function resolveCsoundVoiceSpec(event: PlaybackEvent, cps: number): Csoun
     midiKey: frequencyToMidi(frequency),
     mode,
     preset: resolveCsoundPreset(instrument, definition?.body),
-    velocity: 127 * gain * velocityBase,
+    velocity: MIDI_MAX_VALUE * gain * velocityBase,
   };
 }
 
@@ -403,11 +507,11 @@ async function playSample(
 ): Promise<LoadedVoice> {
   const env = createEnvelope(context, event, targetTime, cps, DEFAULT_SAMPLE_ENVELOPE);
   const requestedSpeed = coerceFiniteNumber(event.payload.speed) ?? 1;
-  const playbackRate = Math.max(Math.abs(requestedSpeed), 1e-3);
+  const playbackRate = Math.max(Math.abs(requestedSpeed), MIN_PLAYBACK_RATE);
   const reverse = requestedSpeed < 0;
   const sourceBuffer = reverse ? getReversedBuffer(context, buffer) : buffer;
   const begin = clampNumber(event.payload.begin, 0, 0.99, 0);
-  const end = clampNumber(event.payload.end, begin + 0.01, 1, 1);
+  const end = clampNumber(event.payload.end, begin + MIN_PLAYBACK_DURATION_SECONDS, 1, 1);
   const loopEnabled = isLoopEnabled(event.payload.loop);
   const loopStart = reverse ? (1 - end) * buffer.duration : begin * buffer.duration;
   const loopEnd = reverse ? (1 - begin) * buffer.duration : end * buffer.duration;
@@ -418,12 +522,13 @@ async function playSample(
     loopStart,
     playbackRate,
   });
-  const availableDuration = Math.max(buffer.duration * (end - begin), 0.01);
+  const availableDuration = Math.max(buffer.duration * (end - begin), MIN_PLAYBACK_DURATION_SECONDS);
   const offset = loopStart;
-  const playbackWindow = Math.max(event.duration / cps, 0.01);
+  const playbackWindow = Math.max(event.duration / cps, MIN_PLAYBACK_DURATION_SECONDS);
   const sampleWindow = availableDuration / playbackRate;
   const duration = loopEnabled ? playbackWindow : Math.min(sampleWindow, playbackWindow);
-  const stopTime = targetTime + Math.max(duration, 0.05) + env.release + 0.01;
+  const stopTime =
+    targetTime + Math.max(duration, MIN_NOTE_DURATION_SECONDS) + env.release + STOP_TIME_PADDING_SECONDS;
   const destination = connectOutputChain(
     context,
     env,
@@ -467,7 +572,11 @@ function playSynth(
   cps: number,
 ): LoadedVoice {
   const env = createEnvelope(context, event, targetTime, cps, DEFAULT_SYNTH_ENVELOPE);
-  const stopTime = targetTime + Math.max(event.duration / cps, 0.05) + env.release + 0.01;
+  const stopTime =
+    targetTime +
+    Math.max(event.duration / cps, MIN_NOTE_DURATION_SECONDS) +
+    env.release +
+    STOP_TIME_PADDING_SECONDS;
   const destination = connectOutputChain(
     context,
     env,
@@ -534,7 +643,7 @@ function playCsound(
 
   const envelopeDefaults = resolveCsoundEnvelope(spec.preset);
   const env = createEnvelope(context, event, targetTime, cps, envelopeDefaults);
-  const stopTime = targetTime + spec.duration + env.release + 0.01;
+  const stopTime = targetTime + spec.duration + env.release + STOP_TIME_PADDING_SECONDS;
   const destination = connectOutputChain(
     context,
     env,
@@ -544,7 +653,9 @@ function playCsound(
     { startTime: targetTime, stopTime },
   );
   const outputGain = new GainNode(context, {
-    gain: DEFAULT_CSOUND_OUTPUT_GAIN * (spec.mode === 'midi' ? clamp(spec.velocity / 127, 0.1, 1.25) : 1),
+    gain:
+      DEFAULT_CSOUND_OUTPUT_GAIN *
+      (spec.mode === 'midi' ? clamp(spec.velocity / MIDI_MAX_VALUE, 0.1, 1.25) : 1),
   });
   outputGain.connect(destination);
 
@@ -586,7 +697,7 @@ function connectOutputChain(
   const lpf = coerceFiniteNumber(payload.lpf ?? payload.cutoff);
   if (lpf !== undefined) {
     const filter = new BiquadFilterNode(context, {
-      frequency: clamp(lpf, 20, 20_000),
+      frequency: clamp(lpf, MIN_AUDIBLE_FREQUENCY_HZ, MAX_AUDIBLE_FREQUENCY_HZ),
       type: 'lowpass',
     });
     const lpq = coerceFiniteNumber(payload.lpq);
@@ -600,7 +711,7 @@ function connectOutputChain(
   const hpf = coerceFiniteNumber(payload.hpf ?? payload.hcutoff);
   if (hpf !== undefined) {
     const filter = new BiquadFilterNode(context, {
-      frequency: clamp(hpf, 20, 20_000),
+      frequency: clamp(hpf, MIN_AUDIBLE_FREQUENCY_HZ, MAX_AUDIBLE_FREQUENCY_HZ),
       type: 'highpass',
     });
     current.connect(filter);
@@ -610,7 +721,7 @@ function connectOutputChain(
   const shapeAmount = coerceFiniteNumber(payload.shape);
   if (shapeAmount !== undefined && shapeAmount > 0) {
     const shaper = new WaveShaperNode(context);
-    shaper.curve = createDistortionCurve(shapeAmount) as unknown as Float32Array<ArrayBuffer>;
+    shaper.curve = createDistortionCurve(shapeAmount);
     shaper.oversample = '2x';
     current.connect(shaper);
     current = shaper;
@@ -696,7 +807,7 @@ function createEnvelope(
   const release = clampNumber(event.payload.release, 0.001, 4, defaults.release);
   const sustain = clampNumber(event.payload.sustain, 0, 1, defaults.sustain);
   const peak = clampNumber(event.payload.gain, 0, 2, defaults.peak);
-  const duration = Math.max(event.duration / cps, 0.05);
+  const duration = Math.max(event.duration / cps, MIN_NOTE_DURATION_SECONDS);
   const attackEnd = targetTime + attack;
   const holdEnd = targetTime + duration;
   const decayEnd = Math.min(attackEnd + decay, holdEnd);
@@ -705,7 +816,7 @@ function createEnvelope(
   gain.gain.linearRampToValueAtTime(peak, attackEnd);
   gain.gain.linearRampToValueAtTime(peak * sustain, decayEnd);
   gain.gain.setValueAtTime(peak * sustain, holdEnd);
-  gain.gain.linearRampToValueAtTime(0.0001, holdEnd + release);
+  gain.gain.linearRampToValueAtTime(ENVELOPE_RELEASE_FLOOR, holdEnd + release);
   return Object.assign(gain, { release });
 }
 
@@ -1057,7 +1168,11 @@ function resolveDelaySettings(
     return {
       feedback: DEFAULT_DELAY_FEEDBACK,
       mix: clamp(value, 0, 2),
-      time: clamp(DEFAULT_DELAY_CYCLES / Math.max(cps, 0.01), 0.02, DEFAULT_DELAY_MAX_SECONDS),
+      time: clamp(
+        DEFAULT_DELAY_CYCLES / Math.max(cps, MIN_CPS_DIVISOR),
+        MIN_DELAY_TIME_SECONDS,
+        DEFAULT_DELAY_MAX_SECONDS,
+      ),
     };
   }
   if (typeof value !== 'string') {
@@ -1071,13 +1186,17 @@ function resolveDelaySettings(
     return undefined;
   }
   return {
-    feedback: clamp(parts[2] ?? DEFAULT_DELAY_FEEDBACK, 0, 0.98),
+    feedback: clamp(parts[2] ?? DEFAULT_DELAY_FEEDBACK, 0, MAX_DELAY_FEEDBACK),
     mix: clamp(parts[0] ?? 0, 0, 2),
-    time: clamp((parts[1] ?? DEFAULT_DELAY_CYCLES) / Math.max(cps, 0.01), 0.02, DEFAULT_DELAY_MAX_SECONDS),
+    time: clamp(
+      (parts[1] ?? DEFAULT_DELAY_CYCLES) / Math.max(cps, MIN_CPS_DIVISOR),
+      MIN_DELAY_TIME_SECONDS,
+      DEFAULT_DELAY_MAX_SECONDS,
+    ),
   };
 }
 
-function createDistortionCurve(amount: number): Float32Array {
+function createDistortionCurve(amount: number): Float32Array<ArrayBuffer> {
   const samples = 1024;
   const curve = new Float32Array(new ArrayBuffer(samples * Float32Array.BYTES_PER_ELEMENT));
   const drive = clamp(amount, 0.01, 4) * 25;
