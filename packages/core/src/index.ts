@@ -3041,6 +3041,7 @@ export class Scheduler {
   private scene: SceneSpec | undefined;
   private secondsAtCpsChange = 0;
   private setIntervalFn: typeof setInterval;
+  private ticking = false;
   started = false;
   cps = 0.5;
 
@@ -3095,6 +3096,7 @@ export class Scheduler {
     }
     this.intervalHandle = undefined;
     this.started = false;
+    this.ticking = false;
     this.lastBegin = 0;
     this.lastEnd = 0;
     this.lastTick = 0;
@@ -3102,9 +3104,10 @@ export class Scheduler {
   }
 
   private tick = (): void => {
-    if (!this.scene || !this.started) {
+    if (!this.scene || !this.started || this.ticking) {
       return;
     }
+    this.ticking = true;
 
     const getTime = this.options.getTime;
     const duration = this.options.windowDuration ?? 0.05;
@@ -3147,5 +3150,6 @@ export class Scheduler {
 
       phase += duration;
     }
+    this.ticking = false;
   };
 }
