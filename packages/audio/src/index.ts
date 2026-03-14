@@ -3,12 +3,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   clampNumber,
+  edoFrequency,
   type ExternalDispatchEvent,
+  parseXenValue,
   type PlaybackEvent,
   queryScene,
   Scheduler,
 } from '@tussel/core';
 import { getCsoundInstrument, type SampleManifest, type SceneSpec } from '@tussel/ir';
+import { type MidiOutputFactory, MidiOutputManager, loadMidiOutputFactory } from './midi-output.js';
+import { OscOutputManager } from './osc-output.js';
 import type {
   AudioBuffer,
   AudioBufferSourceNode,
@@ -116,8 +120,10 @@ export class RealtimeAudioEngine {
   private readonly cacheDir: string;
   private context: AudioContext | undefined;
   private readonly cutGroups = new Map<string, LoadedVoice[]>();
+  readonly midiOutput: MidiOutputManager | undefined;
   private mixGraph: MixGraph | undefined;
   private readonly onExternalDispatch: RealtimeAudioEngineOptions['onExternalDispatch'];
+  readonly oscOutput = new OscOutputManager();
   private readonly sampleRegistry = new SampleRegistry();
   private scheduler: Scheduler | undefined;
 
@@ -134,6 +140,8 @@ export class RealtimeAudioEngine {
       this.context = await createRealtimeContext(this.sinkless);
     }
 
+    await this.initMidi();
+
     await this.sampleRegistry.prepareScene(scene, this.cacheDir);
     this.mixGraph = createMixGraph(
       this.context,
@@ -143,7 +151,14 @@ export class RealtimeAudioEngine {
 
     this.scheduler ??= new Scheduler({
       getTime: () => this.context?.currentTime ?? 0,
-      onExternalDispatch: this.onExternalDispatch,
+      onExternalDispatch: (dispatch, targetTime) => {
+        if (dispatch.kind === 'osc') {
+          this.oscOutput.dispatchEvent(dispatch);
+        } else if (dispatch.kind === 'midi-note' || dispatch.kind === 'midi-cc') {
+          this.handleMidiDispatch(dispatch, targetTime);
+        }
+        return this.onExternalDispatch?.(dispatch, targetTime);
+      },
       onTrigger: (event, targetTime) => this.trigger(event, targetTime),
     });
     this.scheduler.setScene(scene);
@@ -168,11 +183,60 @@ export class RealtimeAudioEngine {
   async stop(): Promise<void> {
     this.scheduler?.stop();
     this.scheduler = undefined;
+    this.oscOutput.closeAll();
+    this.midiOutput?.closeAll();
 
     if (this.context) {
       await this.context.close();
       this.context = undefined;
       this.mixGraph = undefined;
+    }
+  }
+
+  /**
+   * Lazily initialize the MidiOutputManager if the native addon is available.
+   * Called once from `start()`. Subsequent calls are a no-op.
+   */
+  private async initMidi(): Promise<void> {
+    if (this.midiOutput !== undefined) {
+      return;
+    }
+    const factory = await loadMidiOutputFactory();
+    if (factory) {
+      // Cast away readonly for one-time initialization
+      (this as { midiOutput: MidiOutputManager | undefined }).midiOutput = new MidiOutputManager(factory);
+    }
+  }
+
+  /**
+   * Handle a MIDI dispatch event. For note events, schedules the Note Off
+   * after the event's duration using `setTimeout`.
+   */
+  private handleMidiDispatch(
+    dispatch: import('@tussel/core').MidiNoteDispatchEvent | import('@tussel/core').MidiCcDispatchEvent,
+    targetTime: number,
+  ): void {
+    if (!this.midiOutput) {
+      return;
+    }
+
+    const noteOff = this.midiOutput.dispatchEvent(dispatch);
+
+    if (noteOff && dispatch.kind === 'midi-note') {
+      // Schedule note-off after the event's duration.
+      // The duration is (end - begin) in cycle units; convert to seconds
+      // using the scheduler's cps (cycles per second).
+      const cps = this.scheduler?.cps ?? 0.5;
+      const durationSeconds = Math.max(0.01, (dispatch.end - dispatch.begin) / cps);
+
+      // Account for the lookahead: targetTime is in AudioContext time,
+      // currentTime is "now". The note-on was sent immediately but should
+      // conceptually start at targetTime, so the note-off delay is relative
+      // to now.
+      const now = this.context?.currentTime ?? 0;
+      const delayMs = Math.max(10, (targetTime - now + durationSeconds) * 1000);
+
+      setTimeout(noteOff, delayMs);
     }
   }
 
@@ -700,7 +764,30 @@ function resolveFrequency(payload: Record<string, unknown>): number {
     return frequency;
   }
 
+  // If payload.xen is set, parse it as xenharmonic notation and apply as a
+  // frequency ratio relative to the base frequency (default C4 = 261.63 Hz).
+  const xenValue = payload.xen;
+  if (typeof xenValue === 'string') {
+    const ratio = parseXenValue(xenValue);
+    if (ratio !== undefined && ratio > 0) {
+      const baseFreq = coerceFiniteNumber(payload.baseFreq) ?? 261.63;
+      return baseFreq * ratio;
+    }
+  }
+
   const note = payload.note ?? payload.n;
+
+  // EDO tuning: when payload.edo is a positive number, use N-EDO frequency
+  // calculation instead of standard 12-TET.
+  const edoDivisions = coerceFiniteNumber(payload.edo);
+  if (edoDivisions !== undefined && edoDivisions > 0) {
+    const step = typeof note === 'number' ? note : typeof note === 'string' ? Number(note) : NaN;
+    if (Number.isFinite(step)) {
+      const baseFreq = coerceFiniteNumber(payload.baseFreq) ?? undefined;
+      return edoFrequency(step, edoDivisions, baseFreq);
+    }
+  }
+
   if (typeof note === 'number') {
     return midiToFrequency(60 + note);
   }
@@ -1461,3 +1548,8 @@ function writeAscii(view: DataView, offset: number, value: string): void {
 export function resolveCacheDir(fromUrl: string | URL): string {
   return path.resolve(path.dirname(fileURLToPath(fromUrl)), '..', '..', '..', '.tussel-cache', 'samples');
 }
+
+export { MidiOutputManager, loadMidiOutputFactory } from './midi-output.js';
+export type { MidiOutputFactory, MidiOutputPort, MidiPortInfo } from './midi-output.js';
+export { OscOutputManager } from './osc-output.js';
+export type { OscArgument } from './osc-output.js';
