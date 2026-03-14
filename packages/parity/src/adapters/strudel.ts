@@ -106,11 +106,14 @@ export async function renderStrudelAudio(
   return encodeWav(sampleRate, [left, right]);
 }
 
-export function resolveStrudelSourceCode(source: ExternalFixtureSource): string {
+export async function resolveStrudelSourceCode(source: ExternalFixtureSource): Promise<string> {
   if (source.code) {
     return source.code;
   }
-  throw new Error('Parity fixtures currently require inline Strudel code.');
+  if (source.path) {
+    return readFile(path.resolve(source.path), 'utf8');
+  }
+  throw new Error('Parity fixture source requires either code or path.');
 }
 
 async function evaluatePattern(code: string): Promise<ReferencePattern> {

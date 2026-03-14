@@ -109,7 +109,9 @@ export class MidiInputManager {
 
       return true;
     } catch (error) {
-      console.warn(`[tussel/midi-input] failed to open port: ${(error as Error).message}`);
+      console.warn(
+        `[tussel/midi-input] failed to open port: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }
@@ -203,13 +205,13 @@ export function describeMidiMessage(
   const data2 = message[2] ?? 0;
 
   const typeMap: Record<number, string> = {
-    0x80: 'noteOff',
-    0x90: data2 > 0 ? 'noteOn' : 'noteOff',
-    0xa0: 'polyPressure',
-    0xb0: 'cc',
-    0xc0: 'programChange',
-    0xd0: 'channelPressure',
-    0xe0: 'pitchBend',
+    128: 'noteOff',
+    144: data2 > 0 ? 'noteOn' : 'noteOff',
+    160: 'polyPressure',
+    176: 'cc',
+    192: 'programChange',
+    208: 'channelPressure',
+    224: 'pitchBend',
   };
 
   const type = typeMap[statusType];

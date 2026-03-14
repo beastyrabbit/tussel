@@ -1,44 +1,9 @@
-const VISUAL_METHODS = ['color', '_scope', 'punchcard', '_punchcard'] as const;
-
 const TOP_LEVEL_STATE_PREFIXES = ['samples(', 'setbpm(', 'setcpm(', 'setcps('] as const;
 
 export function normalizeStrudelSource(source: string): string {
-  let normalized = stripVisualMethods(source);
-  normalized = rewriteSetcpmCalls(normalized);
+  let normalized = rewriteSetcpmCalls(source);
   normalized = rewriteLayeredScript(normalized);
   return normalized.trim();
-}
-
-function stripVisualMethods(source: string): string {
-  let result = source;
-  for (const methodName of VISUAL_METHODS) {
-    result = stripMethodCalls(result, methodName);
-  }
-  return result;
-}
-
-function stripMethodCalls(source: string, methodName: string): string {
-  let result = '';
-  let index = 0;
-
-  while (index < source.length) {
-    const marker = `.${methodName}(`;
-    const matchIndex = source.indexOf(marker, index);
-    if (matchIndex === -1) {
-      result += source.slice(index);
-      break;
-    }
-
-    result += source.slice(index, matchIndex);
-    const endIndex = findCallEnd(source, matchIndex + marker.length - 1);
-    if (endIndex === -1) {
-      result += source.slice(matchIndex);
-      break;
-    }
-    index = endIndex + 1;
-  }
-
-  return result;
 }
 
 function rewriteSetcpmCalls(source: string): string {

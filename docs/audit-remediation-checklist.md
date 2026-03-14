@@ -68,15 +68,15 @@ Status:
 
 ## Declared-But-Not-Implemented Pattern Methods
 
-- [ ] 3.1 Implement `anchor()` or reject it explicitly.
+- [x] 3.1 Implement `anchor()` or reject it explicitly.
 - [x] 3.2 Implement `ceil()` or reject it explicitly.
-- [ ] 3.3 Implement `chunk()` or reject it explicitly.
+- [x] 3.3 Implement `chunk()` or reject it explicitly.
 - [/] 3.4 Implement `dict()` or reject it explicitly.
 - [x] 3.5 Implement `floor()` or reject it explicitly.
 - [x] 3.6 Implement `offset()` or reject it explicitly.
 - [x] 3.7 Implement `rarely()` or reject it explicitly.
 - [x] 3.8 Implement `round()` or reject it explicitly.
-- [ ] 3.9 Implement `segment()` or reject it explicitly.
+- [x] 3.9 Implement `segment()` or reject it explicitly.
 - [x] 3.10 Implement `voicing()` or reject it explicitly.
 
 ## Audio Engine Deficiencies

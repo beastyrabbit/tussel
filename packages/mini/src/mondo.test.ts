@@ -130,36 +130,36 @@ describe('mondo notation', () => {
     it('distributes 4 steps evenly across one cycle', () => {
       const events = parseMondo('xoxo');
       expect(events).toHaveLength(4);
-      expect(events[0]!.begin).toBeCloseTo(0, 10);
-      expect(events[0]!.end).toBeCloseTo(0.25, 10);
-      expect(events[1]!.begin).toBeCloseTo(0.25, 10);
-      expect(events[1]!.end).toBeCloseTo(0.5, 10);
-      expect(events[2]!.begin).toBeCloseTo(0.5, 10);
-      expect(events[2]!.end).toBeCloseTo(0.75, 10);
-      expect(events[3]!.begin).toBeCloseTo(0.75, 10);
-      expect(events[3]!.end).toBeCloseTo(1, 10);
+      expect(events[0]?.begin).toBeCloseTo(0, 10);
+      expect(events[0]?.end).toBeCloseTo(0.25, 10);
+      expect(events[1]?.begin).toBeCloseTo(0.25, 10);
+      expect(events[1]?.end).toBeCloseTo(0.5, 10);
+      expect(events[2]?.begin).toBeCloseTo(0.5, 10);
+      expect(events[2]?.end).toBeCloseTo(0.75, 10);
+      expect(events[3]?.begin).toBeCloseTo(0.75, 10);
+      expect(events[3]?.end).toBeCloseTo(1, 10);
     });
 
     it('distributes 16 steps evenly (standard drum machine grid)', () => {
       const events = parseMondo('x...o...x...o...');
       expect(events).toHaveLength(4);
-      expect(events[0]!.begin).toBeCloseTo(0, 10);
-      expect(events[0]!.end).toBeCloseTo(0.0625, 10);
-      expect(events[1]!.begin).toBeCloseTo(0.25, 10);
-      expect(events[1]!.end).toBeCloseTo(0.3125, 10);
-      expect(events[2]!.begin).toBeCloseTo(0.5, 10);
-      expect(events[2]!.end).toBeCloseTo(0.5625, 10);
-      expect(events[3]!.begin).toBeCloseTo(0.75, 10);
-      expect(events[3]!.end).toBeCloseTo(0.8125, 10);
+      expect(events[0]?.begin).toBeCloseTo(0, 10);
+      expect(events[0]?.end).toBeCloseTo(0.0625, 10);
+      expect(events[1]?.begin).toBeCloseTo(0.25, 10);
+      expect(events[1]?.end).toBeCloseTo(0.3125, 10);
+      expect(events[2]?.begin).toBeCloseTo(0.5, 10);
+      expect(events[2]?.end).toBeCloseTo(0.5625, 10);
+      expect(events[3]?.begin).toBeCloseTo(0.75, 10);
+      expect(events[3]?.end).toBeCloseTo(0.8125, 10);
     });
 
     it('handles odd step counts correctly', () => {
       const events = parseMondo('x.x');
       expect(events).toHaveLength(2);
-      expect(events[0]!.begin).toBeCloseTo(0, 10);
-      expect(events[0]!.end).toBeCloseTo(1 / 3, 10);
-      expect(events[1]!.begin).toBeCloseTo(2 / 3, 10);
-      expect(events[1]!.end).toBeCloseTo(1, 10);
+      expect(events[0]?.begin).toBeCloseTo(0, 10);
+      expect(events[0]?.end).toBeCloseTo(1 / 3, 10);
+      expect(events[1]?.begin).toBeCloseTo(2 / 3, 10);
+      expect(events[1]?.end).toBeCloseTo(1, 10);
     });
   });
 

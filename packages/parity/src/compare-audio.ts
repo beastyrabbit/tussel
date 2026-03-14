@@ -20,13 +20,22 @@ export function compareAudio(expected: Buffer, actual: Buffer): AudioComparisonR
       ok: false,
     };
   }
+  if (expectedSilent && actualSilent) {
+    return {
+      actualBytes: rendered.data.byteLength,
+      actualSilent,
+      expectedBytes: oracle.data.byteLength,
+      expectedSilent,
+      ok: false,
+    };
+  }
   if (expectedSilent || actualSilent) {
     return {
       actualBytes: rendered.data.byteLength,
       actualSilent,
       expectedBytes: oracle.data.byteLength,
       expectedSilent,
-      ok: expectedSilent && actualSilent && oracle.data.equals(rendered.data),
+      ok: false,
     };
   }
 

@@ -153,19 +153,25 @@ const PROPERTY_METHODS = new Set([
   'struct',
   'sustain',
   'velocity',
+  'color',
+  '_scope',
+  'punchcard',
+  '_punchcard',
 ]);
 
-const warnedUnsupportedPatterns = new Set<string>();
 const warnedChannelErrors = new Set<string>();
+
+export function resetWarnings(): void {
+  warnedChannelErrors.clear();
+}
 
 function warnChannelError(channelName: string, error: unknown): void {
   if (warnedChannelErrors.has(channelName)) {
     return;
   }
   warnedChannelErrors.add(channelName);
-  console.warn(
-    `[tussel/core] channel "${channelName}" evaluation failed: ${(error as Error).message ?? error}`,
-  );
+  const message = error instanceof Error ? error.message : String(error);
+  console.warn(`[tussel/core] channel "${channelName}" evaluation failed: ${message}`);
 }
 
 export function evaluateNumericValue(value: ExpressionValue | undefined, cycle: number): number | undefined {
@@ -201,14 +207,8 @@ export function evaluateNumericValue(value: ExpressionValue | undefined, cycle: 
   return typeof resolved === 'number' ? resolved : undefined;
 }
 
-function warnUnsupportedPattern(kind: 'call' | 'method', name: string): void {
-  const key = `${kind}:${name}`;
-  if (warnedUnsupportedPatterns.has(key)) {
-    return;
-  }
-  warnedUnsupportedPatterns.add(key);
-  const behavior = kind === 'call' ? 'returns silence' : 'leaves events unchanged';
-  console.warn(`[tussel/core] unsupported pattern ${kind} "${name}" currently ${behavior}.`);
+function throwUnsupportedPattern(kind: 'call' | 'method', name: string): never {
+  throw new Error(`[tussel/core] unsupported pattern ${kind} "${name}" is not implemented.`);
 }
 
 export function queryScene(
@@ -449,8 +449,7 @@ function queryPattern(
       case 'value':
         return callPattern(value.name, value.args[0], begin, end, context);
       default:
-        warnUnsupportedPattern('call', value.name);
-        return [];
+        throwUnsupportedPattern('call', value.name);
     }
   }
 
@@ -665,8 +664,7 @@ function queryPattern(
       if (PROPERTY_METHODS.has(value.name)) {
         return annotateEvents(targetEvents, value.name, value.args, context);
       }
-      warnUnsupportedPattern('method', value.name);
-      return targetEvents;
+      throwUnsupportedPattern('method', value.name);
   }
 }
 
@@ -3143,9 +3141,35 @@ export class Scheduler {
           (event.begin - this.cycleAtCpsChange) / this.cps + this.secondsAtCpsChange + latency;
         const targetTime = Math.max(rawTargetTime, now + 0.001);
         for (const dispatch of collectExternalDispatches(event, targetTime)) {
-          void this.options.onExternalDispatch?.(dispatch, targetTime);
+          try {
+            const result = this.options.onExternalDispatch?.(dispatch, targetTime);
+            if (result instanceof Promise) {
+              result.catch((error) =>
+                console.error(
+                  `[tussel/core] onExternalDispatch error: ${error instanceof Error ? error.message : String(error)}`,
+                ),
+              );
+            }
+          } catch (error) {
+            console.error(
+              `[tussel/core] onExternalDispatch error: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
         }
-        void this.options.onTrigger(event, targetTime);
+        try {
+          const result = this.options.onTrigger(event, targetTime);
+          if (result instanceof Promise) {
+            result.catch((error) =>
+              console.error(
+                `[tussel/core] onTrigger error: ${error instanceof Error ? error.message : String(error)}`,
+              ),
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[tussel/core] onTrigger error: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
 
       phase += duration;

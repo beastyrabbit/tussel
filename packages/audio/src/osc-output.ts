@@ -88,7 +88,7 @@ export function encodeOscArgument(arg: OscArgument): Buffer {
  * Returns e.g. ",ifs" for [int, float, string].
  */
 export function buildTypeTagString(args: OscArgument[]): string {
-  return ',' + args.map((a) => a.type).join('');
+  return `,${args.map((a) => a.type).join('')}`;
 }
 
 /**

@@ -1,19 +1,26 @@
 import {
   areStringPrototypeExtensionsInstalled,
   cat,
+  cosine,
   createParam,
   createParams,
   defineScene,
   installStringPrototypeExtensions,
   note,
   PatternBuilder,
+  perlin,
+  rand,
   SceneRecorder,
   SignalBuilder,
   s,
+  saw,
   seq,
   silence,
   sine,
+  square,
   stack,
+  tri,
+  triangle,
   uninstallStringPrototypeExtensions,
 } from '@tussel/dsl';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -684,5 +691,502 @@ describe('String.prototype extensions', () => {
     expect('bd'.often((p: PatternBuilder) => p.rev()).show()).toBe(
       'value("bd").sometimesBy(0.75, value("bd").rev())',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SignalBuilder: extended operations
+// ---------------------------------------------------------------------------
+describe('SignalBuilder extended operations', () => {
+  it('range returns a SignalBuilder with correct expression', () => {
+    const result = sine.range(-1, 1);
+    expect(result).toBeInstanceOf(SignalBuilder);
+    const json = result.toJSON();
+    expect(json.kind).toBe('method');
+    expect(json.name).toBe('range');
+    expect(json.args).toEqual([-1, 1]);
+    expect(json.exprType).toBe('signal');
+  });
+
+  it('segment quantizes a signal', () => {
+    const result = saw.segment(8);
+    expect(result).toBeInstanceOf(SignalBuilder);
+    expect(result.show()).toBe('saw.segment(8)');
+    expect(result.toJSON().name).toBe('segment');
+    expect(result.toJSON().args).toEqual([8]);
+  });
+
+  it('fast and slow scale signal speed', () => {
+    expect(tri.fast(4).show()).toBe('tri.fast(4)');
+    expect(tri.slow(0.5).show()).toBe('tri.slow(0.5)');
+  });
+
+  it('early and late shift signal phase', () => {
+    expect(square.early(0.125).show()).toBe('square.early(0.125)');
+    expect(square.late(0.5).show()).toBe('square.late(0.5)');
+  });
+
+  it('arithmetic ops chain correctly on signals', () => {
+    const result = cosine.add(1).mul(0.5).sub(0.1).div(2);
+    expect(result.show()).toBe('cosine().add(1).mul(0.5).sub(0.1).div(2)');
+    expect(result).toBeInstanceOf(SignalBuilder);
+  });
+
+  it('each chained signal method returns a new SignalBuilder (immutable)', () => {
+    const base = sine;
+    const withRange = base.range(0, 1);
+    const withFast = withRange.fast(2);
+
+    expect(base.show()).toBe('sine');
+    expect(withRange.show()).toBe('sine.range(0, 1)');
+    expect(withFast.show()).toBe('sine.range(0, 1).fast(2)');
+  });
+
+  it('toJSON on a bare signal constant returns a call expression', () => {
+    const json = rand.toJSON();
+    expect(json.kind).toBe('call');
+    expect(json.name).toBe('rand');
+    expect(json.exprType).toBe('signal');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Exported signal constants
+// ---------------------------------------------------------------------------
+describe('exported signal constants', () => {
+  it('sine is a SignalBuilder', () => {
+    expect(sine).toBeInstanceOf(SignalBuilder);
+    expect(sine.show()).toBe('sine');
+    expect(sine.toJSON().name).toBe('sine');
+    expect(sine.toJSON().exprType).toBe('signal');
+  });
+
+  it('saw is a SignalBuilder', () => {
+    expect(saw).toBeInstanceOf(SignalBuilder);
+    expect(saw.show()).toBe('saw');
+    expect(saw.toJSON().name).toBe('saw');
+  });
+
+  it('tri is a SignalBuilder', () => {
+    expect(tri).toBeInstanceOf(SignalBuilder);
+    expect(tri.show()).toBe('tri');
+    expect(tri.toJSON().name).toBe('tri');
+  });
+
+  it('triangle is a SignalBuilder', () => {
+    expect(triangle).toBeInstanceOf(SignalBuilder);
+    expect(triangle.show()).toBe('triangle');
+    expect(triangle.toJSON().name).toBe('triangle');
+  });
+
+  it('square is a SignalBuilder', () => {
+    expect(square).toBeInstanceOf(SignalBuilder);
+    expect(square.show()).toBe('square');
+    expect(square.toJSON().name).toBe('square');
+  });
+
+  it('rand is a SignalBuilder', () => {
+    expect(rand).toBeInstanceOf(SignalBuilder);
+    expect(rand.show()).toBe('rand');
+    expect(rand.toJSON().name).toBe('rand');
+  });
+
+  it('perlin is a SignalBuilder', () => {
+    expect(perlin).toBeInstanceOf(SignalBuilder);
+    expect(perlin.show()).toBe('perlin');
+    expect(perlin.toJSON().name).toBe('perlin');
+  });
+
+  it('cosine is a SignalBuilder', () => {
+    expect(cosine).toBeInstanceOf(SignalBuilder);
+    // cosine is not in SIGNAL_IDENTIFIERS so it renders with parens
+    expect(cosine.show()).toBe('cosine()');
+    expect(cosine.toJSON().name).toBe('cosine');
+  });
+
+  it('all signal constants produce "call" kind nodes', () => {
+    for (const sig of [sine, saw, tri, triangle, square, rand, perlin, cosine]) {
+      expect(sig.toJSON().kind).toBe('call');
+      expect(sig.toJSON().exprType).toBe('signal');
+    }
+  });
+
+  it('signal constants can be used as pattern arguments', () => {
+    const result = s('bd').gain(sine.range(0, 1));
+    const json = result.toJSON();
+    const gainArg = json.args[0] as { kind: string; name: string; exprType: string };
+    expect(gainArg.kind).toBe('method');
+    expect(gainArg.name).toBe('range');
+    expect(gainArg.exprType).toBe('signal');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createParam / createParams: edge cases
+// ---------------------------------------------------------------------------
+describe('createParam edge cases', () => {
+  it('custom param accepts numeric arguments', () => {
+    const freq = createParam('freq');
+    expect(freq(440).show()).toBe('freq(440)');
+  });
+
+  it('custom param accepts boolean arguments', () => {
+    const toggle = createParam('toggle');
+    expect(toggle(true).show()).toBe('toggle(true)');
+    expect(toggle(false).show()).toBe('toggle(false)');
+  });
+
+  it('custom param accepts builder arguments', () => {
+    const modParam = createParam('modulation');
+    const result = modParam(sine.range(0, 1));
+    const json = result.toJSON();
+    expect(json.args.length).toBe(1);
+    const arg = json.args[0] as { kind: string; name: string };
+    expect(arg.kind).toBe('method');
+    expect(arg.name).toBe('range');
+  });
+
+  it('custom param method is chainable from existing patterns', () => {
+    createParam('customEffect');
+    const result = s('bd').fast(2);
+    const fn = (result as unknown as Record<string, (...args: unknown[]) => PatternBuilder>).customEffect;
+    expect(fn).toBeDefined();
+    // biome-ignore lint/style/noNonNullAssertion: fn is verified by toBeDefined above
+    const chained = fn!.call(result, 0.7);
+    expect(chained.show()).toBe('s("bd").fast(2).customEffect(0.7)');
+  });
+
+  it('ignores names with invalid JS identifiers', () => {
+    // Names starting with numbers or containing spaces should be silently ignored
+    // for prototype registration, but the factory still works
+    const fn = createParam('123invalid');
+    expect(fn(1).show()).toBe('123invalid(1)');
+    // Should not be registered on prototype (since the name is invalid)
+    expect('123invalid' in PatternBuilder.prototype).toBe(false);
+  });
+
+  it('does not override existing built-in methods when called multiple times', () => {
+    const firstFn = createParam('uniqueParam1');
+    const secondFn = createParam('uniqueParam1');
+    // Both factory functions work
+    expect(firstFn(1).show()).toBe('uniqueParam1(1)');
+    expect(secondFn(2).show()).toBe('uniqueParam1(2)');
+  });
+});
+
+describe('createParams edge cases', () => {
+  it('returns an empty object for no arguments', () => {
+    const params = createParams();
+    expect(Object.keys(params)).toEqual([]);
+  });
+
+  it('each returned function is independent', () => {
+    const params = createParams('alpha', 'beta');
+    const a = params.alpha(10);
+    const b = params.beta(20);
+    expect(a.show()).toBe('alpha(10)');
+    expect(b.show()).toBe('beta(20)');
+    // They produce independent expression trees
+    expect(a.toJSON().name).toBe('alpha');
+    expect(b.toJSON().name).toBe('beta');
+  });
+
+  it('params can be chained onto patterns', () => {
+    const _params = createParams('x', 'y');
+    const result = s('bd');
+    const xFn = (result as unknown as Record<string, (...args: unknown[]) => PatternBuilder>).x;
+    const yFn = (result as unknown as Record<string, (...args: unknown[]) => PatternBuilder>).y;
+    expect(xFn).toBeDefined();
+    expect(yFn).toBeDefined();
+    // biome-ignore lint/style/noNonNullAssertion: verified above
+    const chained = yFn!.call(xFn!.call(result, 1), 2);
+    expect(chained.show()).toBe('s("bd").x(1).y(2)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SceneRecorder: state management
+// ---------------------------------------------------------------------------
+describe('SceneRecorder state management', () => {
+  it('beginModule fully resets transport, samples, and root between calls', () => {
+    const recorder = new SceneRecorder();
+
+    recorder.beginModule();
+    recorder.setBpm(100);
+    recorder.registerSample('pack.json');
+    recorder.setRoot(s('bd'));
+    const scene1 = recorder.finalize();
+
+    recorder.beginModule();
+    recorder.setRoot(s('hh'));
+    const scene2 = recorder.finalize();
+
+    // scene1 should have bpm and samples
+    expect(scene1.transport.bpm).toBe(100);
+    expect(scene1.samples).toEqual([{ ref: 'pack.json' }]);
+
+    // scene2 should have clean state
+    expect(scene2.transport.bpm).toBeUndefined();
+    expect(scene2.transport.cps).toBeUndefined();
+    expect(scene2.samples).toEqual([]);
+  });
+
+  it('setRoot returns the original input value for pass-through', () => {
+    const recorder = new SceneRecorder();
+    recorder.beginModule();
+    const input = s('bd').fast(2);
+    const returned = recorder.setRoot(input);
+    expect(returned).toBe(input);
+  });
+
+  it('setRoot can be called multiple times and last one wins', () => {
+    const recorder = new SceneRecorder();
+    recorder.beginModule();
+    recorder.setRoot(s('bd'));
+    recorder.setRoot(s('hh'));
+    recorder.setRoot(s('cp'));
+    const scene = recorder.finalize();
+    const channelNode = scene.channels.main?.node;
+    expect(channelNode).toBeDefined();
+    // The last root (cp) should be the one used
+    expect((channelNode as { name: string }).name).toBe('s');
+    expect((channelNode as { args: unknown[] }).args).toEqual(['cp']);
+  });
+
+  it('setBpm and setCps are independent transport properties', () => {
+    const recorder = new SceneRecorder();
+    recorder.beginModule();
+    recorder.setBpm(120);
+    recorder.setCps(2);
+    recorder.setRoot(s('bd'));
+    const scene = recorder.finalize();
+    expect(scene.transport.bpm).toBe(120);
+    expect(scene.transport.cps).toBe(2);
+  });
+
+  it('setMetadata merges with existing metadata', () => {
+    const recorder = new SceneRecorder();
+    recorder.beginModule({ author: 'test' } as unknown as import('@tussel/ir').MetadataSpec);
+    recorder.setMetadata({ version: '1.0' } as unknown as import('@tussel/ir').MetadataSpec);
+    recorder.setRoot(s('bd'));
+    const scene = recorder.finalize();
+    expect((scene.metadata as Record<string, unknown>)?.author).toBe('test');
+    expect((scene.metadata as Record<string, unknown>)?.version).toBe('1.0');
+  });
+
+  it('finalize without setRoot throws because scene has no channels', () => {
+    const recorder = new SceneRecorder();
+    recorder.beginModule();
+    expect(() => recorder.finalize()).toThrow();
+  });
+
+  it('registerSample preserves insertion order', () => {
+    const recorder = new SceneRecorder();
+    recorder.beginModule();
+    recorder.registerSample('z.json');
+    recorder.registerSample('a.json');
+    recorder.registerSample('m.json');
+    recorder.setRoot(s('bd'));
+    const scene = recorder.finalize();
+    expect(scene.samples).toEqual([{ ref: 'z.json' }, { ref: 'a.json' }, { ref: 'm.json' }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// String prototype extensions: detailed behavior
+// ---------------------------------------------------------------------------
+describe('String prototype extensions: detailed behavior', () => {
+  it('all STRING_PATTERN_METHODS are installed', () => {
+    installStringPrototypeExtensions();
+
+    const expectedMethods = [
+      'add',
+      'almostAlways',
+      'almostNever',
+      'compress',
+      'contract',
+      'degrade',
+      'degradeBy',
+      'div',
+      'drop',
+      'edo',
+      'every',
+      'early',
+      'expand',
+      'extend',
+      'fast',
+      'fastGap',
+      'grow',
+      'hurry',
+      'jux',
+      'juxBy',
+      'late',
+      'layer',
+      'linger',
+      'log',
+      'loop',
+      'midichan',
+      'midicc',
+      'midiport',
+      'midivalue',
+      'mul',
+      'off',
+      'often',
+      'osc',
+      'oschost',
+      'oscport',
+      'pace',
+      'ply',
+      'rarely',
+      'rev',
+      'rootNotes',
+      'scramble',
+      'scale',
+      'scaleTranspose',
+      'shuffle',
+      'shrink',
+      'slow',
+      'slowGap',
+      'sometimes',
+      'sometimesBy',
+      'sub',
+      'superimpose',
+      'take',
+      'tour',
+      'transpose',
+      'velocity',
+      'voicings',
+      'when',
+      'within',
+      'zoom',
+    ];
+
+    for (const method of expectedMethods) {
+      expect(typeof ('' as unknown as Record<string, unknown>)[method]).toBe('function');
+    }
+  });
+
+  it('all methods are removed after uninstallation', () => {
+    installStringPrototypeExtensions();
+    uninstallStringPrototypeExtensions();
+
+    const sampleMethods = ['fast', 'slow', 'add', 'rev', 'gain'];
+    for (const method of sampleMethods) {
+      expect(typeof ('' as unknown as Record<string, unknown>)[method]).toBe('undefined');
+    }
+  });
+
+  it('triple install requires triple uninstall', () => {
+    installStringPrototypeExtensions();
+    installStringPrototypeExtensions();
+    installStringPrototypeExtensions();
+
+    uninstallStringPrototypeExtensions();
+    expect(areStringPrototypeExtensionsInstalled()).toBe(true);
+
+    uninstallStringPrototypeExtensions();
+    expect(areStringPrototypeExtensionsInstalled()).toBe(true);
+
+    uninstallStringPrototypeExtensions();
+    expect(areStringPrototypeExtensionsInstalled()).toBe(false);
+  });
+
+  it('string methods delegate to value() builder correctly', () => {
+    installStringPrototypeExtensions();
+    const result = 'c4 e4 g4'.transpose(12);
+    expect(result).toBeInstanceOf(PatternBuilder);
+    expect(result.show()).toBe('value("c4 e4 g4").transpose(12)');
+  });
+
+  it('string rev() returns a PatternBuilder', () => {
+    installStringPrototypeExtensions();
+    const result = 'bd hh'.rev();
+    expect(result).toBeInstanceOf(PatternBuilder);
+    expect(result.show()).toBe('value("bd hh").rev()');
+  });
+
+  it('does not overwrite existing String.prototype methods', () => {
+    // Methods like toString, valueOf, etc. should not be affected
+    const str = 'hello';
+    installStringPrototypeExtensions();
+    expect(str.toString()).toBe('hello');
+    expect(str.valueOf()).toBe('hello');
+    expect(str.toUpperCase()).toBe('HELLO');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeValue: complex nesting
+// ---------------------------------------------------------------------------
+describe('normalizeValue with complex nesting', () => {
+  it('handles nested arrays of builders', () => {
+    const result = s('bd').set([sine.range(0, 1), 42, 'hello']);
+    const json = result.toJSON();
+    const setArg = json.args[0] as unknown[];
+    expect(Array.isArray(setArg)).toBe(true);
+    expect(setArg.length).toBe(3);
+    // First element is the normalized sine.range expression
+    expect((setArg[0] as { kind: string }).kind).toBe('method');
+    expect(setArg[1]).toBe(42);
+    expect(setArg[2]).toBe('hello');
+  });
+
+  it('handles objects with builder values', () => {
+    const result = s('bd').set({ gain: sine.range(0, 1), n: 3 });
+    const json = result.toJSON();
+    const setArg = json.args[0] as Record<string, unknown>;
+    expect((setArg.gain as { kind: string }).kind).toBe('method');
+    expect(setArg.n).toBe(3);
+  });
+
+  it('handles deeply nested structures', () => {
+    const inner = sine.range(0, 1);
+    const result = s('bd').set({ effects: [{ mod: inner, level: 0.5 }] });
+    const json = result.toJSON();
+    const setArg = json.args[0] as Record<string, unknown>;
+    const effects = setArg.effects as unknown[];
+    expect(Array.isArray(effects)).toBe(true);
+    const first = effects[0] as Record<string, unknown>;
+    expect((first.mod as { kind: string }).kind).toBe('method');
+    expect(first.level).toBe(0.5);
+  });
+
+  it('handles null values in args', () => {
+    // null is a valid ExpressionValue primitive
+    const result = s('bd').set(null);
+    const json = result.toJSON();
+    expect(json.args).toEqual([null]);
+  });
+
+  it('handles boolean values in args', () => {
+    const result = s('bd').loop(true);
+    expect(result.toJSON().args).toEqual([true]);
+    const result2 = s('bd').loop(false);
+    expect(result2.toJSON().args).toEqual([false]);
+  });
+
+  it('clones expression nodes so mutations do not propagate', () => {
+    const inner = sine.range(0, 1);
+    const r1 = s('bd').gain(inner);
+    const r2 = s('hh').gain(inner);
+    // Both should have independent copies
+    const arg1 = r1.toJSON().args[0] as { name: string };
+    const arg2 = r2.toJSON().args[0] as { name: string };
+    expect(arg1.name).toBe('range');
+    expect(arg2.name).toBe('range');
+    // They should be structurally equal but not the same reference
+    expect(arg1).not.toBe(arg2);
+  });
+
+  it('normalizeValue throws for unsupported types like functions', () => {
+    expect(() => {
+      s('bd').set((() => {}) as unknown);
+    }).toThrow('Unsupported structural value');
+  });
+
+  it('normalizeValue throws for unsupported types like symbols', () => {
+    expect(() => {
+      s('bd').set(Symbol('test') as unknown);
+    }).toThrow('Unsupported structural value');
   });
 });

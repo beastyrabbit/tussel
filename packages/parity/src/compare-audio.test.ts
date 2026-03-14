@@ -31,18 +31,26 @@ function createWav(samples: number[]): Buffer {
 }
 
 describe('compareAudio', () => {
-  it('accepts matching silent renders and rejects one-sided silence', () => {
+  it('rejects matching silent renders as a hard failure', () => {
     const silent = createWav([0, 0, 0, 0]);
-    const audible = createWav([0, 1200, -1200, 0]);
-
     expect(compareAudio(silent, silent)).toMatchObject({
       actualSilent: true,
       expectedSilent: true,
-      ok: true,
+      ok: false,
     });
+  });
+
+  it('rejects one-sided silence', () => {
+    const silent = createWav([0, 0, 0, 0]);
+    const audible = createWav([0, 1200, -1200, 0]);
     expect(compareAudio(audible, silent)).toMatchObject({
       actualSilent: true,
       expectedSilent: false,
+      ok: false,
+    });
+    expect(compareAudio(silent, audible)).toMatchObject({
+      actualSilent: false,
+      expectedSilent: true,
       ok: false,
     });
   });
@@ -92,7 +100,8 @@ describe('compareAudioWithTolerance', () => {
     const b = createWav([1005, 2010, -990, -2005]);
     const result = compareAudioWithTolerance(a, b);
     expect(result.ok).toBe(true);
-    expect(result.maxAbsoluteDelta).toBeLessThanOrEqual(DEFAULT_AUDIO_TOLERANCE.maxAbsoluteDelta ?? 0);
+    expect(DEFAULT_AUDIO_TOLERANCE.maxAbsoluteDelta).toBeDefined();
+    expect(result.maxAbsoluteDelta).toBeLessThanOrEqual(DEFAULT_AUDIO_TOLERANCE.maxAbsoluteDelta!);
   });
 
   it('rejects large deltas exceeding tolerance', () => {

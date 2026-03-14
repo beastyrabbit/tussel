@@ -1,6 +1,6 @@
 import type { MidiCcDispatchEvent, MidiNoteDispatchEvent } from '@tussel/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type MidiOutputFactory, type MidiOutputPort, MidiOutputManager } from './midi-output.js';
+import { type MidiOutputFactory, MidiOutputManager, type MidiOutputPort } from './midi-output.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -303,7 +303,7 @@ describe('MidiOutputManager', () => {
       expect(noteOff).toBeTypeOf('function');
 
       // Invoke the noteOff thunk
-      noteOff!();
+      noteOff?.();
       expect(port.sendMessage).toHaveBeenCalledWith([0x82, 64, 0]);
     });
 

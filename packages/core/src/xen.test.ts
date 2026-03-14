@@ -301,9 +301,9 @@ describe('DSL .edo() integration', () => {
     expect(eventsDefault.length).toBeGreaterThan(0);
 
     // The EDO pattern should have an 'edo' payload property
-    expect(eventsEdo[0]!.payload.edo).toBe(19);
+    expect(eventsEdo[0]?.payload.edo).toBe(19);
 
     // The default pattern should NOT have an 'edo' payload property
-    expect(eventsDefault[0]!.payload.edo).toBeUndefined();
+    expect(eventsDefault[0]?.payload.edo).toBeUndefined();
   });
 });

@@ -9,6 +9,9 @@
 /** Default base frequency — middle C (C4) in 12-TET. */
 const DEFAULT_BASE_FREQ = 261.63;
 
+/** Number of cents in one octave — the standard unit for measuring musical intervals. */
+const CENTS_PER_OCTAVE = 1200;
+
 /**
  * Calculate the frequency for a given step in N-EDO tuning.
  *
@@ -35,7 +38,7 @@ export function edoFrequency(step: number, edo: number, baseFreq: number = DEFAU
  * @returns Frequency ratio (dimensionless).
  */
 export function centsToRatio(cents: number): number {
-  return 2 ** (cents / 1200);
+  return 2 ** (cents / CENTS_PER_OCTAVE);
 }
 
 /**
@@ -48,7 +51,7 @@ export function ratioToCents(ratio: number): number {
   if (ratio <= 0) {
     throw new RangeError(`Ratio must be positive, got ${ratio}`);
   }
-  return 1200 * Math.log2(ratio);
+  return CENTS_PER_OCTAVE * Math.log2(ratio);
 }
 
 /**

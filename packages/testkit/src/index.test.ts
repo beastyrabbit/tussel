@@ -149,13 +149,15 @@ describe('extractMarkdownLinks', () => {
   });
 
   it('does not extract image references as links', () => {
-    // Image syntax: ![alt](url) - the regex matches [alt](url) but not the ! part
-    // Actually the regex [^\]] would still match alt text, and the url portion
-    // The current implementation does match image links since [alt](url) is embedded
     const markdown = '![image](image.png)';
     const links = extractMarkdownLinks(markdown);
-    // The regex `\[[^\]]+\]\(([^)]+)\)` will match [image](image.png)
-    expect(links).toEqual(['image.png']);
+    expect(links).toEqual([]);
+  });
+
+  it('extracts links adjacent to images', () => {
+    const markdown = '![logo](logo.png) [docs](https://docs.example.com)';
+    const links = extractMarkdownLinks(markdown);
+    expect(links).toEqual(['https://docs.example.com']);
   });
 
   it('handles multiline markdown', () => {

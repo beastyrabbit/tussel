@@ -572,5 +572,5 @@ function shouldPrefixToken(token: string): boolean {
   return !['', '-', '~'].includes(token) && !token.includes(':');
 }
 
-export { isMondoNotation, parseMondo, queryMondo, showMondoFirstCycle } from './mondo.js';
 export type { MondoEvent } from './mondo.js';
+export { isMondoNotation, parseMondo, queryMondo, showMondoFirstCycle } from './mondo.js';

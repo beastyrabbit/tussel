@@ -14,7 +14,7 @@ export interface ParityFixture {
   compare: {
     audio?: 'exact-pcm16' | 'tolerance';
     audioTolerance?: AudioToleranceThresholds;
-    events: 'exact';
+    events?: 'exact';
   };
   cps: number;
   durationCycles: number;

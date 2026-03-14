@@ -3,16 +3,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   clampNumber,
-  edoFrequency,
   type ExternalDispatchEvent,
-  parseXenValue,
+  edoFrequency,
   type PlaybackEvent,
+  parseXenValue,
   queryScene,
   Scheduler,
 } from '@tussel/core';
 import { getCsoundInstrument, type SampleManifest, type SceneSpec, TusselAudioError } from '@tussel/ir';
-import { type MidiOutputFactory, MidiOutputManager, loadMidiOutputFactory } from './midi-output.js';
-import { OscOutputManager } from './osc-output.js';
 import type {
   AudioBuffer,
   AudioBufferSourceNode,
@@ -33,6 +31,8 @@ import {
   WaveShaperNode,
 } from 'node-web-audio-api';
 import pc from 'picocolors';
+import { loadMidiOutputFactory, MidiOutputManager } from './midi-output.js';
+import { OscOutputManager } from './osc-output.js';
 
 type AnyContext = AudioContext | OfflineAudioContext;
 
@@ -199,6 +199,11 @@ const impulseResponseCache = new WeakMap<AnyContext, Map<string, AudioBuffer>>()
 const reversedBufferCache = new WeakMap<AudioBuffer, AudioBuffer>();
 const warnedMissingSamples = new Set<string>();
 const warnedUnknownCsoundInstruments = new Set<string>();
+
+export function resetAudioWarnings(): void {
+  warnedMissingSamples.clear();
+  warnedUnknownCsoundInstruments.clear();
+}
 
 export interface RealtimeAudioEngineOptions {
   cacheDir?: string;
@@ -435,7 +440,12 @@ async function createRealtimeContext(sinkless: boolean): Promise<AudioContext> {
       } as SinklessAudioContextOptions);
     }
     return new RealtimeAudioContext({ latencyHint: 'playback' });
-  } catch {
+  } catch (error) {
+    console.warn(
+      pc.yellow(
+        `[tussel/audio] Audio output unavailable (${error instanceof Error ? error.message : String(error)}). Falling back to sinkless context — no audio will be heard.`,
+      ),
+    );
     return new RealtimeAudioContext({
       latencyHint: 'playback',
       sinkId: { type: 'none' },
@@ -1683,7 +1693,7 @@ export function resolveCacheDir(fromUrl: string | URL): string {
   return path.resolve(path.dirname(fileURLToPath(fromUrl)), '..', '..', '..', '.tussel-cache', 'samples');
 }
 
-export { MidiOutputManager, loadMidiOutputFactory } from './midi-output.js';
 export type { MidiOutputFactory, MidiOutputPort, MidiPortInfo } from './midi-output.js';
-export { OscOutputManager } from './osc-output.js';
+export { loadMidiOutputFactory, MidiOutputManager } from './midi-output.js';
 export type { OscArgument } from './osc-output.js';
+export { OscOutputManager } from './osc-output.js';

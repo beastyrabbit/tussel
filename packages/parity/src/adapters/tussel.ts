@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { renderSceneToWavBuffer } from '@tussel/audio';
 import {
   type ExpressionValue,
   isExpressionNode,
@@ -18,8 +19,6 @@ import {
   type SourceKind,
 } from '@tussel/runtime';
 import type { ExternalFixtureSource, NormalizedEvent } from '../schema.js';
-import { renderSceneToStrudelScriptWithOptions } from './scene-to-strudel.js';
-import { renderStrudelAudio } from './strudel.js';
 
 export async function prepareTusselScene(
   sourceKind: SourceKind,
@@ -78,11 +77,21 @@ export async function renderTusselAudio(
     samplePack?: string;
   },
 ): Promise<Buffer> {
-  return renderStrudelAudio(renderSceneToStrudelScriptWithOptions(prepared.scene, { includeState: false }), {
-    cps: options.cps,
-    durationCycles: options.durationCycles,
-    samplePack: options.samplePack ?? prepared.scene.samples[0]?.ref,
-  });
+  const scene = prepared.scene;
+  const samplePack = options.samplePack ?? scene.samples[0]?.ref;
+  const sceneWithSamples: SceneSpec = samplePack
+    ? {
+        ...scene,
+        samples: scene.samples.length > 0 ? scene.samples : [{ ref: samplePack }],
+      }
+    : scene;
+
+  if (typeof sceneWithSamples.transport.cps !== 'number') {
+    sceneWithSamples.transport = { ...sceneWithSamples.transport, cps: options.cps };
+  }
+
+  const seconds = options.durationCycles / options.cps;
+  return renderSceneToWavBuffer(sceneWithSamples, { seconds, sampleRate: 48_000 });
 }
 
 export async function readCanonicalScene(prepared: ImportedScene): Promise<string> {
@@ -134,7 +143,7 @@ function round(value: number): number {
 
 export type SupportedFixtureSourceKind = ExternalSourceKind | NativeSourceKind;
 
-const PROPERTY_METHODS = new Set([
+const _PROPERTY_METHODS = new Set([
   'attack',
   'bank',
   'begin',
@@ -223,26 +232,7 @@ function canonicalizeMethodChain(value: Extract<ExpressionValue, { kind: 'method
   }
 
   let rebuilt = canonicalizeValue(current);
-  const transforms = chain.filter((method) => !PROPERTY_METHODS.has(method.name));
-  const properties = chain
-    .filter((method) => PROPERTY_METHODS.has(method.name))
-    .sort(
-      (left, right) =>
-        left.name.localeCompare(right.name) ||
-        JSON.stringify(left.args).localeCompare(JSON.stringify(right.args)),
-    );
-
-  for (const method of transforms) {
-    rebuilt = {
-      args: method.args,
-      exprType: method.exprType as 'pattern' | 'scene' | 'signal' | 'value',
-      kind: 'method',
-      name: method.name,
-      target: rebuilt,
-    };
-  }
-
-  for (const method of properties) {
+  for (const method of chain) {
     rebuilt = {
       args: method.args,
       exprType: method.exprType as 'pattern' | 'scene' | 'signal' | 'value',

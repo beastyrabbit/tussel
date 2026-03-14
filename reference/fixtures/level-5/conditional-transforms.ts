@@ -1,7 +1,7 @@
 import type { ParityFixture } from '../../../packages/parity/src/schema.js';
 
 export default {
-  compare: { events: 'exact' },
+  compare: { audio: 'tolerance' },
   cps: 0.5,
   durationCycles: 8,
   id: 'level-5/conditional-transforms',

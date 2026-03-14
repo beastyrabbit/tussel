@@ -235,7 +235,7 @@ $: note("c e g").sound("triangle").punchcard()
     expect(rendered).toContain('export default async function runHydra');
   });
 
-  it('rewrites muted layer syntax and visual helpers deterministically', () => {
+  it('rewrites muted layer syntax and preserves visual helpers', () => {
     expect(
       normalizeStrudelSource(`setcpm(120)
 $: s("bd").color("red")
@@ -245,8 +245,8 @@ $: note("c e g").punchcard()
     ).toBe(`setcps((120) / 60)
 
 stack(
-  s("bd"),
-  note("c e g")
+  s("bd").color("red"),
+  note("c e g").punchcard()
 )`);
   });
 

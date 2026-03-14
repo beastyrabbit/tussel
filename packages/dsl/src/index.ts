@@ -524,6 +524,22 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('zoom', [begin, end]);
   }
 
+  color(value: unknown): PatternBuilder {
+    return this.method('color', [value]);
+  }
+
+  punchcard(): PatternBuilder {
+    return this.method('punchcard', []);
+  }
+
+  _punchcard(): PatternBuilder {
+    return this.method('_punchcard', []);
+  }
+
+  _scope(): PatternBuilder {
+    return this.method('_scope', []);
+  }
+
   rootNotes(value: unknown = 2): PatternBuilder {
     return this.method('rootNotes', [value]);
   }

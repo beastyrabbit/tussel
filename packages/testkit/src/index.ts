@@ -18,7 +18,7 @@ export async function writeFixtureFile(
 }
 
 export function extractMarkdownLinks(markdown: string): string[] {
-  return [...markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)]
+  return [...markdown.matchAll(/(?<!!)\[[^\]]+\]\(([^)]+)\)/g)]
     .map((match) => match[1])
     .filter((value): value is string => typeof value === 'string' && value.length > 0);
 }

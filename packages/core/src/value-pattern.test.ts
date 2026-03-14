@@ -122,7 +122,7 @@ describe('value-pattern runtime support', () => {
     expect(events.map((event) => Number((event.payload.note as number).toFixed(6)))).toEqual([2, 4, 2, 0]);
   });
 
-  it('warns when unsupported pattern calls would otherwise fail silently', () => {
+  it('errors on unsupported pattern calls and produces no events for that channel', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const scene = defineScene({
       channels: {
@@ -139,9 +139,10 @@ describe('value-pattern runtime support', () => {
       transport: { cps: 1 },
     });
 
-    expect(queryScene(scene, 0, 1, { cps: 1 })).toEqual([]);
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith(
-      '[tussel/core] unsupported pattern call "definitelyUnsupported" currently returns silence.',
+      expect.stringContaining('unsupported pattern call "definitelyUnsupported" is not implemented'),
     );
     warnSpy.mockRestore();
   });

@@ -98,7 +98,7 @@ export async function runFixture(fixture: LoadedParityFixture): Promise<FixtureR
     if (!fixture.sources.strudel) {
       throw new Error(`Fixture ${fixture.id} is missing Strudel source for audio parity.`);
     }
-    result.expectedAudio = await renderStrudelAudio(resolveStrudelSourceCode(fixture.sources.strudel), {
+    result.expectedAudio = await renderStrudelAudio(await resolveStrudelSourceCode(fixture.sources.strudel), {
       cps: fixture.cps,
       durationCycles,
       samplePack: fixture.samplePack,

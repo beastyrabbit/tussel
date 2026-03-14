@@ -127,5 +127,7 @@ export async function loadCsound(
   registerCsoundCode(renderTemplatedCode(strings, values));
 }
 
+/** @deprecated Use `loadCsound` instead. Compatibility alias. */
 export const loadCSound = loadCsound;
+/** @deprecated Use `loadCsound` instead. Compatibility alias. */
 export const loadcsound = loadCsound;
