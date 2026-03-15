@@ -33,7 +33,7 @@ import {
   setMidiValue,
   setMotionValue,
 } from '@tussel/ir';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 afterEach(() => {
   resetInputRegistry();
@@ -935,8 +935,8 @@ describe('core modifiers and factories', () => {
     expect(secondEvent).toBeDefined();
     expect(fourthEvent).toBeDefined();
     // These should be shifted later than their original 0.25 and 0.75
-    expect(secondEvent!.begin).toBeGreaterThan(0.25);
-    expect(fourthEvent!.begin).toBeGreaterThan(0.75);
+    expect(secondEvent?.begin).toBeGreaterThan(0.25);
+    expect(fourthEvent?.begin).toBeGreaterThan(0.75);
   });
 
   it('swing is shorthand for swingBy(1/3, n)', () => {
@@ -1019,7 +1019,7 @@ describe('core modifiers and factories', () => {
     expect(events.length).toBe(3);
     // Each event should extend to the next onset (no gaps)
     for (let i = 0; i < events.length - 1; i++) {
-      const gap = events[i + 1]!.begin - events[i]!.end;
+      const gap = (events[i + 1]?.begin ?? 0) - (events[i]?.end ?? 0);
       expect(Math.abs(gap)).toBeLessThan(0.01);
     }
   });
@@ -1107,7 +1107,7 @@ describe('core modifiers and factories', () => {
     });
     const events = queryScene(scene, 0, 1, { cps: 1 });
     expect(events.length).toBe(1);
-    expect(events[0]!.payload.gain).toBe(0);
+    expect(events[0]?.payload.gain).toBe(0);
   });
 
   it('speed(0) produces events with speed zero', () => {
@@ -1118,7 +1118,7 @@ describe('core modifiers and factories', () => {
     });
     const events = queryScene(scene, 0, 1, { cps: 1 });
     expect(events.length).toBe(1);
-    expect(events[0]!.payload.speed).toBe(0);
+    expect(events[0]?.payload.speed).toBe(0);
   });
 
   it('querying very large cycle numbers does not crash', () => {
@@ -1143,6 +1143,72 @@ describe('core modifiers and factories', () => {
     });
     const events = queryScene(scene, 0, 1, { cps: 1 });
     expect(events.length).toBe(1);
-    expect(events[0]!.payload.note).toBe(20);
+    expect(events[0]?.payload.note).toBe(20);
+  });
+
+  // -----------------------------------------------------------------------
+  // Additional edge case tests (J.08-J.12)
+  // -----------------------------------------------------------------------
+
+  it('J.08: sample not found — unresolved sound still produces events', () => {
+    const scene = defineScene({
+      channels: { lead: { node: s('nonexistent_sample_xyz').gain(0.5) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBe(1);
+    expect(events[0]?.payload.s).toBe('nonexistent_sample_xyz');
+    expect(events[0]?.payload.gain).toBe(0.5);
+  });
+
+  it('J.09: invalid mini notation produces no events and logs a warning', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('[[[[') } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const events = queryScene(scene, 0, 1, { cps: 1 });
+      expect(events).toEqual([]);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('channel "lead" evaluation failed'));
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('J.10: gain(0) produces actual zero gain', () => {
+    const scene = defineScene({
+      channels: { lead: { node: s('bd').gain(0) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBe(1);
+    expect(events[0]?.payload.gain).toBe(0);
+  });
+
+  it('J.11: speed(0) is defined behavior', () => {
+    const scene = defineScene({
+      channels: { lead: { node: s('bd').speed(0) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBe(1);
+    expect(events[0]?.payload.speed).toBe(0);
+  });
+
+  it('J.12: begin(0.5).end(0.3) (begin > end) produces event with those payload values', () => {
+    const scene = defineScene({
+      channels: { lead: { node: s('bd').begin(0.5).end(0.3) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBe(1);
+    expect(events[0]?.payload.begin).toBe(0.5);
+    expect(events[0]?.payload.end).toBe(0.3);
   });
 });

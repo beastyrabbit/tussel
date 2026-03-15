@@ -107,7 +107,18 @@ interface InternalQueryContext extends QueryContext {
   channel: string;
 }
 
-// Must stay in sync with DSL PatternBuilder property methods (packages/dsl/src/index.ts).
+/**
+ * Set of method names treated as simple property annotations on pattern events.
+ *
+ * When the pattern evaluator encounters a method call whose name is in this set,
+ * it bypasses the main switch statement and instead writes the method's argument
+ * directly into the event payload (via `annotateEvents`). Methods NOT in this set
+ * go through the switch statement for special handling (e.g. `fast`, `rev`, `scale`).
+ *
+ * IMPORTANT: Must be kept in sync with the PatternBuilder property methods defined
+ * in packages/dsl/src/index.ts. Adding a new simple property in the DSL requires a
+ * corresponding entry here, and vice versa.
+ */
 const PROPERTY_METHODS = new Set([
   'anchor',
   'attack',
@@ -186,6 +197,13 @@ function warnChannelError(channelName: string, error: unknown): void {
   );
 }
 
+/**
+ * Evaluate an expression value to a number at a given cycle position.
+ *
+ * Handles numbers (pass-through), strings (mini notation parse), signals
+ * (continuous evaluation), and pattern expressions (discrete evaluation).
+ * Returns undefined if the value cannot be resolved to a number.
+ */
 export function evaluateNumericValue(value: ExpressionValue | undefined, cycle: number): number | undefined {
   if (value === undefined) {
     return undefined;
@@ -223,6 +241,17 @@ function throwUnsupportedPattern(kind: 'call' | 'method', name: string): never {
   throw new Error(`[tussel/core] unsupported pattern ${kind} "${name}" is not implemented.`);
 }
 
+/**
+ * Query a scene for playback events within a cycle-time window.
+ *
+ * @param scene  - The scene specification containing channels, transport, and samples.
+ * @param begin  - Start of the query window in cycle-time (inclusive). Cycle 0 is the
+ *                 beginning of playback; cycle 1 is one full cycle later.
+ * @param end    - End of the query window in cycle-time (exclusive). Must be >= begin.
+ * @param context - Query context providing the current cycles-per-second (cps) rate.
+ * @returns Sorted array of PlaybackEvent objects falling within [begin, end).
+ *          Events are sorted by begin time, then channel name.
+ */
 export function queryScene(
   scene: SceneSpec,
   begin: number,
@@ -533,6 +562,7 @@ function queryPattern(
         value.target,
         begin,
         end,
+        // Fallback 0/1 = full cycle range; safe because compress(0,1) is the identity transform
         evaluateNumericValue(value.args[0], begin) ?? 0,
         evaluateNumericValue(value.args[1], begin) ?? 1,
         context,
@@ -546,6 +576,7 @@ function queryPattern(
         value.target,
         begin,
         end,
+        // Fallback 1 = no speed change; factor of 1 is the identity for fast/slow
         evaluateNumericValue(value.args[0], begin) ?? 1,
         context,
       );
@@ -570,10 +601,12 @@ function queryPattern(
         value.target,
         begin,
         end,
+        // Fallback 1 = no speed change (identity); ?? 0 would freeze playback
         evaluateNumericValue(value.args[0], begin) ?? 1,
         context,
       );
     case 'early':
+      // Fallback 0 = no time shift; safe identity because early(0) leaves events in place
       return shiftEvents(
         queryPattern(
           value.target,
@@ -623,10 +656,12 @@ function queryPattern(
         (left, right) => left * right,
       );
     case 'ply':
+      // Fallback 1 = each event occupies its original slot (no subdivision)
       return applyPly(targetEvents, evaluateNumericValue(value.args[0], begin) ?? 1);
     case 'degrade':
       return applyDegrade(targetEvents, 0.5);
     case 'degradeBy':
+      // Fallback 0.5 = 50% drop probability, matching the default `degrade` behavior
       return applyDegrade(targetEvents, evaluateNumericValue(value.args[0], begin) ?? 0.5);
     case 'drop':
       return applyDrop(value.target, value.args[0], begin, end, context);
@@ -698,6 +733,7 @@ function queryPattern(
         value.target,
         begin,
         end,
+        // Fallback 0/1 = view the full cycle; same rationale as compress/zoom defaults
         evaluateNumericValue(value.args[0], begin) ?? 0,
         evaluateNumericValue(value.args[1], begin) ?? 1,
         context,
@@ -725,6 +761,7 @@ function queryPattern(
         value.target,
         begin,
         end,
+        // Fallback 60 cpm / 60 = 1 cps (identity speed); avoids 0/60 which would halt playback
         (evaluateNumericValue(value.args[0], begin) ?? 60) / 60,
         context,
       );
@@ -937,6 +974,7 @@ function applyScaleTranspose(
   begin: number,
   _context: InternalQueryContext,
 ): PlaybackEvent[] {
+  // Fallback 0 = no transposition; safe identity since shifting by 0 scale degrees is a no-op
   const steps = evaluateNumericValue(stepsExpr, begin) ?? 0;
   return currentEvents.map((event) => {
     const scaleName = typeof event.payload.scale === 'string' ? event.payload.scale : undefined;
@@ -2951,6 +2989,7 @@ function applySometimesBy(
 ): PlaybackEvent[] {
   return replaceEventsByWindow(currentEvents, transformedPattern, begin, end, context, (value) => {
     const cycle = Math.floor(value);
+    // Fallback 0.5 = coin-flip probability; matches Tidal/Strudel convention for sometimesBy
     const probability = clampNumber(evaluateNumericValue(probabilityExpr, value) ?? 0.5, 0, 1, 0.5);
     return seededRandom(cycle * 131 + hashString(context.channel)) < probability;
   });
@@ -3788,6 +3827,13 @@ function smoothNoise(value: number): number {
   return left + (right - left) * (t * t * (3 - 2 * t));
 }
 
+/**
+ * Real-time event scheduler that drives pattern playback.
+ *
+ * Queries a scene at regular intervals and dispatches events to an onTrigger
+ * callback at the correct wall-clock time. Supports dynamic CPS changes,
+ * MIDI/OSC external dispatch, and configurable lookahead/overlap windows.
+ */
 export class Scheduler {
   private clearIntervalFn: typeof clearInterval;
   private cycleAtCpsChange = 0;

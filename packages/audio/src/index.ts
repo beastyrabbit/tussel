@@ -808,6 +808,7 @@ function connectOutputChain(
 
   const panValue = coerceFiniteNumber(payload.pan);
   if (panValue !== undefined) {
+    // StereoPanner pan range: -1 (full left) to 1 (full right) per Web Audio spec
     const panner = new StereoPannerNode(context, { pan: clamp(panValue, -1, 1) });
     current.connect(panner);
     current = panner;
@@ -821,6 +822,7 @@ function connectOutputChain(
     });
     const lpq = coerceFiniteNumber(payload.lpq);
     if (lpq !== undefined) {
+      // Q floor 0.0001 avoids division-by-zero in biquad math; ceiling 30 prevents extreme resonance
       filter.Q.value = clamp(lpq, 0.0001, 30);
     }
     current.connect(filter);
@@ -877,9 +879,11 @@ function connectOutputChain(
 
   const roomAmount = coerceFiniteNumber(payload.room);
   if (roomAmount !== undefined && roomAmount > 0) {
+    // Room size range: 0.05s (tiny booth) to 8s (large cathedral); default 2s is a medium room
     const roomSize = clampNumber(payload.size, 0.05, 8, DEFAULT_ROOM_SIZE);
     const convolver = new ConvolverNode(context);
     convolver.buffer = getImpulseResponse(context, roomSize);
+    // Wet gain up to 2 allows emphasizing reverb beyond unity for creative effects
     const wet = new GainNode(context, { gain: clamp(roomAmount, 0, 2) });
     current.connect(convolver);
     convolver.connect(wet);
@@ -1083,12 +1087,15 @@ function playCsoundAnalog(
   env: GainNode,
 ): LoadedVoice {
   const filter = new BiquadFilterNode(context, {
+    // Cutoff at 3.5x fundamental: bright enough for presence, low enough to tame aliasing
     frequency: clamp(spec.frequency * 3.5, 120, 8_000),
+    // Q 0.8: gentle resonance peak without excessive ringing
     Q: 0.8,
     type: 'lowpass',
   });
   filter.connect(destination);
 
+  // +/-5 cents detune creates a subtle chorus/unison thickening effect
   const detunes = [-5, 0, 5];
   const sources = detunes.map((detune) => {
     const oscillator = new OscillatorNode(context, {
@@ -1096,6 +1103,7 @@ function playCsoundAnalog(
       frequency: spec.frequency,
       type: detune === 0 ? 'sawtooth' : 'triangle',
     });
+    // Center voice louder (0.65) than detuned sides (0.22) to keep pitch focus
     const gain = new GainNode(context, { gain: detune === 0 ? 0.65 : 0.22 });
     oscillator.connect(gain);
     gain.connect(filter);
@@ -1119,13 +1127,16 @@ function playCsoundFm(
     frequency: spec.frequency,
     type: 'sine',
   });
+  // Modulator at 3x carrier (3rd harmonic ratio) for metallic/bell-like FM timbre
   const modulator = new OscillatorNode(context, {
     frequency: spec.frequency * 3,
     type: 'sine',
   });
+  // Modulation index ~1.4: enough harmonic complexity without becoming harsh
   const modGain = new GainNode(context, {
     gain: spec.frequency * 1.4,
   });
+  // Output gain 0.85: slight attenuation to match loudness with other Csound presets
   const output = new GainNode(context, { gain: 0.85 });
   modulator.connect(modGain);
   modGain.connect(carrier.frequency);
@@ -1174,16 +1185,19 @@ function playCsoundDrum(
   });
   const toneGain = new GainNode(context, { gain: 0.9 });
   tone.frequency.setValueAtTime(clamp(spec.frequency * 0.75, 60, 240), targetTime);
+  // Pitch drops to 18% of initial over 80ms, simulating a kick/tom pitch envelope
   tone.frequency.exponentialRampToValueAtTime(clamp(spec.frequency * 0.18, 30, 90), targetTime + 0.08);
   tone.connect(toneGain);
   toneGain.connect(destination);
 
   const noise = new BufferSourceNode(context, { buffer: createNoiseBuffer(context), loop: true });
   const noiseFilter = new BiquadFilterNode(context, {
+    // 1800 Hz HPF isolates snare-like "crack" from the noise burst
     frequency: 1_800,
     Q: 1.5,
     type: 'highpass',
   });
+  // Noise mixed at 0.18: audible attack transient without overpowering the tonal body
   const noiseGain = new GainNode(context, { gain: 0.18 });
   noise.connect(noiseFilter);
   noiseFilter.connect(noiseGain);
@@ -1333,6 +1347,7 @@ function resolveDelaySettings(
 function createDistortionCurve(amount: number): Float32Array<ArrayBuffer> {
   const samples = 1024;
   const curve = new Float32Array(new ArrayBuffer(samples * Float32Array.BYTES_PER_ELEMENT));
+  // Multiply by 25 to scale user-facing 0.01-4 range into effective distortion drive
   const drive = clamp(amount, 0.01, 4) * 25;
   for (let index = 0; index < samples; index += 1) {
     const x = (index / (samples - 1)) * 2 - 1;
@@ -1348,8 +1363,10 @@ function createPhaserChain(
   window?: { startTime: number; stopTime: number },
 ): AudioNode {
   const depth = clamp(amount, 0.05, 4);
+  // 4 all-pass stages: standard phaser topology balancing sweep width vs. CPU cost
   const stages = Array.from({ length: 4 }, (_, index) => {
     const filter = new BiquadFilterNode(context, {
+      // Base 300 Hz with per-stage 180 Hz spacing covers the audible midrange
       frequency: 300 + depth * 120 + index * 180,
       type: 'allpass',
     });
@@ -1363,6 +1380,7 @@ function createPhaserChain(
   }
 
   const feedback = new GainNode(context, {
+    // Feedback capped at 0.85 to prevent runaway resonance in the all-pass chain
     gain: clamp(DEFAULT_PHASER_FEEDBACK + depth * 0.08, 0, 0.85),
   });
   current.connect(feedback);
@@ -1434,7 +1452,8 @@ function createVowelFilter(context: AnyContext, input: AudioNode, vowel: string)
   const formant = VOWEL_FORMANTS[vowel];
   if (!formant) return input;
 
-  const output = new GainNode(context, { gain: 8 }); // makeup gain
+  // Makeup gain of 8 compensates for energy lost by splitting signal across 5 narrow bandpass filters
+  const output = new GainNode(context, { gain: 8 });
 
   for (let i = 0; i < 5; i++) {
     const filter = new BiquadFilterNode(context, {

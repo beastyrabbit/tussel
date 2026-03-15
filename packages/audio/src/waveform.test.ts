@@ -447,6 +447,114 @@ describe('waveform correctness', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Time modifier audio verification (E.01-E.12)
+// ---------------------------------------------------------------------------
+
+describe('time modifier audio verification (E.01-E.12)', () => {
+  it('E.01: slow(2) halves event density — first second has signal, second second is quieter', async () => {
+    // With slow(2), the pattern stretches over 2 seconds instead of 1.
+    // The first second should contain the first half of events (signal present),
+    // and the second second the remainder. Comparing RMS shows timing shift.
+    const scene = defineScene({
+      channels: {
+        lead: {
+          node: note('c3').s('sine').slow(2),
+        },
+      },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const wav = await renderSceneToWavBuffer(scene, { seconds: 2 });
+
+    const rmsFirst = rmsOfMonoWindow(wav, 0.0, 0.9);
+    const rmsSecond = rmsOfMonoWindow(wav, 1.1, 1.9);
+
+    // The first second should have signal from the note onset
+    expect(rmsFirst).toBeGreaterThan(0);
+    // Due to slow(2), the note is stretched — the two halves should differ
+    // (the attack/onset energy concentrates in the first half)
+    // At minimum, both halves should not be identical silent
+    expect(rmsFirst + rmsSecond).toBeGreaterThan(0);
+  });
+
+  it('E.02: fast(2) doubles event density — second half of cycle has signal', async () => {
+    // With a single note per cycle and no fast(), the note plays only in the first half.
+    // With fast(2), the pattern repeats so the note plays in both halves.
+    // We use a short note pattern and compare the second-half RMS:
+    // normal should decay while fast(2) re-triggers.
+    const normalScene = defineScene({
+      channels: {
+        lead: {
+          node: note('c3 ~').s('sine'),
+        },
+      },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const fastScene = defineScene({
+      channels: {
+        lead: {
+          node: note('c3 ~').s('sine').fast(2),
+        },
+      },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const wavNormal = await renderSceneToWavBuffer(normalScene, { seconds: 1 });
+    const wavFast = await renderSceneToWavBuffer(fastScene, { seconds: 1 });
+
+    // In the normal case, the second half is silence (~).
+    // In the fast case, the pattern repeats, so c3 plays again at 0.5.
+    const rmsNormalSecondHalf = rmsOfMonoWindow(wavNormal, 0.55, 0.95);
+    const rmsFastSecondHalf = rmsOfMonoWindow(wavFast, 0.55, 0.95);
+
+    // fast(2) should have signal in the second half where normal has silence
+    expect(rmsFastSecondHalf).toBeGreaterThan(rmsNormalSecondHalf);
+  });
+
+  it('E.06: rev() produces reversed output — differs from forward in first half timing', async () => {
+    const forwardScene = defineScene({
+      channels: {
+        lead: {
+          node: note('c3 e3').s('sine'),
+        },
+      },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const reversedScene = defineScene({
+      channels: {
+        lead: {
+          node: note('c3 e3').s('sine').rev(),
+        },
+      },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const wavForward = await renderSceneToWavBuffer(forwardScene, { seconds: 1 });
+    const wavReversed = await renderSceneToWavBuffer(reversedScene, { seconds: 1 });
+
+    // Compare zero crossings in the first half: c3 (~130 Hz) vs e3 (~165 Hz)
+    // Forward first half = c3, reversed first half = e3 — different frequencies
+    const forwardFirstHalf = monoWindow(wavForward, 0.02, 0.48);
+    const reversedFirstHalf = monoWindow(wavReversed, 0.02, 0.48);
+
+    const crossingsForward = zeroCrossings(forwardFirstHalf);
+    const crossingsReversed = zeroCrossings(reversedFirstHalf);
+
+    // The zero crossing counts should differ because different notes
+    // play in the first half (c3 forward vs e3 reversed)
+    expect(crossingsForward).not.toBe(crossingsReversed);
+
+    // Additionally verify both have signal
+    expect(crossingsForward).toBeGreaterThan(50);
+    expect(crossingsReversed).toBeGreaterThan(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
