@@ -12,6 +12,7 @@ import {
   resolveMidiInputKey,
   resolveMotionInputKey,
   type SceneSpec,
+  TusselCoreError,
 } from '@tussel/ir';
 import { inferMiniSteps, queryMini, queryMondo } from '@tussel/mini';
 
@@ -238,7 +239,10 @@ export function evaluateNumericValue(value: ExpressionValue | undefined, cycle: 
 }
 
 function throwUnsupportedPattern(kind: 'call' | 'method', name: string): never {
-  throw new Error(`[tussel/core] unsupported pattern ${kind} "${name}" is not implemented.`);
+  throw new TusselCoreError(`unsupported pattern ${kind} "${name}" is not implemented.`, {
+    code: 'TUSSEL_UNSUPPORTED_PATTERN',
+    details: { kind, name },
+  });
 }
 
 /**

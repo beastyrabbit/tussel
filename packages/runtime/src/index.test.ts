@@ -259,3 +259,83 @@ stack(
     expect(prepared.scene.samples).toEqual([{ ref: './examples/assets/basic-kit' }]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// normalizeStrudelSource — focused unit tests
+// ---------------------------------------------------------------------------
+describe('normalizeStrudelSource', () => {
+  it('returns empty string for empty input', () => {
+    expect(normalizeStrudelSource('')).toBe('');
+  });
+
+  it('returns empty string for whitespace-only input', () => {
+    expect(normalizeStrudelSource('   \n  \n  ')).toBe('');
+  });
+
+  it('returns already-normalized code unchanged (no layers, no setcpm)', () => {
+    const code = 's("bd hh").fast(2)';
+    expect(normalizeStrudelSource(code)).toBe(code);
+  });
+
+  it('rewrites setcpm to setcps division', () => {
+    expect(normalizeStrudelSource('setcpm(120)')).toBe('setcps((120) / 60)');
+  });
+
+  it('rewrites setcpm with expression argument', () => {
+    expect(normalizeStrudelSource('setcpm(90/4)')).toBe('setcps((90/4) / 60)');
+  });
+
+  it('does not rewrite identifiers that contain setcpm as a substring', () => {
+    const code = 'mysetcpm(120)';
+    expect(normalizeStrudelSource(code)).toBe(code);
+  });
+
+  it('rewrites multiple setcpm calls in the same source', () => {
+    const code = 'setcpm(60)\nsetcpm(120)';
+    expect(normalizeStrudelSource(code)).toBe('setcps((60) / 60)\nsetcps((120) / 60)');
+  });
+
+  it('converts single layer to a stack with one entry', () => {
+    const result = normalizeStrudelSource('$: s("bd")');
+    expect(result).toContain('stack(');
+    expect(result).toContain('s("bd")');
+  });
+
+  it('converts multiple layers to stack', () => {
+    const result = normalizeStrudelSource('$: s("bd")\n$: s("hh")');
+    expect(result).toContain('stack(');
+    expect(result).toContain('s("bd")');
+    expect(result).toContain('s("hh")');
+  });
+
+  it('omits muted layers (_$:) from the output', () => {
+    const result = normalizeStrudelSource('$: s("bd")\n_$: s("hh")\n$: note("c e g")');
+    expect(result).toContain('s("bd")');
+    expect(result).not.toContain('s("hh")');
+    expect(result).toContain('note("c e g")');
+  });
+
+  it('preserves non-layer state calls before layers', () => {
+    const result = normalizeStrudelSource('setcps(0.5)\n$: s("bd")');
+    expect(result).toContain('setcps(0.5)');
+    expect(result).toContain('stack(');
+  });
+
+  it('handles layer continuation with method chaining on next line', () => {
+    const result = normalizeStrudelSource('$: s("bd")\n  .fast(2)\n$: s("hh")');
+    expect(result).toContain('.fast(2)');
+    expect(result).toContain('stack(');
+  });
+
+  it('handles layer continuation with dot prefix', () => {
+    const result = normalizeStrudelSource('$: s("bd")\n.gain(0.5)');
+    expect(result).toContain('.gain(0.5)');
+    expect(result).toContain('stack(');
+  });
+
+  it('combines setcpm rewriting with layer rewriting', () => {
+    const result = normalizeStrudelSource('setcpm(120)\n$: s("bd")\n$: s("hh")');
+    expect(result).toContain('setcps((120) / 60)');
+    expect(result).toContain('stack(');
+  });
+});

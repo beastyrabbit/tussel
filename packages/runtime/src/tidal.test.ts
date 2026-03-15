@@ -165,4 +165,87 @@ describe('Tidal dialect translation', () => {
     // In Tidal, # binds tighter than $, so gain applies first, then fast wraps
     expect(result.channels[0]?.expr).toBe('s("bd sd").gain(0.8).fast(2)');
   });
+
+  // ---------------------------------------------------------------------------
+  // Edge cases — empty / whitespace
+  // ---------------------------------------------------------------------------
+
+  it('throws on whitespace-only source', () => {
+    expect(() => translateTidalToStrudelProgram('   \n  \n  ')).toThrow();
+  });
+
+  it('throws on source with only comments', () => {
+    expect(() => translateTidalToStrudelProgram('-- just a comment\n// another comment')).toThrow();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Nested pattern expressions
+  // ---------------------------------------------------------------------------
+
+  it('translates nested parenthesised sub-expressions', () => {
+    const result = translateTidalToStrudelProgram('d1 $ s "bd" # gain (0.5)');
+    expect(result.channels[0]?.expr).toBe('s("bd").gain(0.5)');
+  });
+
+  it('translates slow with a numeric argument', () => {
+    const result = translateTidalToStrudelProgram('d1 $ slow 3 $ s "bd sd hh"');
+    expect(result.channels[0]?.expr).toBe('s("bd sd hh").slow(3)');
+  });
+
+  it('chains multiple $ transforms in order', () => {
+    const result = translateTidalToStrudelProgram('d1 $ slow 2 $ fast 4 $ s "bd"');
+    expect(result.channels[0]?.expr).toBe('s("bd").fast(4).slow(2)');
+  });
+
+  it('translates degrade (no-arg method) via $', () => {
+    const result = translateTidalToStrudelProgram('d1 $ degrade $ s "bd sd"');
+    expect(result.channels[0]?.expr).toBe('s("bd sd").degrade()');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Transport edge cases
+  // ---------------------------------------------------------------------------
+
+  it('parses fractional cps', () => {
+    const result = translateTidalToStrudelProgram('setcps 0.125\nd1 $ s "bd"');
+    expect(result.transport.cps).toBe(0.125);
+  });
+
+  it('ignores transport lines that are not numeric', () => {
+    expect(() => translateTidalToStrudelProgram('setcps notanumber\nd1 $ s "bd"')).toThrow(
+      'Expected numeric literal',
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Bindings in expressions
+  // ---------------------------------------------------------------------------
+
+  it('resolves a binding used in a channel expression', () => {
+    const result = translateTidalToStrudelProgram('drums = s "bd sd"\nd1 $ drums');
+    expect(result.channels[0]?.expr).toBe('s("bd sd")');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Scene module output edge cases
+  // ---------------------------------------------------------------------------
+
+  it('generates scene module with bpm transport', () => {
+    const module = translateTidalToSceneModule('setbpm 90\nd1 $ s "bd"');
+    expect(module).toContain('bpm: 90');
+  });
+
+  it('generates scene module with multiple channels', () => {
+    const module = translateTidalToSceneModule('d1 $ s "bd"\nd2 $ s "hh"\nd3 $ note "0 3"');
+    expect(module).toContain('"d1"');
+    expect(module).toContain('"d2"');
+    expect(module).toContain('"d3"');
+  });
+
+  it('generates scene module without transport when none is set', () => {
+    const module = translateTidalToSceneModule('d1 $ s "bd"');
+    // Transport block should exist but be essentially empty (no cps/bpm lines)
+    expect(module).not.toContain('cps:');
+    expect(module).not.toContain('bpm:');
+  });
 });

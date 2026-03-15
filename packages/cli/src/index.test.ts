@@ -171,4 +171,142 @@ describe('@tussel/cli', () => {
 
     expect(deps.runScene).toHaveBeenCalledWith('demo.scene.ts', false, 'realtime', { entry: undefined });
   });
+
+  // ---------------------------------------------------------------------------
+  // --entry pass-through
+  // ---------------------------------------------------------------------------
+
+  it('passes --entry to the check command', async () => {
+    const deps = createDeps();
+    vi.mocked(deps.checkScene).mockResolvedValue({
+      canonicalSceneTsPath: 'scene.ts',
+      dependencies: [],
+      generatedPath: 'generated.ts',
+      kind: 'strudel-js',
+      scene: { channels: { d1: { node: 'bd' } }, samples: [], transport: {} },
+    } as Awaited<ReturnType<typeof deps.checkScene>>);
+
+    await main(['node', 'tussel', 'check', 'demo.strudel.js', '--entry', 'drums'], deps);
+
+    expect(deps.checkScene).toHaveBeenCalledWith('demo.strudel.js', { entry: 'drums' });
+  });
+
+  it('passes --entry to the run command', async () => {
+    const deps = createDeps();
+
+    await main(['node', 'tussel', 'run', 'demo.strudel.js', '--entry', 'lead'], deps);
+
+    expect(deps.runScene).toHaveBeenCalledWith('demo.strudel.js', true, 'realtime', { entry: 'lead' });
+  });
+
+  it('passes --entry to the convert command', async () => {
+    const deps = createDeps();
+    vi.mocked(deps.convertScene).mockResolvedValue('export default {};');
+
+    await main(['node', 'tussel', 'convert', 'demo.strudel.js', '--to', 'scene-ts', '--entry', 'bass'], deps);
+
+    expect(deps.convertScene).toHaveBeenCalledWith('demo.strudel.js', 'scene-ts', { entry: 'bass' });
+  });
+
+  // ---------------------------------------------------------------------------
+  // render command
+  // ---------------------------------------------------------------------------
+
+  it('passes seconds option to the render command', async () => {
+    const deps = createDeps();
+
+    await main(['node', 'tussel', 'render', 'demo.scene.ts', '--out', 'out.wav', '--seconds', '4'], deps);
+
+    expect(deps.renderScene).toHaveBeenCalledWith('demo.scene.ts', 'out.wav', 4, { entry: undefined });
+  });
+
+  it('uses default seconds (8) for the render command when not specified', async () => {
+    const deps = createDeps();
+
+    await main(['node', 'tussel', 'render', 'demo.scene.ts', '--out', 'out.wav'], deps);
+
+    expect(deps.renderScene).toHaveBeenCalledWith('demo.scene.ts', 'out.wav', 8, { entry: undefined });
+  });
+
+  it('logs success message after rendering', async () => {
+    const deps = createDeps();
+
+    await main(['node', 'tussel', 'render', 'demo.scene.ts', '--out', 'render.wav'], deps);
+
+    expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('Rendered render.wav'));
+  });
+
+  // ---------------------------------------------------------------------------
+  // import command
+  // ---------------------------------------------------------------------------
+
+  it('calls importExternalSource then convertScene for the import command', async () => {
+    const deps = createDeps();
+    vi.mocked(deps.importExternalSource).mockResolvedValue({
+      canonicalSceneTsPath: 'scene.ts',
+      dependencies: [],
+      generatedPath: 'generated.ts',
+      kind: 'strudel-js',
+      scene: { channels: {}, samples: [], transport: {} },
+    } as Awaited<ReturnType<typeof deps.importExternalSource>>);
+    vi.mocked(deps.convertScene).mockResolvedValue('export default defineScene({});');
+
+    await main(['node', 'tussel', 'import', 'demo.strudel.js'], deps);
+
+    expect(deps.importExternalSource).toHaveBeenCalledWith('demo.strudel.js', { entry: undefined });
+    expect(deps.convertScene).toHaveBeenCalledWith('demo.strudel.js', 'scene-ts', { entry: undefined });
+    expect(deps.stdout.write).toHaveBeenCalledWith('export default defineScene({});');
+  });
+
+  it('writes import output to file when --out is provided', async () => {
+    const deps = createDeps();
+    vi.mocked(deps.importExternalSource).mockResolvedValue({
+      canonicalSceneTsPath: 'scene.ts',
+      dependencies: [],
+      generatedPath: 'generated.ts',
+      kind: 'strudel-js',
+      scene: { channels: {}, samples: [], transport: {} },
+    } as Awaited<ReturnType<typeof deps.importExternalSource>>);
+    vi.mocked(deps.convertScene).mockResolvedValue('export default defineScene({});');
+
+    await main(['node', 'tussel', 'import', 'demo.strudel.js', '--out', 'imported.scene.ts'], deps);
+
+    expect(deps.writeFile).toHaveBeenCalledWith('imported.scene.ts', 'export default defineScene({});');
+    expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('Wrote imported.scene.ts'));
+  });
+
+  // ---------------------------------------------------------------------------
+  // convert command — writes to stdout when no --out
+  // ---------------------------------------------------------------------------
+
+  it('writes converted output to stdout when no --out is provided', async () => {
+    const deps = createDeps();
+    vi.mocked(deps.convertScene).mockResolvedValue('scene json content');
+
+    await main(['node', 'tussel', 'convert', 'demo.scene.ts', '--to', 'scene-json'], deps);
+
+    expect(deps.stdout.write).toHaveBeenCalledWith('scene json content');
+    expect(deps.writeFile).not.toHaveBeenCalled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // createProgram
+  // ---------------------------------------------------------------------------
+
+  it('createProgram returns a Command instance', () => {
+    const deps = createDeps();
+    const program = createProgram(deps);
+    expect(program.name()).toBe('tussel');
+  });
+
+  it('has the expected set of subcommands', () => {
+    const deps = createDeps();
+    const program = createProgram(deps);
+    const commandNames = program.commands.map((cmd: Command) => cmd.name());
+    expect(commandNames).toContain('run');
+    expect(commandNames).toContain('check');
+    expect(commandNames).toContain('render');
+    expect(commandNames).toContain('convert');
+    expect(commandNames).toContain('import');
+  });
 });

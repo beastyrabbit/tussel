@@ -92,6 +92,18 @@ export function isAudibleWav(buffer: Buffer | undefined): boolean {
   return !isSilentPcm(buffer.subarray(44));
 }
 
+/**
+ * Default tolerance for audio parity comparison.
+ *
+ * On 16-bit PCM (range ±32767):
+ * - maxAbsoluteDelta 100 ≈ 0.3% of full scale — allows minor float rounding
+ *   differences between tussel and Strudel audio engines.
+ * - rmsDelta 20 ≈ 0.06% RMS — catches gross mismatches while tolerating
+ *   micro-level differences from independent oscillator/filter implementations.
+ *
+ * These thresholds were empirically tuned to pass known-correct comparisons
+ * while catching real regressions (wrong frequencies, missing effects, etc.).
+ */
 export const DEFAULT_AUDIO_TOLERANCE: AudioToleranceThresholds = {
   maxAbsoluteDelta: 100,
   rmsDelta: 20,

@@ -921,6 +921,115 @@ describe('audio signal correctness (D.08–D.25)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// D.12–D.18: Audio effect verification tests
+// ---------------------------------------------------------------------------
+
+describe('audio effect verification (D.12-D.18)', () => {
+  // D.12: speed(2) on a sample-based scene should produce different audio than speed(1)
+  it('D.12: speed(2) on sample produces different audio than speed(1)', async () => {
+    const sceneSlow = createSampleScene({ speed: 1 });
+    const sceneFast = createSampleScene({ speed: 2 });
+
+    const wavSlow = await renderSceneToWavBuffer(sceneSlow, { seconds: 1 });
+    const wavFast = await renderSceneToWavBuffer(sceneFast, { seconds: 1 });
+
+    // Both should produce audible output
+    expect(maxSampleMagnitude(wavSlow)).toBeGreaterThan(100);
+    expect(maxSampleMagnitude(wavFast)).toBeGreaterThan(100);
+
+    // The audio should differ — speed(2) changes the playback rate
+    expect(pcmData(wavFast).equals(pcmData(wavSlow))).toBe(false);
+    expect(maxAbsoluteDelta(wavSlow, wavFast)).toBeGreaterThan(100);
+  });
+
+  // D.14: ADSR envelope — attack phase should start quiet
+  it('D.14: ADSR envelope — signal starts quiet during attack phase', async () => {
+    const scene = defineScene({
+      channels: {
+        lead: {
+          node: note('c3').s('sine').attack(0.2).release(0.3).sustain(1).decay(0.01).gain(0.8),
+        },
+      },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const wav = await renderSceneToWavBuffer(scene, { seconds: 1 });
+
+    // Signal should be audible overall
+    expect(maxSampleMagnitude(wav)).toBeGreaterThan(100);
+
+    // During early attack phase (first 50ms), RMS should be lower than at 0.3s (after attack completes)
+    const rmsEarlyAttack = rmsWindow(wav, 0, 0.05);
+    const rmsAfterAttack = rmsWindow(wav, 0.25, 0.35);
+    expect(rmsEarlyAttack).toBeLessThan(rmsAfterAttack);
+  });
+
+  // D.15: room(0.5) produces reverb tail
+  it('D.15: room(0.5) produces a reverb tail — higher RMS in tail region', async () => {
+    const dryScene = createImpulseScene();
+    const wetScene = createImpulseScene({ room: 0.5 });
+
+    const wavDry = await renderSceneToWavBuffer(dryScene, { seconds: 1 });
+    const wavWet = await renderSceneToWavBuffer(wetScene, { seconds: 1 });
+
+    // Both should have audible output
+    expect(maxSampleMagnitude(wavDry)).toBeGreaterThan(0);
+    expect(maxSampleMagnitude(wavWet)).toBeGreaterThan(0);
+
+    // Wet version should have more energy in the tail (reverb sustains the sound)
+    const rmsDryTail = rmsWindow(wavDry, 0.5, 0.9);
+    const rmsWetTail = rmsWindow(wavWet, 0.5, 0.9);
+    expect(rmsWetTail).toBeGreaterThan(rmsDryTail);
+  });
+
+  // D.17: delay(0.5) produces echo — more energy after the main note
+  it('D.17: delay(0.5) produces echo — higher RMS after main note than without delay', async () => {
+    const dryScene = createImpulseScene();
+    const delayedScene = createImpulseScene({ delay: 0.5 });
+
+    const wavDry = await renderSceneToWavBuffer(dryScene, { seconds: 1 });
+    const wavDelayed = await renderSceneToWavBuffer(delayedScene, { seconds: 1 });
+
+    // Both should produce sound
+    expect(maxSampleMagnitude(wavDry)).toBeGreaterThan(0);
+    expect(maxSampleMagnitude(wavDelayed)).toBeGreaterThan(0);
+
+    // The delayed version should have more energy in the tail region
+    const rmsDryTail = rmsWindow(wavDry, 0.35, 0.85);
+    const rmsDelayedTail = rmsWindow(wavDelayed, 0.35, 0.85);
+    expect(rmsDelayedTail).toBeGreaterThan(rmsDryTail);
+  });
+
+  // D.18: shape(0.5) adds distortion — changes peak magnitude of noise
+  it('D.18: shape(0.5) adds distortion — alters waveform compared to no shaping', async () => {
+    const dryScene = createNoiseScene();
+    const shapedScene = defineScene({
+      channels: {
+        noise: {
+          node: s('noise').fast(8).attack(0.001).decay(0.02).sustain(0).release(0.01).gain(0.2).shape(0.5),
+        },
+      },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const wavDry = await renderSceneToWavBuffer(dryScene, { seconds: 1 });
+    const wavShaped = await renderSceneToWavBuffer(shapedScene, { seconds: 1 });
+
+    // Both should produce audible output
+    expect(maxSampleMagnitude(wavDry)).toBeGreaterThan(0);
+    expect(maxSampleMagnitude(wavShaped)).toBeGreaterThan(0);
+
+    // The PCM data should differ (distortion changes the waveform)
+    expect(pcmData(wavShaped).equals(pcmData(wavDry))).toBe(false);
+
+    // The distortion should produce a measurable difference
+    expect(maxAbsoluteDelta(wavDry, wavShaped)).toBeGreaterThan(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // N.03: Audio output smoke test — verify event-to-audio pipeline produces sound
 // ---------------------------------------------------------------------------
 describe('audio output smoke test (N.03)', () => {

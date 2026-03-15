@@ -45,3 +45,15 @@ export class TusselSchedulerError extends TusselError {
     super(message, { ...options, code: options.code ?? 'TUSSEL_SCHEDULER_ERROR' });
   }
 }
+
+export class TusselCoreError extends TusselError {
+  constructor(message: string, options: TusselErrorOptions = {}) {
+    super(message, { ...options, code: options.code ?? 'TUSSEL_CORE_ERROR' });
+  }
+}
+
+export class TusselParseError extends TusselError {
+  constructor(message: string, options: TusselErrorOptions = {}) {
+    super(message, { ...options, code: options.code ?? 'TUSSEL_PARSE_ERROR' });
+  }
+}

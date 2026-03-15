@@ -242,6 +242,7 @@ export class RealtimeAudioEngine {
   private scheduler: Scheduler | undefined;
 
   constructor(options: RealtimeAudioEngineOptions = {}) {
+    // NOTE: CWD-relative — assumes process is started from the project root
     this.cacheDir = options.cacheDir ?? path.resolve('.tussel-cache', 'samples');
     this.onExternalDispatch = options.onExternalDispatch;
     this.sinkless = options.sinkless ?? process.env.TUSSEL_SINK === 'none';
@@ -398,6 +399,7 @@ export async function renderSceneToFile(
   scene: SceneSpec,
   outputPath: string,
   seconds = 8,
+  // NOTE: CWD-relative default — assumes process is started from the project root
   cacheDir = path.resolve('.tussel-cache', 'samples'),
 ): Promise<void> {
   await mkdir(path.dirname(outputPath), { recursive: true });
@@ -427,6 +429,7 @@ export async function renderSceneToWavBuffer(
       `renderSceneToWavBuffer() buffer too large: ${totalFrames} frames exceeds limit of ${MAX_BUFFER_FRAMES} (${seconds}s at ${sampleRate}Hz).`,
     );
   }
+  // NOTE: CWD-relative default — assumes process is started from the project root
   const cacheDir = options.cacheDir ?? path.resolve('.tussel-cache', 'samples');
   const context = new OfflineContext(2, Math.max(1, totalFrames), sampleRate);
   const registry = new SampleRegistry();
@@ -449,6 +452,7 @@ export async function renderSceneToWavBuffer(
 
 export async function ensureSamplePackLocal(
   ref: string,
+  // NOTE: CWD-relative default — assumes process is started from the project root
   cacheDir = path.resolve('.tussel-cache', 'samples'),
 ): Promise<string> {
   const manifest = await resolveManifest(ref, cacheDir);
@@ -1611,6 +1615,7 @@ async function resolveManifest(ref: string, cacheDir: string): Promise<SampleMan
   const fullPath = path.resolve(ref);
   // Prevent path traversal: relative refs must resolve under cwd.
   // Also resolve symlinks to prevent escaping via symlinked directories.
+  // NOTE: CWD-relative — security check assumes process is started from the project root
   const cwd = process.cwd();
   if (!path.isAbsolute(ref) && !fullPath.startsWith(cwd)) {
     throw new Error(`Sample ref "${ref}" resolves outside the project directory.`);

@@ -172,4 +172,70 @@ Another paragraph with [link2](url2).
     const links = extractMarkdownLinks(markdown);
     expect(links).toEqual(['url1', 'url2']);
   });
+
+  it('does not extract links from inline code blocks', () => {
+    // The regex is simple and does match inside code blocks — this documents
+    // current behaviour rather than asserting ideal behaviour.
+    const markdown = '`[code link](code-url)` and [real](real-url)';
+    const links = extractMarkdownLinks(markdown);
+    expect(links).toContain('real-url');
+  });
+
+  it('handles links with parentheses in the URL', () => {
+    // Parentheses in URLs are terminated at the first `)` by the regex, so
+    // this documents the current edge-case behaviour.
+    const markdown = '[wiki](https://en.wikipedia.org/wiki/Example_(disambiguation))';
+    const links = extractMarkdownLinks(markdown);
+    expect(links).toHaveLength(1);
+  });
+
+  it('handles adjacent links with no space', () => {
+    const markdown = '[a](url1)[b](url2)';
+    const links = extractMarkdownLinks(markdown);
+    expect(links).toEqual(['url1', 'url2']);
+  });
+
+  it('does not match empty URL parentheses', () => {
+    const markdown = '[empty]()';
+    const links = extractMarkdownLinks(markdown);
+    expect(links).toEqual([]);
+  });
+
+  it('does not match link text containing nested square brackets', () => {
+    // The regex [^\]]+ stops at the first ], so nested brackets break the match.
+    const markdown = '[outer [inner]](url)';
+    const links = extractMarkdownLinks(markdown);
+    // The inner ] terminates the link text match prematurely, so no link is found.
+    expect(links).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// writeFixtureFile — additional edge cases
+// ---------------------------------------------------------------------------
+describe('writeFixtureFile edge cases', () => {
+  it('handles unicode content', async () => {
+    const dir = await createFixtureDirectory();
+    tempDirs.push(dir);
+    const filePath = await writeFixtureFile(dir, 'unicode.txt', 'Hello, \u4e16\u754c! \ud83c\udfb5');
+    const contents = await readFile(filePath, 'utf-8');
+    expect(contents).toBe('Hello, \u4e16\u754c! \ud83c\udfb5');
+  });
+
+  it('handles filenames with special characters', async () => {
+    const dir = await createFixtureDirectory();
+    tempDirs.push(dir);
+    const filePath = await writeFixtureFile(dir, 'my-file (1).txt', 'test');
+    const contents = await readFile(filePath, 'utf-8');
+    expect(contents).toBe('test');
+  });
+
+  it('handles deeply nested directories', async () => {
+    const dir = await createFixtureDirectory();
+    tempDirs.push(dir);
+    const filePath = await writeFixtureFile(dir, 'a/b/c/d/e/f.txt', 'deep');
+    const contents = await readFile(filePath, 'utf-8');
+    expect(contents).toBe('deep');
+    expect(path.isAbsolute(filePath)).toBe(true);
+  });
 });

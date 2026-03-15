@@ -1707,3 +1707,69 @@ describe('value pattern with signal transforms', () => {
     expect(events.map((e) => e.payload.value)).toEqual([5, 10, 15]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// E.13–E.17: Pattern composition event verification
+// ---------------------------------------------------------------------------
+describe('pattern composition event verification (E.13-E.17)', () => {
+  // E.13: stack(s("bd"), s("sd")) produces events from both sounds in same cycle
+  it('E.13: stack(s("bd"), s("sd")) produces events from both sounds in same cycle', () => {
+    const events = query(stack(s('bd'), s('sd')));
+    expect(events).toHaveLength(2);
+    const sounds = events.map((e) => e.payload.s);
+    expect(sounds).toEqual(expect.arrayContaining(['bd', 'sd']));
+    // Both events should occupy the same cycle window
+    for (const e of events) {
+      expect(e.begin).toBe(0);
+      expect(e.end).toBe(1);
+    }
+  });
+
+  // E.14: note("0 1 2 3").mask("1 0 1 0") keeps only events where mask is truthy
+  it('E.14: mask("1 0 1 0") keeps only events at positions 0 and 2', () => {
+    const events = query(note('0 1 2 3').mask('1 0 1 0'));
+    expect(events).toHaveLength(2);
+    const notes = events.map((e) => e.payload.note);
+    expect(notes).toEqual([0, 2]);
+    // Verify positions: first event at 0, second at 0.5
+    expect(events[0]?.begin).toBe(0);
+    expect(events[1]?.begin).toBeCloseTo(0.5, 6);
+  });
+
+  // E.15: sine signal evaluated at multiple positions produces values in [0,1]
+  it('E.15: sine signal produces values in [0,1] at multiple positions', () => {
+    const positions = [0, 0.1, 0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 0.99];
+    for (const pos of positions) {
+      const v = evaluateNumericValue(sine.expr, pos);
+      expect(v).toBeDefined();
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+  });
+
+  // E.16: note("0").add(note("10")) applies numeric addition per event
+  it('E.16: note("0").add(note("10")) applies numeric addition', () => {
+    const events = query(note('0').add(note('10')));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.note).toBe(10);
+  });
+
+  // E.17: stack(note("0").fast(2), note("7").slow(2)) produces different event counts per channel
+  it('E.17: stack with fast and slow produces different event counts per layer', () => {
+    const events = query(stack(note('0').fast(2), note('7').slow(2)));
+    // note("0").fast(2) produces 2 events per cycle
+    // note("7").slow(2) produces 1 event per cycle (stretched over 2 cycles)
+    const fastEvents = events.filter((e) => e.payload.note === 0);
+    const slowEvents = events.filter((e) => e.payload.note === 7);
+    expect(fastEvents).toHaveLength(2);
+    expect(slowEvents).toHaveLength(1);
+    // Total events is the sum of both layers
+    expect(events).toHaveLength(3);
+    // Fast events should have shorter durations than the slow event
+    for (const e of fastEvents) {
+      expect(e.duration).toBeCloseTo(0.5, 6);
+    }
+    // slow(2) stretches the single note over 2 cycles, so duration = 2
+    expect(slowEvents[0]?.duration).toBeGreaterThan(fastEvents[0]?.duration ?? 0);
+  });
+});
