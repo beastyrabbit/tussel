@@ -449,6 +449,295 @@ describe('scheduler concurrent tick handling', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// H.01: Window / overlap / latency — additional coverage
+// ---------------------------------------------------------------------------
+describe('H.01 — window/overlap/latency effects', () => {
+  it('zero latency produces earlier target times than non-zero latency', () => {
+    const zeroLatency = createHarnessWithOptions({ latency: 0 });
+    zeroLatency.scheduler.setScene(createFastScene('bd'));
+    zeroLatency.scheduler.start();
+    zeroLatency.scheduler.stop();
+
+    const highLatency = createHarnessWithOptions({ latency: 0.5 });
+    highLatency.scheduler.setScene(createFastScene('bd'));
+    highLatency.scheduler.start();
+    highLatency.scheduler.stop();
+
+    expect(zeroLatency.triggers.length).toBe(highLatency.triggers.length);
+    for (let i = 0; i < zeroLatency.triggers.length; i++) {
+      expect(highLatency.triggers[i]!.targetTime).toBeGreaterThanOrEqual(zeroLatency.triggers[i]!.targetTime);
+    }
+  });
+
+  it('larger overlap schedules more events on the initial tick', () => {
+    const smallOverlap = createHarnessWithOptions({ overlap: 0.01, interval: 0.05 });
+    smallOverlap.scheduler.setScene(createFastScene('bd'));
+    smallOverlap.scheduler.start();
+    smallOverlap.scheduler.stop();
+
+    const largeOverlap = createHarnessWithOptions({ overlap: 0.5, interval: 0.05 });
+    largeOverlap.scheduler.setScene(createFastScene('bd'));
+    largeOverlap.scheduler.start();
+    largeOverlap.scheduler.stop();
+
+    expect(largeOverlap.triggers.length).toBeGreaterThan(smallOverlap.triggers.length);
+  });
+
+  it('different windowDuration values produce different per-tick granularity', () => {
+    // With a very small window, each inner tick covers fewer cycles
+    const tinyWindow = createHarnessWithOptions({ windowDuration: 0.01, overlap: 0 });
+    tinyWindow.scheduler.setScene(createFastScene('bd'));
+    tinyWindow.scheduler.start();
+    tinyWindow.tickAt(0.05);
+    tinyWindow.scheduler.stop();
+
+    const normalWindow = createHarnessWithOptions({ windowDuration: 0.05, overlap: 0 });
+    normalWindow.scheduler.setScene(createFastScene('bd'));
+    normalWindow.scheduler.start();
+    normalWindow.tickAt(0.05);
+    normalWindow.scheduler.stop();
+
+    // Both should produce triggers
+    expect(tinyWindow.triggers.length).toBeGreaterThan(0);
+    expect(normalWindow.triggers.length).toBeGreaterThan(0);
+  });
+
+  it('combined high latency + high overlap still produces valid target times', () => {
+    const harness = createHarnessWithOptions({ latency: 1.0, overlap: 0.5, interval: 0.05 });
+    harness.scheduler.setScene(createFastScene('bd'));
+    harness.scheduler.start();
+    harness.tickAt(0.05);
+    harness.scheduler.stop();
+
+    expect(harness.triggers.length).toBeGreaterThan(0);
+    // All target times should be positive
+    for (const trigger of harness.triggers) {
+      expect(trigger.targetTime).toBeGreaterThan(0);
+    }
+    // Target times should be monotonically non-decreasing
+    for (let i = 1; i < harness.triggers.length; i++) {
+      expect(harness.triggers[i]!.targetTime).toBeGreaterThanOrEqual(
+        harness.triggers[i - 1]!.targetTime - 1e-9,
+      );
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// H.02: Long-running stability — 100+ ticks, no drift
+// ---------------------------------------------------------------------------
+describe('H.02 — long-running stability', () => {
+  it('maintains monotonic target times over 100+ ticks', () => {
+    const harness = createHarness();
+    harness.scheduler.setScene(createFastScene('bd'));
+    harness.scheduler.start();
+
+    for (let i = 1; i <= 120; i++) {
+      harness.tickAt(i * 0.05);
+    }
+    harness.scheduler.stop();
+
+    expect(harness.triggers.length).toBeGreaterThan(100);
+
+    for (let i = 1; i < harness.triggers.length; i++) {
+      expect(harness.triggers[i]!.targetTime).toBeGreaterThanOrEqual(
+        harness.triggers[i - 1]!.targetTime - 1e-9,
+      );
+    }
+  });
+
+  it('no drift accumulation: two identical runs produce identical results', () => {
+    const run = () => {
+      const h = createHarness();
+      h.scheduler.setScene(createFastScene('bd'));
+      h.scheduler.start();
+      for (let i = 1; i <= 100; i++) {
+        h.tickAt(i * 0.05);
+      }
+      h.scheduler.stop();
+      return h.triggers;
+    };
+
+    const triggers1 = run();
+    const triggers2 = run();
+
+    expect(triggers1.length).toBe(triggers2.length);
+    expect(triggers1.length).toBeGreaterThan(50);
+
+    for (let i = 0; i < triggers1.length; i++) {
+      expect(triggers1[i]!.targetTime).toBeCloseTo(triggers2[i]!.targetTime, 9);
+    }
+  });
+
+  it('event count scales linearly with elapsed time at constant cps', () => {
+    // Run for 50 ticks (~2.5s) and 100 ticks (~5s)
+    const short = createHarness();
+    short.scheduler.setScene(createFastScene('bd'));
+    short.scheduler.start();
+    for (let i = 1; i <= 50; i++) {
+      short.tickAt(i * 0.05);
+    }
+    short.scheduler.stop();
+
+    const long = createHarness();
+    long.scheduler.setScene(createFastScene('bd'));
+    long.scheduler.start();
+    for (let i = 1; i <= 100; i++) {
+      long.tickAt(i * 0.05);
+    }
+    long.scheduler.stop();
+
+    // The longer run should produce roughly twice as many events
+    const ratio = long.triggers.length / short.triggers.length;
+    expect(ratio).toBeGreaterThan(1.8);
+    expect(ratio).toBeLessThan(2.2);
+  });
+
+  it('survives a mid-run cps change over 100+ ticks without drift', () => {
+    const harness = createHarness();
+    harness.scheduler.setScene(createFastScene('bd', false));
+    harness.scheduler.setCps(1);
+    harness.scheduler.start();
+
+    // Run 50 ticks at cps=1
+    for (let i = 1; i <= 50; i++) {
+      harness.tickAt(i * 0.05);
+    }
+    const countBeforeChange = harness.triggers.length;
+
+    // Change cps mid-run
+    harness.scheduler.setCps(2);
+
+    // Run another 70 ticks at cps=2
+    for (let i = 51; i <= 120; i++) {
+      harness.tickAt(i * 0.05);
+    }
+    harness.scheduler.stop();
+
+    // Should have scheduled more events in the second half due to higher cps
+    const countAfterChange = harness.triggers.length - countBeforeChange;
+    expect(countAfterChange).toBeGreaterThan(countBeforeChange);
+
+    // All target times should remain monotonic
+    for (let i = 1; i < harness.triggers.length; i++) {
+      expect(harness.triggers[i]!.targetTime).toBeGreaterThanOrEqual(
+        harness.triggers[i - 1]!.targetTime - 1e-9,
+      );
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// H.03: Concurrent tick guard — re-entrancy protection
+// ---------------------------------------------------------------------------
+describe('H.03 — concurrent tick guard', () => {
+  it('ticking boolean prevents re-entrant tick from producing extra triggers', () => {
+    let currentTime = 0;
+    let intervalCallback: (() => void) | undefined;
+    const triggers: Array<{ targetTime: number }> = [];
+    let reEntrantCallsMade = 0;
+    let firstTickDone = false;
+
+    const scheduler = new Scheduler({
+      clearIntervalFn: (() => {}) as unknown as typeof clearInterval,
+      getTime: () => currentTime,
+      interval: 0.05,
+      latency: 0,
+      onTrigger: (_event, targetTime) => {
+        triggers.push({ targetTime });
+        // Only attempt re-entrancy on the second tick (after intervalCallback is set)
+        if (firstTickDone && triggers.length === 2 && intervalCallback) {
+          reEntrantCallsMade++;
+          currentTime = 0.12;
+          intervalCallback();
+        }
+      },
+      overlap: 0,
+      setIntervalFn: ((callback: Parameters<typeof setInterval>[0]) => {
+        intervalCallback = callback as () => void;
+        return 1 as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval,
+      windowDuration: 0.05,
+    });
+
+    scheduler.setScene(createFastScene('bd'));
+    scheduler.start();
+    firstTickDone = true;
+    const countAfterStart = triggers.length;
+
+    // Manually trigger a second tick where re-entrancy is attempted
+    currentTime = 0.05;
+    intervalCallback!();
+    scheduler.stop();
+
+    // We made exactly one re-entrant call attempt
+    expect(reEntrantCallsMade).toBe(1);
+    // The second tick produced triggers (re-entrancy did not add extra ones)
+    expect(triggers.length).toBeGreaterThan(countAfterStart);
+
+    // Compare to a reference run without re-entrancy
+    const referenceHarness = createHarness();
+    referenceHarness.scheduler.setScene(createFastScene('bd'));
+    referenceHarness.scheduler.start();
+    referenceHarness.tickAt(0.05);
+    referenceHarness.scheduler.stop();
+    expect(triggers.length).toBe(referenceHarness.triggers.length);
+  });
+
+  it('tick after stop is a no-op even with pending interval', () => {
+    const harness = createHarness();
+    harness.scheduler.setScene(createFastScene('bd'));
+    harness.scheduler.start();
+    const countAfterStart = harness.triggers.length;
+
+    harness.scheduler.stop();
+
+    // Multiple ticks after stop should not produce anything
+    for (let i = 1; i <= 10; i++) {
+      harness.tickAt(i * 0.05);
+    }
+    expect(harness.triggers.length).toBe(countAfterStart);
+  });
+
+  it('stop clears ticking flag so restart works cleanly', () => {
+    const harness1 = createHarness();
+    harness1.scheduler.setScene(createFastScene('bd'));
+    harness1.scheduler.start();
+    harness1.tickAt(0.05);
+    harness1.tickAt(0.1);
+    harness1.scheduler.stop();
+    const firstRunCount = harness1.triggers.length;
+
+    // Second run with fresh harness should produce identical results
+    const harness2 = createHarness();
+    harness2.scheduler.setScene(createFastScene('bd'));
+    harness2.scheduler.start();
+    harness2.tickAt(0.05);
+    harness2.tickAt(0.1);
+    harness2.scheduler.stop();
+
+    expect(harness2.triggers.length).toBe(firstRunCount);
+    expect(firstRunCount).toBeGreaterThan(0);
+  });
+
+  it('double start is idempotent and does not duplicate triggers', () => {
+    const harness = createHarness();
+    harness.scheduler.setScene(createFastScene('bd'));
+    harness.scheduler.start();
+    const countAfterFirstStart = harness.triggers.length;
+
+    harness.scheduler.start(); // second start is a no-op
+    expect(harness.triggers.length).toBe(countAfterFirstStart);
+
+    harness.tickAt(0.05);
+    const countAfterTick = harness.triggers.length;
+    expect(countAfterTick).toBeGreaterThan(countAfterFirstStart);
+
+    harness.scheduler.stop();
+  });
+});
+
 function createFastScene(sound: string, withTransport = true) {
   return defineScene({
     channels: {

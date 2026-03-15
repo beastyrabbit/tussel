@@ -1320,4 +1320,164 @@ describe('mini edge cases', () => {
       }
     });
   });
+
+  // ── Audit edge cases (F.01–F.11) ─────────────────────────────────────
+  describe('audit edge cases (F.01-F.11)', () => {
+    // F.01: Deep nesting (10+ levels)
+    it('F.01 — deep nesting (10+ levels) parses without stack overflow', () => {
+      const events = showFirstCycle('[[[[[[[[[[bd]]]]]]]]]]');
+      expect(events).toEqual(['bd: 0 - 1']);
+    });
+
+    it('F.01 — deep nesting (12 levels) with two leaves', () => {
+      const pattern = '['.repeat(12) + 'a b' + ']'.repeat(12);
+      const events = showFirstCycle(pattern);
+      expect(events).toEqual(['a: 0 - 0.5', 'b: 0.5 - 1']);
+    });
+
+    // F.02: Multiplication by non-integers
+    it('F.02 — bd*2.5 produces three events covering the cycle', () => {
+      const events = showFirstCycle('bd*2.5');
+      expect(events).toHaveLength(3);
+      // Each slot is 1/2.5 = 0.4 wide; third event bleeds past cycle end
+      expect(events[0]).toBe('bd: 0 - 0.4');
+      expect(events[1]).toBe('bd: 0.4 - 0.8');
+      expect(events[2]).toMatch(/^bd: 0\.8 - 1\.2/);
+    });
+
+    it('F.02 — bd*1.5 produces two events', () => {
+      const events = showFirstCycle('bd*1.5');
+      expect(events).toHaveLength(2);
+      expect(events[0]).toBe('bd: 0 - 0.666667');
+      expect(events[1]).toMatch(/^bd: 0\.666667/);
+    });
+
+    // F.03: Empty input
+    it('F.03 — queryMini("", 0, 1) returns an empty array', () => {
+      const events = queryMini('', 0, 1);
+      expect(events).toEqual([]);
+    });
+
+    it('F.03 — showFirstCycle("") returns an empty array', () => {
+      expect(showFirstCycle('')).toEqual([]);
+    });
+
+    it('F.03 — inferMiniSteps("") returns 0', () => {
+      expect(inferMiniSteps('')).toBe(0);
+    });
+
+    // F.04: Malformed input
+    it('F.04 — unclosed bracket "[bd" throws', () => {
+      expect(() => showFirstCycle('[bd')).toThrow('Unterminated [ group in mini source');
+    });
+
+    it('F.04 — unclosed angle bracket "<bd" throws', () => {
+      expect(() => showFirstCycle('<bd')).toThrow('Unterminated < group in mini source');
+    });
+
+    it('F.04 — mismatched parens "bd(3,8" does not crash (parens are not group delimiters)', () => {
+      // Parens are only consumed by the euclidean regex in preprocessing.
+      // An incomplete paren pattern falls through as literal token characters.
+      const events = showFirstCycle('bd(3,8');
+      expect(events).toBeDefined();
+      expect(Array.isArray(events)).toBe(true);
+      // The comma splits into a stack; "bd(3" and "8" become literals
+      expect(events).toHaveLength(2);
+    });
+
+    // F.05: Unicode input
+    it('F.05 — unicode emoji "🎵" parses as a literal', () => {
+      const events = showFirstCycle('🎵');
+      expect(events).toEqual(['🎵: 0 - 1']);
+    });
+
+    it('F.05 — unicode characters in a sequence', () => {
+      const events = showFirstCycle('🥁 🎹');
+      expect(events).toHaveLength(2);
+      expect(events).toEqual(['🎹: 0.5 - 1', '🥁: 0 - 0.5']);
+    });
+
+    // F.06: Very long patterns (100+ elements)
+    it('F.06 — 100-element pattern parses correctly', () => {
+      const tokens = Array.from({ length: 100 }, (_, index) => `x${index}`);
+      const pattern = tokens.join(' ');
+      const events = showFirstCycle(pattern);
+      expect(events).toHaveLength(100);
+      // Each element occupies 1/100 of the cycle
+      const width = 1 / 100;
+      // Check first and last events
+      expect(events).toContain(`x0: 0 - ${Number(width.toFixed(6))}`);
+      expect(events).toContain(`x99: ${Number((99 * width).toFixed(6))} - 1`);
+    });
+
+    it('F.06 — 200-element pattern parses without error', () => {
+      const tokens = Array.from({ length: 200 }, (_, index) => `s${index}`);
+      const pattern = tokens.join(' ');
+      const events = showFirstCycle(pattern);
+      expect(events).toHaveLength(200);
+    });
+
+    // F.09: Top-level comma-separated stacks
+    it('F.09 — "bd, sd, hh" produces 3 simultaneous events', () => {
+      const events = showFirstCycle('bd, sd, hh');
+      expect(events).toHaveLength(3);
+      expect(events).toEqual(['bd: 0 - 1', 'hh: 0 - 1', 'sd: 0 - 1']);
+    });
+
+    it('F.09 — "a, b" produces 2 simultaneous events spanning full cycle', () => {
+      const events = showFirstCycle('a, b');
+      expect(events).toEqual(['a: 0 - 1', 'b: 0 - 1']);
+    });
+
+    it('F.09 — parseMini("bd, sd, hh") produces a stack node with 3 items', () => {
+      const node = parseMini('bd, sd, hh');
+      expect(node.kind).toBe('seq');
+      if (node.kind === 'seq') {
+        expect(node.items).toHaveLength(1);
+        const stack = node.items[0];
+        expect(stack?.kind).toBe('stack');
+        if (stack?.kind === 'stack') {
+          expect(stack.items).toHaveLength(3);
+        }
+      }
+    });
+
+    // F.10: Colon variants
+    it('F.10 — "bd:2" sets value to "bd:2"', () => {
+      const events = showFirstCycle('bd:2');
+      expect(events).toEqual(['bd:2: 0 - 1']);
+    });
+
+    it('F.10 — "hh:open" sets value to "hh:open"', () => {
+      const events = showFirstCycle('hh:open');
+      expect(events).toEqual(['hh:open: 0 - 1']);
+    });
+
+    it('F.10 — colon variant inside a group "[bd:0 sd:1]"', () => {
+      const events = showFirstCycle('[bd:0 sd:1]');
+      expect(events).toEqual(['bd:0: 0 - 0.5', 'sd:1: 0.5 - 1']);
+    });
+
+    // F.11: Decimal pattern weights (multiplication / division with decimals)
+    it('F.11 — bd*0.5 stretches the event to 2x normal width', () => {
+      // *0.5 means repeat 0.5 times, which creates a single event spanning 1/0.5 = 2 units
+      const events = showFirstCycle('bd*0.5');
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBe('bd: 0 - 2');
+    });
+
+    it('F.11 — bd/1.5 sets factor to 1.5', () => {
+      const events = showFirstCycle('bd/1.5 sd');
+      // bd has factor 1.5, sd has factor 1 => total 2.5
+      // bd occupies 1.5/2.5 = 0.6, sd occupies 1/2.5 = 0.4
+      expect(events).toEqual(['bd: 0 - 0.6', 'sd: 0.6 - 1']);
+    });
+
+    it('F.11 — decimal multiplier interacts correctly with groups', () => {
+      const events = showFirstCycle('[a b]*1.5');
+      // *1.5 on a group: repeat 1.5 times -> a, b, a (three events)
+      expect(events).toHaveLength(3);
+      expect(events).toEqual(['a: 0 - 0.333333', 'a: 0.666667 - 1', 'b: 0.333333 - 0.666667']);
+    });
+  });
 });

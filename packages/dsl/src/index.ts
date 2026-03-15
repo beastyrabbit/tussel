@@ -282,6 +282,7 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.sometimesBy(0.1, transform);
   }
 
+  // Intentional console.log — this is a user-facing debug method.
   log(): PatternBuilder {
     console.log(this.show());
     return this;
@@ -1176,6 +1177,7 @@ export function installStringPrototypeExtensions(): void {
       enumerable: false,
       value(this: string, ...args: unknown[]) {
         if (method === 'log') {
+          // Intentional console.log — mirrors PatternBuilder.log() for string DSL usage.
           console.log(String(this));
           return String(this);
         }

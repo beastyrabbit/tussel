@@ -107,6 +107,7 @@ interface InternalQueryContext extends QueryContext {
   channel: string;
 }
 
+// Must stay in sync with DSL PatternBuilder property methods (packages/dsl/src/index.ts).
 const PROPERTY_METHODS = new Set([
   'anchor',
   'attack',
@@ -1294,7 +1295,8 @@ function applyChunk(
   context: InternalQueryContext,
 ): PlaybackEvent[] {
   const size = Math.max(1, Math.floor(evaluateNumericValue(sizeExpr, begin) ?? 1));
-  if (!Number.isFinite(size) || size <= 0 || transformedPattern === undefined) {
+  // Math.max(1, ...) guarantees size >= 1 when finite; only NaN needs guarding.
+  if (!Number.isFinite(size) || transformedPattern === undefined) {
     return queryPattern(target, begin, end, context);
   }
 
@@ -1337,7 +1339,8 @@ function applySegment(
   context: InternalQueryContext,
 ): PlaybackEvent[] {
   const segments = Math.max(1, Math.floor(evaluateNumericValue(value, begin) ?? 1));
-  if (!Number.isFinite(segments) || segments <= 0) {
+  // Math.max(1, ...) guarantees segments >= 1 when finite; only NaN needs guarding.
+  if (!Number.isFinite(segments)) {
     return queryPattern(target, begin, end, context);
   }
 
