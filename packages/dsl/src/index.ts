@@ -8,7 +8,6 @@ import {
   type ExpressionValue,
   type ExprType,
   type HydraSceneSpec,
-  type SceneInput,
   isExpressionNode,
   isPlainObject,
   type MetadataSpec,
@@ -18,6 +17,7 @@ import {
   renderHydraTemplate,
   renderValue,
   type SampleSourceSpec,
+  type SceneInput,
   type SceneSpec,
   type TransportSpec,
   TusselHydraError,
@@ -124,9 +124,23 @@ class BaseBuilder<TKind extends BuilderKind> implements BuilderState<TKind> {
 }
 
 export class PatternBuilder extends BaseBuilder<'pattern'> {
-  add(value: unknown): PatternBuilder {
-    return this.method('add', [value]);
-  }
+  add: ((value: unknown) => PatternBuilder) & {
+    in: (value: unknown) => PatternBuilder;
+    mix: (value: unknown) => PatternBuilder;
+    out: (value: unknown) => PatternBuilder;
+    reset: (value: unknown) => PatternBuilder;
+    restart: (value: unknown) => PatternBuilder;
+    squeeze: (value: unknown) => PatternBuilder;
+    squeezeout: (value: unknown) => PatternBuilder;
+  } = Object.assign((value: unknown): PatternBuilder => this.method('add', [value]), {
+    in: (value: unknown): PatternBuilder => this.method('addIn', [value]),
+    out: (value: unknown): PatternBuilder => this.method('addOut', [value]),
+    mix: (value: unknown): PatternBuilder => this.method('addMix', [value]),
+    squeeze: (value: unknown): PatternBuilder => this.method('addSqueeze', [value]),
+    squeezeout: (value: unknown): PatternBuilder => this.method('addSqueezeout', [value]),
+    reset: (value: unknown): PatternBuilder => this.method('addReset', [value]),
+    restart: (value: unknown): PatternBuilder => this.method('addRestart', [value]),
+  });
 
   anchor(value: unknown): PatternBuilder {
     return this.method('anchor', [value]);
@@ -571,6 +585,108 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
   voicings(value: unknown): PatternBuilder {
     return this.dict(value).voicing();
   }
+
+  palindrome(): PatternBuilder {
+    return this.method('palindrome', []);
+  }
+
+  iter(value: unknown): PatternBuilder {
+    return this.method('iter', [value]);
+  }
+
+  iterBack(value: unknown): PatternBuilder {
+    return this.method('iterBack', [value]);
+  }
+
+  iterback(value: unknown): PatternBuilder {
+    return this.method('iterback', [value]);
+  }
+
+  inside(factor: unknown, transform: unknown): PatternBuilder {
+    // inside(n, f) = pat.slow(n).f().fast(n)
+    const slowed = this.slow(factor);
+    const transformed = applyPatternTransform(slowed, transform);
+    return transformed.fast(factor);
+  }
+
+  outside(factor: unknown, transform: unknown): PatternBuilder {
+    // outside(n, f) = pat.fast(n).f().slow(n)
+    const fasted = this.fast(factor);
+    const transformed = applyPatternTransform(fasted, transform);
+    return transformed.slow(factor);
+  }
+
+  ribbon(offset: unknown, cycles: unknown): PatternBuilder {
+    return this.method('ribbon', [offset, cycles]);
+  }
+
+  rib(offset: unknown, cycles: unknown): PatternBuilder {
+    return this.method('rib', [offset, cycles]);
+  }
+
+  swingBy(amount: unknown, subdivisions: unknown): PatternBuilder {
+    return this.method('swingBy', [amount, subdivisions]);
+  }
+
+  swing(subdivisions: unknown): PatternBuilder {
+    return this.method('swing', [subdivisions]);
+  }
+
+  cpm(value: unknown): PatternBuilder {
+    return this.method('cpm', [value]);
+  }
+
+  sparsity(value: unknown): PatternBuilder {
+    return this.method('sparsity', [value]);
+  }
+
+  density(value: unknown): PatternBuilder {
+    return this.method('density', [value]);
+  }
+
+  euclidLegato(pulses: unknown, steps: unknown, rotation?: unknown): PatternBuilder {
+    return this.method('euclidLegato', rotation === undefined ? [pulses, steps] : [pulses, steps, rotation]);
+  }
+
+  euclidRot(pulses: unknown, steps: unknown, rotation?: unknown): PatternBuilder {
+    return this.method('euclidRot', rotation === undefined ? [pulses, steps] : [pulses, steps, rotation]);
+  }
+
+  euclidrot(pulses: unknown, steps: unknown, rotation?: unknown): PatternBuilder {
+    return this.method('euclidrot', rotation === undefined ? [pulses, steps] : [pulses, steps, rotation]);
+  }
+
+  fmap(value: unknown): PatternBuilder {
+    return this.method('fmap', [value]);
+  }
+
+  addIn(value: unknown): PatternBuilder {
+    return this.method('addIn', [value]);
+  }
+
+  addOut(value: unknown): PatternBuilder {
+    return this.method('addOut', [value]);
+  }
+
+  addMix(value: unknown): PatternBuilder {
+    return this.method('addMix', [value]);
+  }
+
+  addSqueeze(value: unknown): PatternBuilder {
+    return this.method('addSqueeze', [value]);
+  }
+
+  addSqueezeout(value: unknown): PatternBuilder {
+    return this.method('addSqueezeout', [value]);
+  }
+
+  addReset(value: unknown): PatternBuilder {
+    return this.method('addReset', [value]);
+  }
+
+  addRestart(value: unknown): PatternBuilder {
+    return this.method('addRestart', [value]);
+  }
 }
 
 export class SignalBuilder extends BaseBuilder<'signal'> {
@@ -698,6 +814,18 @@ const shuffleTransform = createPatternTransformFactory('shuffle');
 const shrinkTransform = createPatternTransformFactory('shrink');
 const takeTransform = createPatternTransformFactory('take');
 const zoomTransform = createPatternTransformFactory('zoom');
+const palindromeTransform = createPatternTransformFactory('palindrome')();
+const iterTransform = createPatternTransformFactory('iter');
+const iterBackTransform = createPatternTransformFactory('iterBack');
+const ribbonTransform = createPatternTransformFactory('ribbon');
+const swingByTransform = createPatternTransformFactory('swingBy');
+const swingTransform = createPatternTransformFactory('swing');
+const cpmTransform = createPatternTransformFactory('cpm');
+const sparsityTransform = createPatternTransformFactory('sparsity');
+const densityTransform = createPatternTransformFactory('density');
+const euclidLegatoTransform = createPatternTransformFactory('euclidLegato');
+const euclidRotTransform = createPatternTransformFactory('euclidRot');
+const fmapTransform = createPatternTransformFactory('fmap');
 
 export function expr(name: string, args: unknown[] = [], exprType: ExprType = 'value'): ExpressionNode {
   return createCallExpression(
@@ -841,6 +969,21 @@ export const shuffle = shuffleTransform;
 export const shrink = shrinkTransform;
 export const take = takeTransform;
 export const zoom = zoomTransform;
+export const palindrome = palindromeTransform;
+export const iter = iterTransform;
+export const iterBack = iterBackTransform;
+export const iterback = iterBackTransform;
+export const ribbon = ribbonTransform;
+export const rib = ribbonTransform;
+export const swingBy = swingByTransform;
+export const swing = swingTransform;
+export const cpm = cpmTransform;
+export const sparsity = sparsityTransform;
+export const density = densityTransform;
+export const euclidLegato = euclidLegatoTransform;
+export const euclidRot = euclidRotTransform;
+export const euclidrot = euclidRotTransform;
+export const fmap = fmapTransform;
 
 export function silence(): PatternBuilder {
   return patternCall('silence');
@@ -921,19 +1064,29 @@ const STRING_PATTERN_METHODS = [
   'almostNever',
   'compress',
   'contract',
+  'cpm',
   'degrade',
   'degradeBy',
+  'density',
   'div',
   'drop',
   'edo',
+  'euclidLegato',
+  'euclidRot',
+  'euclidrot',
   'every',
   'early',
   'expand',
   'extend',
   'fast',
   'fastGap',
+  'fmap',
   'grow',
   'hurry',
+  'inside',
+  'iter',
+  'iterBack',
+  'iterback',
   'jux',
   'juxBy',
   'late',
@@ -951,10 +1104,14 @@ const STRING_PATTERN_METHODS = [
   'osc',
   'oschost',
   'oscport',
+  'outside',
   'pace',
+  'palindrome',
   'ply',
   'rarely',
   'rev',
+  'rib',
+  'ribbon',
   'rootNotes',
   'scramble',
   'scale',
@@ -965,8 +1122,11 @@ const STRING_PATTERN_METHODS = [
   'slowGap',
   'sometimes',
   'sometimesBy',
+  'sparsity',
   'sub',
   'superimpose',
+  'swing',
+  'swingBy',
   'take',
   'tour',
   'transpose',

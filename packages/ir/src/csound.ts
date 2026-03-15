@@ -85,6 +85,9 @@ export function resolveOrcUrl(url: string): string {
   return trimmed;
 }
 
+const ORC_FETCH_TIMEOUT_MS = 15_000;
+const ORC_MAX_SIZE_BYTES = 1_024 * 1_024; // 1 MB
+
 export async function loadOrc(url: string): Promise<void> {
   const resolvedUrl = resolveOrcUrl(url);
   const pending =
@@ -94,14 +97,39 @@ export async function loadOrc(url: string): Promise<void> {
         throw new Error(`loadOrc: fetch is unavailable for ${resolvedUrl}`);
       }
 
-      const response = await fetch(resolvedUrl);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), ORC_FETCH_TIMEOUT_MS);
+      let response: Response;
+      try {
+        response = await fetch(resolvedUrl, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
+
       if (!response.ok) {
         throw new Error(
           `loadOrc: failed to fetch ${resolvedUrl} (${response.status} ${response.statusText})`,
         );
       }
 
+      const contentType = response.headers.get('content-type') ?? '';
+      if (contentType && !contentType.includes('text') && !contentType.includes('octet-stream')) {
+        throw new Error(`loadOrc: unexpected content-type "${contentType}" for ${resolvedUrl}`);
+      }
+
+      const contentLength = response.headers.get('content-length');
+      if (contentLength && Number(contentLength) > ORC_MAX_SIZE_BYTES) {
+        throw new Error(
+          `loadOrc: response too large (${contentLength} bytes, limit ${ORC_MAX_SIZE_BYTES}) for ${resolvedUrl}`,
+        );
+      }
+
       const code = await response.text();
+      if (code.length > ORC_MAX_SIZE_BYTES) {
+        throw new Error(
+          `loadOrc: body too large (${code.length} bytes, limit ${ORC_MAX_SIZE_BYTES}) for ${resolvedUrl}`,
+        );
+      }
       registerCsoundCode(code, resolvedUrl);
     })();
 

@@ -28,33 +28,27 @@ describe('Strudel value modifiers page audio parity', () => {
   });
 
   for (const testCase of cases) {
-    it(
-      `${testCase.id} (native audio parity)`,
-      async () => {
-        const prepared = await prepareTusselScene('strudel-js', {
-          code: testCase.code,
-          shape: 'script',
-        });
+    it(`${testCase.id} (native audio parity)`, async () => {
+      const prepared = await prepareTusselScene('strudel-js', {
+        code: testCase.code,
+        shape: 'script',
+      });
 
-        const [tusselWav, strudelWav] = await Promise.all([
-          renderTusselAudio(prepared, {
-            cps: testCase.cps,
-            durationCycles: testCase.durationCycles,
-            samplePack,
-          }),
-          renderStrudelAudio(testCase.code, {
-            cps: testCase.cps,
-            durationCycles: testCase.durationCycles,
-            samplePack,
-          }),
-        ]);
+      const [tusselWav, strudelWav] = await Promise.all([
+        renderTusselAudio(prepared, {
+          cps: testCase.cps,
+          durationCycles: testCase.durationCycles,
+          samplePack,
+        }),
+        renderStrudelAudio(testCase.code, {
+          cps: testCase.cps,
+          durationCycles: testCase.durationCycles,
+          samplePack,
+        }),
+      ]);
 
-        const result = compareAudioWithTolerance(strudelWav, tusselWav);
-        expect(result.ok, `Audio mismatch for ${testCase.id}: ${JSON.stringify(result)}`).toBe(
-          true,
-        );
-      },
-      60_000,
-    );
+      const result = compareAudioWithTolerance(strudelWav, tusselWav);
+      expect(result.ok, `Audio mismatch for ${testCase.id}: ${JSON.stringify(result)}`).toBe(true);
+    }, 60_000);
   }
 });

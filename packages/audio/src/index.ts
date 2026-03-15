@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -10,7 +10,13 @@ import {
   queryScene,
   Scheduler,
 } from '@tussel/core';
-import { coerceFiniteNumber, getCsoundInstrument, type SampleManifest, type SceneSpec, TusselAudioError } from '@tussel/ir';
+import {
+  coerceFiniteNumber,
+  getCsoundInstrument,
+  type SampleManifest,
+  type SceneSpec,
+  TusselAudioError,
+} from '@tussel/ir';
 import type {
   AudioBuffer,
   AudioBufferSourceNode,
@@ -80,7 +86,15 @@ export interface CsoundVoiceSpec {
 }
 
 const BUILTIN_SYNTHS = new Set([
-  'brown', 'noise', 'pink', 'saw', 'sawtooth', 'sine', 'square', 'triangle', 'white',
+  'brown',
+  'noise',
+  'pink',
+  'saw',
+  'sawtooth',
+  'sine',
+  'square',
+  'triangle',
+  'white',
 ]);
 
 // -- Default constants: audio engine configuration ----------------------------
@@ -217,7 +231,10 @@ export class RealtimeAudioEngine {
   private readonly cacheDir: string;
   private context: AudioContext | undefined;
   private readonly cutGroups = new Map<string, LoadedVoice[]>();
-  readonly midiOutput: MidiOutputManager | undefined;
+  private _midiOutput: MidiOutputManager | undefined;
+  get midiOutput(): MidiOutputManager | undefined {
+    return this._midiOutput;
+  }
   private mixGraph: MixGraph | undefined;
   private readonly onExternalDispatch: RealtimeAudioEngineOptions['onExternalDispatch'];
   readonly oscOutput = new OscOutputManager();
@@ -281,7 +298,7 @@ export class RealtimeAudioEngine {
     this.scheduler?.stop();
     this.scheduler = undefined;
     this.oscOutput.closeAll();
-    this.midiOutput?.closeAll();
+    this._midiOutput?.closeAll();
 
     if (this.context) {
       await this.context.close();
@@ -295,13 +312,12 @@ export class RealtimeAudioEngine {
    * Called once from `start()`. Subsequent calls are a no-op.
    */
   private async initMidi(): Promise<void> {
-    if (this.midiOutput !== undefined) {
+    if (this._midiOutput !== undefined) {
       return;
     }
     const factory = await loadMidiOutputFactory();
     if (factory) {
-      // Cast away readonly for one-time initialization
-      (this as { midiOutput: MidiOutputManager | undefined }).midiOutput = new MidiOutputManager(factory);
+      this._midiOutput = new MidiOutputManager(factory);
     }
   }
 
@@ -313,11 +329,11 @@ export class RealtimeAudioEngine {
     dispatch: import('@tussel/core').MidiNoteDispatchEvent | import('@tussel/core').MidiCcDispatchEvent,
     targetTime: number,
   ): void {
-    if (!this.midiOutput) {
+    if (!this._midiOutput) {
       return;
     }
 
-    const noteOff = this.midiOutput.dispatchEvent(dispatch);
+    const noteOff = this._midiOutput.dispatchEvent(dispatch);
 
     if (noteOff && dispatch.kind === 'midi-note') {
       // Schedule note-off after the event's duration.
@@ -333,7 +349,15 @@ export class RealtimeAudioEngine {
       const now = this.context?.currentTime ?? 0;
       const delayMs = Math.max(10, (targetTime - now + durationSeconds) * 1000);
 
-      setTimeout(noteOff, delayMs);
+      setTimeout(() => {
+        try {
+          noteOff();
+        } catch (error) {
+          console.warn(
+            `[tussel/audio] MIDI note-off error: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }, delayMs);
     }
   }
 
@@ -396,8 +420,15 @@ export async function renderSceneToWavBuffer(
   if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
     throw new RangeError(`renderSceneToWavBuffer() requires sampleRate > 0, received ${sampleRate}.`);
   }
+  const totalFrames = Math.ceil(sampleRate * seconds);
+  const MAX_BUFFER_FRAMES = 48_000 * 600; // 10 minutes at 48kHz
+  if (totalFrames > MAX_BUFFER_FRAMES) {
+    throw new RangeError(
+      `renderSceneToWavBuffer() buffer too large: ${totalFrames} frames exceeds limit of ${MAX_BUFFER_FRAMES} (${seconds}s at ${sampleRate}Hz).`,
+    );
+  }
   const cacheDir = options.cacheDir ?? path.resolve('.tussel-cache', 'samples');
-  const context = new OfflineContext(2, Math.max(1, Math.ceil(sampleRate * seconds)), sampleRate);
+  const context = new OfflineContext(2, Math.max(1, totalFrames), sampleRate);
   const registry = new SampleRegistry();
   await registry.prepareScene(scene, cacheDir);
   const cps = typeof scene.transport.cps === 'number' ? scene.transport.cps : 0.5;
@@ -1493,12 +1524,19 @@ async function resolveManifest(ref: string, cacheDir: string): Promise<SampleMan
   }
 
   const fullPath = path.resolve(ref);
-  // Prevent path traversal: relative refs must resolve under cwd
+  // Prevent path traversal: relative refs must resolve under cwd.
+  // Also resolve symlinks to prevent escaping via symlinked directories.
   const cwd = process.cwd();
   if (!path.isAbsolute(ref) && !fullPath.startsWith(cwd)) {
     throw new Error(`Sample ref "${ref}" resolves outside the project directory.`);
   }
   const stats = await stat(fullPath);
+  if (stats.isSymbolicLink?.()) {
+    const realTarget = await realpath(fullPath);
+    if (!realTarget.startsWith(cwd)) {
+      throw new Error(`Sample ref "${ref}" symlink target resolves outside the project directory.`);
+    }
+  }
   const manifestPath = stats.isDirectory() ? path.join(fullPath, 'strudel.json') : fullPath;
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as SampleManifest;
   return { manifest, rootDir: path.dirname(manifestPath) };

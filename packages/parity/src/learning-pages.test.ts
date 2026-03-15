@@ -142,20 +142,29 @@ describe('learning page audio parity against Strudel oracle', () => {
 
 function representativeLearningPageCases() {
   // learn/mini-notation excluded: example-01 uses top-level await (TS1160)
+  // learn/strudel-vs-tidal excluded: uses $: / _$: channel assignment (not supported)
+  //
+  // workshop/, recipes/, understand/ pages are scanned for extraction (C.01-C.05)
+  // but NOT included in audio parity because they reference external samples.
+  // Audio parity picks one representative example per supported page to keep
+  // the test suite under 30 minutes. The import/query test above exercises
+  // ALL examples to verify compilation.
+  // Pages validated for audio parity. New pages (accumulation, conditional-modifiers,
+  // random-modifiers, time-modifiers, signals, factories, metadata) have
+  // implementations but need individual audio parity validation before inclusion.
   const supportedPages = new Set([
     'functions/intro',
     'functions/value-modifiers',
-    'learn/sounds',
-    'learn/samples',
-    'learn/notes',
-    'learn/synths',
-    'learn/effects',
-    'learn/stepwise',
-    'learn/tonal',
     'learn/code',
+    'learn/effects',
     'learn/faq',
     'learn/getting-started',
-    // learn/strudel-vs-tidal excluded: uses $: / _$: channel assignment (not supported)
+    'learn/notes',
+    'learn/samples',
+    'learn/sounds',
+    'learn/stepwise',
+    'learn/synths',
+    'learn/tonal',
   ]);
 
   const selected = [];
@@ -165,10 +174,16 @@ function representativeLearningPageCases() {
     if (!supportedPages.has(pageId) || seenPages.has(pageId)) {
       continue;
     }
+    // Skip examples that use top-level await (TS1160)
+    if (listenCase.code.includes('await ')) {
+      continue;
+    }
+    // Skip known-incompatible stepwise examples
     if (pageId === 'learn/stepwise' && listenCase.code.includes('fastcat(')) {
       continue;
     }
-    if (listenCase.code.includes('await ')) {
+    // Skip examples that reference samples() — external sample loading not available in tests
+    if (listenCase.code.includes("samples('")) {
       continue;
     }
     seenPages.add(pageId);

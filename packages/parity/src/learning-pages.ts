@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { normalizeStrudelSource } from '@tussel/runtime';
 import { describeSnippet, detectCps } from './case-text.js';
@@ -14,7 +14,15 @@ export interface ListenCase {
 }
 
 const PAGE_ROOT = path.resolve('.ref/strudel/website/src/pages');
-const LEARNING_PAGE_DIRS = ['functions', 'learn'] as const;
+const LEARNING_PAGE_DIRS = [
+  'functions',
+  'intro',
+  'learn',
+  'recipes',
+  'technical-manual',
+  'understand',
+  'workshop',
+] as const;
 const MINI_REPL_TUNE_PATTERN = /<MiniRepl[^>]*?tune=\{(`([\s\S]*?)`|'([\s\S]*?)'|"([\s\S]*?)")\}[^>]*\/?>/g;
 const DEFAULT_LISTEN_SECONDS = 10;
 const COASTLINE_LISTEN_SECONDS = 24;
@@ -23,6 +31,7 @@ export function buildLearningPageListenCases(): ListenCase[] {
   const cases: ListenCase[] = [];
   for (const relativeDir of LEARNING_PAGE_DIRS) {
     const directory = path.join(PAGE_ROOT, relativeDir);
+    if (!existsSync(directory)) continue;
     for (const sourcePath of listMdxFiles(directory)) {
       cases.push(...extractMiniReplCases(sourcePath));
     }

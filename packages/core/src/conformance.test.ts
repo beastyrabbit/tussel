@@ -1,5 +1,5 @@
 import { queryScene } from '@tussel/core';
-import { cosine, defineScene, saw, seq } from '@tussel/dsl';
+import { cosine, defineScene, rand, saw, seq, sine, square, triangle } from '@tussel/dsl';
 import { describe, expect, it } from 'vitest';
 import { evaluateNumericValue } from './index.js';
 
@@ -60,6 +60,50 @@ describe('reference conformance', () => {
         payload: { note: 'e' },
       },
     ]);
+  });
+
+  it('evaluates sine signal at common positions', () => {
+    expect(evaluateNumericValue(sine.expr, 0)).toBeCloseTo(0.5, 6);
+    expect(evaluateNumericValue(sine.expr, 0.25)).toBeCloseTo(1, 6);
+    expect(evaluateNumericValue(sine.expr, 0.5)).toBeCloseTo(0.5, 6);
+    expect(evaluateNumericValue(sine.expr, 0.75)).toBeCloseTo(0, 6);
+  });
+
+  it('evaluates square signal at common positions', () => {
+    // Square wave: 0 for first half (phase < 0.5), 1 for second half (phase >= 0.5)
+    expect(evaluateNumericValue(square.expr, 0.1)).toBe(0);
+    expect(evaluateNumericValue(square.expr, 0.4)).toBe(0);
+    expect(evaluateNumericValue(square.expr, 0.6)).toBe(1);
+    expect(evaluateNumericValue(square.expr, 0.9)).toBe(1);
+  });
+
+  it('evaluates triangle signal at common positions', () => {
+    // Triangle: 0 at 0, rises to 1 at 0.5, back to 0 at 1
+    expect(evaluateNumericValue(triangle.expr, 0)).toBeCloseTo(0, 6);
+    expect(evaluateNumericValue(triangle.expr, 0.25)).toBeCloseTo(0.5, 6);
+    expect(evaluateNumericValue(triangle.expr, 0.5)).toBeCloseTo(1, 6);
+    expect(evaluateNumericValue(triangle.expr, 0.75)).toBeCloseTo(0.5, 6);
+  });
+
+  it('evaluates rand signal to values in [0, 1)', () => {
+    for (let i = 0; i < 20; i++) {
+      const val = evaluateNumericValue(rand.expr, i * 0.37) ?? -1;
+      expect(val).toBeGreaterThanOrEqual(0);
+      expect(val).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('evaluates saw range with inverted bounds', () => {
+    // range(high, low) should still produce valid interpolated values
+    const val = evaluateNumericValue(saw.range(10, 0).expr, 0.5);
+    expect(val).toBeCloseTo(5, 2);
+  });
+
+  it('evaluates saw with fast modifier', () => {
+    // fast(2) should double the speed, so position 0.25 at fast(2) = position 0.5 at normal
+    const normal = evaluateNumericValue(saw.expr, 0.5) ?? 0;
+    const fasted = evaluateNumericValue(saw.fast(2).expr, 0.25) ?? 0;
+    expect(fasted).toBeCloseTo(normal, 6);
   });
 
   it('treats seq entries as within-cycle subdivision like Strudel', () => {

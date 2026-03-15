@@ -5,6 +5,7 @@ import {
   defineScene,
   n,
   note,
+  type PatternBuilder,
   perlin,
   rand,
   rev,
@@ -18,7 +19,7 @@ import {
   tri,
   value,
 } from '@tussel/dsl';
-import type { SceneSpec } from '@tussel/ir';
+import type { ExpressionValue, SceneSpec } from '@tussel/ir';
 import { describe, expect, it, vi } from 'vitest';
 import { evaluateNumericValue } from './index.js';
 
@@ -580,13 +581,13 @@ describe('scramble / shuffle rearrangement', () => {
 // ---------------------------------------------------------------------------
 describe('every / when / sometimesBy / within', () => {
   it('every(2, ...) applies transform only on even cycles', () => {
-    const scene = makeScene(note('0 1').every(2, (p: any) => p.add(12)));
+    const scene = makeScene(note('0 1').every(2, (p: PatternBuilder) => p.add(12)));
     const events = queryScene(scene, 0, 2, { cps: 1 });
     expect(events.map((e) => e.payload.note)).toEqual([12, 13, 0, 1]);
   });
 
   it('when applies transform when mask is truthy', () => {
-    const scene = makeScene(note('0 1').when('0 1', (p: any) => p.add(7)));
+    const scene = makeScene(note('0 1').when('0 1', (p: PatternBuilder) => p.add(7)));
     const events = queryScene(scene, 0, 1, { cps: 1 });
     expect(events.map((e) => e.payload.note)).toEqual([0, 8]);
   });
@@ -859,7 +860,7 @@ describe('signal fast/slow on signals', () => {
 describe('channel error boundaries', () => {
   it('returns events from valid channels when another channel throws', () => {
     const validNode = note('c').expr;
-    const brokenChannel = { node: null as any };
+    const brokenChannel = { node: null as unknown as ExpressionValue };
     Object.defineProperty(brokenChannel, 'node', {
       get() {
         throw new Error('deliberate test explosion');
@@ -890,7 +891,7 @@ describe('channel error boundaries', () => {
   });
 
   it('does not crash queryScene when a channel evaluation throws', () => {
-    const brokenChannel = { node: null as any };
+    const brokenChannel = { node: null as unknown as ExpressionValue };
     Object.defineProperty(brokenChannel, 'node', {
       get() {
         throw new TypeError('cannot read properties of kaboom');
@@ -1511,7 +1512,7 @@ describe('evaluateNumericValue edge cases (extended)', () => {
   });
 
   it('returns undefined for object that is not an expression node', () => {
-    expect(evaluateNumericValue({ foo: 'bar' } as any, 0)).toBeUndefined();
+    expect(evaluateNumericValue({ foo: 'bar' } as unknown as ExpressionValue, 0)).toBeUndefined();
   });
 
   it('evaluates signal expression node (sine)', () => {

@@ -25,7 +25,14 @@ import {
   wchoose,
   zip,
 } from '@tussel/dsl';
-import { type ExpressionValue, resetInputRegistry, setGamepadValue, setInputValue, setMidiValue, setMotionValue } from '@tussel/ir';
+import {
+  type ExpressionValue,
+  resetInputRegistry,
+  setGamepadValue,
+  setInputValue,
+  setMidiValue,
+  setMotionValue,
+} from '@tussel/ir';
 import { afterEach, describe, expect, it } from 'vitest';
 
 afterEach(() => {
@@ -331,7 +338,11 @@ describe('core modifiers and factories', () => {
     const base = note('0 1 2 3');
     const q = (node: unknown) =>
       queryScene(
-        defineScene({ channels: { lead: { node: node as ExpressionValue } }, samples: [], transport: { cps: 1 } }),
+        defineScene({
+          channels: { lead: { node: node as ExpressionValue } },
+          samples: [],
+          transport: { cps: 1 },
+        }),
         0,
         1,
         { cps: 1 },
@@ -704,7 +715,18 @@ describe('core modifiers and factories', () => {
     const meterEvents = queryScene(meter, 0, 1, { cps: 1 });
     expect(meterEvents).toHaveLength(12);
     expect(meterEvents.map((e) => e.payload.value)).toEqual([
-      'a', 'd', 'b', 'e', 'c', 'd', 'a', 'e', 'b', 'd', 'c', 'e',
+      'a',
+      'd',
+      'b',
+      'e',
+      'c',
+      'd',
+      'a',
+      'e',
+      'b',
+      'd',
+      'c',
+      'e',
     ]);
     // Verify timing uses toBeCloseTo to avoid IEEE 754 representation issues
     expect(meterEvents[0]?.begin).toBeCloseTo(0, 9);
@@ -807,5 +829,320 @@ describe('core modifiers and factories', () => {
     });
 
     expect(queryScene(helperScene, 0, 3, { cps: 1 }).length).toBeGreaterThan(0);
+  });
+
+  // -----------------------------------------------------------------------
+  // New time-modifier functions (A.01-A.13)
+  // -----------------------------------------------------------------------
+
+  it('palindrome reverses every other cycle', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1 2 3').palindrome() } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const cycle0 = queryScene(scene, 0, 1, { cps: 1 }).map((e) => e.payload.note);
+    const cycle1 = queryScene(scene, 1, 2, { cps: 1 }).map((e) => e.payload.note);
+    // Cycle 0: forward [0, 1, 2, 3]
+    expect(cycle0).toEqual([0, 1, 2, 3]);
+    // Cycle 1: reversed [3, 2, 1, 0]
+    expect(cycle1).toEqual([3, 2, 1, 0]);
+  });
+
+  it('iter(n) rotates pattern start each cycle', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1 2 3').iter(4) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const c0 = queryScene(scene, 0, 1, { cps: 1 }).map((e) => e.payload.note);
+    const c1 = queryScene(scene, 1, 2, { cps: 1 }).map((e) => e.payload.note);
+    const c2 = queryScene(scene, 2, 3, { cps: 1 }).map((e) => e.payload.note);
+
+    // Cycle 0: [0,1,2,3], Cycle 1: [1,2,3,0], Cycle 2: [2,3,0,1]
+    expect(c0).toEqual([0, 1, 2, 3]);
+    expect(c1).toEqual([1, 2, 3, 0]);
+    expect(c2).toEqual([2, 3, 0, 1]);
+  });
+
+  it('iterBack(n) rotates pattern in reverse', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1 2 3').iterBack(4) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const c0 = queryScene(scene, 0, 1, { cps: 1 }).map((e) => e.payload.note);
+    const c1 = queryScene(scene, 1, 2, { cps: 1 }).map((e) => e.payload.note);
+
+    expect(c0).toEqual([0, 1, 2, 3]);
+    expect(c1).toEqual([3, 0, 1, 2]);
+  });
+
+  it('inside(n, transform) slows then transforms then speeds up', () => {
+    const scene = defineScene({
+      channels: {
+        lead: { node: note('0 1 2 3').inside(2, (p: PatternBuilder) => p.rev()) },
+      },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  it('outside(n, transform) speeds then transforms then slows', () => {
+    const scene = defineScene({
+      channels: {
+        lead: { node: note('0 1 2 3').outside(2, (p: PatternBuilder) => p.rev()) },
+      },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 2, { cps: 1 });
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  it('ribbon(offset, cycles) loops a section of the pattern', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1 2 3').ribbon(0, 2) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const c0 = queryScene(scene, 0, 1, { cps: 1 });
+    const c2 = queryScene(scene, 2, 3, { cps: 1 });
+    // Should loop every 2 cycles, so c0 and c2 should be the same
+    expect(c0.map((e) => e.payload.note)).toEqual(c2.map((e) => e.payload.note));
+  });
+
+  it('swingBy delays events in the second half of subdivisions', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1 2 3').swingBy(0.5, 2) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBe(4);
+    // Events at positions 0.25 and 0.75 should be delayed
+    const secondEvent = events[1];
+    const fourthEvent = events[3];
+    expect(secondEvent).toBeDefined();
+    expect(fourthEvent).toBeDefined();
+    // These should be shifted later than their original 0.25 and 0.75
+    expect(secondEvent!.begin).toBeGreaterThan(0.25);
+    expect(fourthEvent!.begin).toBeGreaterThan(0.75);
+  });
+
+  it('swing is shorthand for swingBy(1/3, n)', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1 2 3').swing(2) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBe(4);
+  });
+
+  it('cpm(120) doubles the speed (120 cycles per minute = 2 cps)', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1').cpm(120) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    // cpm(120) = fast(120/60) = fast(2), so 4 events in one cycle
+    expect(events.length).toBe(4);
+  });
+
+  it('sparsity is an alias for slow', () => {
+    const withSlow = defineScene({
+      channels: { lead: { node: note('0 1 2 3').slow(2) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const withSparsity = defineScene({
+      channels: { lead: { node: note('0 1 2 3').sparsity(2) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const slowEvents = queryScene(withSlow, 0, 2, { cps: 1 }).map((e) => e.payload.note);
+    const sparsityEvents = queryScene(withSparsity, 0, 2, { cps: 1 }).map((e) => e.payload.note);
+    expect(sparsityEvents).toEqual(slowEvents);
+  });
+
+  it('density is an alias for fast', () => {
+    const withFast = defineScene({
+      channels: { lead: { node: note('0 1').fast(2) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const withDensity = defineScene({
+      channels: { lead: { node: note('0 1').density(2) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const fastEvents = queryScene(withFast, 0, 1, { cps: 1 }).map((e) => e.payload.note);
+    const densityEvents = queryScene(withDensity, 0, 1, { cps: 1 }).map((e) => e.payload.note);
+    expect(densityEvents).toEqual(fastEvents);
+  });
+
+  it('euclidRot distributes pulses with rotation', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0').euclidRot(3, 8, 0) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    // 3 pulses in 8 steps
+    expect(events.length).toBe(3);
+  });
+
+  it('euclidLegato holds each onset until the next', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0').euclidLegato(3, 8) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBe(3);
+    // Each event should extend to the next onset (no gaps)
+    for (let i = 0; i < events.length - 1; i++) {
+      const gap = events[i + 1]!.begin - events[i]!.end;
+      expect(Math.abs(gap)).toBeLessThan(0.01);
+    }
+  });
+
+  it('fmap adds a value to each event payload number', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1 2').fmap(10) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.map((e) => e.payload.note)).toEqual([10, 11, 12]);
+  });
+
+  // -----------------------------------------------------------------------
+  // Alignment modes (A.14-A.20)
+  // -----------------------------------------------------------------------
+
+  it('addIn aligns to left pattern structure', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1 2').addIn(note('10 20')) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    // Left has 3 events, right has 2 — left controls structure
+    expect(events.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('addOut aligns to right pattern structure', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1 2').addOut(note('10 20')) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('addMix combines intersecting events', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1').addMix(note('10 20')) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  it('addSqueeze squeezes right into left event spans', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1').addSqueeze(note('10 20')) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    // Each of 2 left events gets 2 right events squeezed in = 4 events
+    expect(events.length).toBeGreaterThanOrEqual(4);
+  });
+
+  // -----------------------------------------------------------------------
+  // Edge case tests (J.01-J.12)
+  // -----------------------------------------------------------------------
+
+  it('empty pattern produces no events', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('~') } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events).toEqual([]);
+  });
+
+  it('gain(0) produces events with gain zero', () => {
+    const scene = defineScene({
+      channels: { lead: { node: s('bd').gain(0) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBe(1);
+    expect(events[0]!.payload.gain).toBe(0);
+  });
+
+  it('speed(0) produces events with speed zero', () => {
+    const scene = defineScene({
+      channels: { lead: { node: s('bd').speed(0) } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBe(1);
+    expect(events[0]!.payload.speed).toBe(0);
+  });
+
+  it('querying very large cycle numbers does not crash', () => {
+    const scene = defineScene({
+      channels: { lead: { node: note('0 1 2 3') } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const events = queryScene(scene, 1_000_000, 1_000_001, { cps: 1 });
+    expect(events.length).toBe(4);
+  });
+
+  it('deeply nested patterns do not stack overflow', () => {
+    let pattern = note('0');
+    for (let i = 0; i < 20; i++) {
+      pattern = pattern.add(1);
+    }
+    const scene = defineScene({
+      channels: { lead: { node: pattern } },
+      samples: [],
+      transport: { cps: 1 },
+    });
+    const events = queryScene(scene, 0, 1, { cps: 1 });
+    expect(events.length).toBe(1);
+    expect(events[0]!.payload.note).toBe(20);
   });
 });

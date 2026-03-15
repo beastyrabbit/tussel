@@ -97,6 +97,7 @@ endin`;
 
     expect(fetchMock).toHaveBeenCalledWith(
       'https://raw.githubusercontent.com/kunstmusik/csound-live-code/master/livecode.orc',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(resolveOrcUrl('github:kunstmusik/csound-live-code/master/livecode.orc')).toBe(
       'https://raw.githubusercontent.com/kunstmusik/csound-live-code/master/livecode.orc',

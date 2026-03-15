@@ -160,19 +160,28 @@ const PROPERTY_METHODS = new Set([
   '_punchcard',
 ]);
 
-const warnedChannelErrors = new Set<string>();
+const channelErrorCounts = new Map<string, number>();
+const MAX_CHANNEL_WARNINGS = 5;
 
 export function resetWarnings(): void {
-  warnedChannelErrors.clear();
+  channelErrorCounts.clear();
 }
 
 function warnChannelError(channelName: string, error: unknown): void {
-  if (warnedChannelErrors.has(channelName)) {
+  const count = (channelErrorCounts.get(channelName) ?? 0) + 1;
+  channelErrorCounts.set(channelName, count);
+  if (count > MAX_CHANNEL_WARNINGS) {
+    if (count === MAX_CHANNEL_WARNINGS + 1) {
+      console.warn(
+        `[tussel/core] channel "${channelName}" — suppressing further warnings (${MAX_CHANNEL_WARNINGS} shown).`,
+      );
+    }
     return;
   }
-  warnedChannelErrors.add(channelName);
   const message = error instanceof Error ? error.message : String(error);
-  console.warn(`[tussel/core] channel "${channelName}" evaluation failed: ${message}`);
+  console.warn(
+    `[tussel/core] channel "${channelName}" evaluation failed (${count}/${MAX_CHANNEL_WARNINGS}): ${message}`,
+  );
 }
 
 export function evaluateNumericValue(value: ExpressionValue | undefined, cycle: number): number | undefined {
@@ -349,9 +358,7 @@ function resolveMidiCcValue(payload: Record<string, unknown>): number {
 }
 
 function resolveMidiVelocity(payload: Record<string, unknown>): number {
-  return (
-    normalizeMidiScalar(coerceFiniteNumber(payload.velocity) ?? coerceFiniteNumber(payload.gain)) ?? 102
-  );
+  return normalizeMidiScalar(coerceFiniteNumber(payload.velocity) ?? coerceFiniteNumber(payload.gain)) ?? 102;
 }
 
 function normalizeMidiScalar(value: number | undefined): number | undefined {
@@ -464,6 +471,52 @@ function queryPattern(
         begin,
         context,
         (left, right) => left + right,
+      );
+    case 'addIn':
+      return applyAlignedOperation(value.target, value.args[0], begin, end, context, (a, b) => a + b, 'in');
+    case 'addOut':
+      return applyAlignedOperation(value.target, value.args[0], begin, end, context, (a, b) => a + b, 'out');
+    case 'addMix':
+      return applyAlignedOperation(value.target, value.args[0], begin, end, context, (a, b) => a + b, 'mix');
+    case 'addSqueeze':
+      return applyAlignedOperation(
+        value.target,
+        value.args[0],
+        begin,
+        end,
+        context,
+        (a, b) => a + b,
+        'squeeze',
+      );
+    case 'addSqueezeout':
+      return applyAlignedOperation(
+        value.target,
+        value.args[0],
+        begin,
+        end,
+        context,
+        (a, b) => a + b,
+        'squeezeout',
+      );
+    case 'addReset':
+      return applyAlignedOperation(
+        value.target,
+        value.args[0],
+        begin,
+        end,
+        context,
+        (a, b) => a + b,
+        'reset',
+      );
+    case 'addRestart':
+      return applyAlignedOperation(
+        value.target,
+        value.args[0],
+        begin,
+        end,
+        context,
+        (a, b) => a + b,
+        'restart',
       );
     case 'div':
       return applyNumericOperation(
@@ -598,6 +651,120 @@ function queryPattern(
       );
     case 'rev':
       return transformRev(targetEvents, begin, end);
+    case 'palindrome':
+      return transformPalindrome(value.target, targetEvents, begin, end, context);
+    case 'iter':
+      return transformIter(
+        value.target,
+        begin,
+        end,
+        Math.max(1, Math.floor(evaluateNumericValue(value.args[0], begin) ?? 1)),
+        false,
+        context,
+      );
+    case 'iterBack':
+    case 'iterback':
+      return transformIter(
+        value.target,
+        begin,
+        end,
+        Math.max(1, Math.floor(evaluateNumericValue(value.args[0], begin) ?? 1)),
+        true,
+        context,
+      );
+    case 'inside':
+      return transformInside(
+        value.target,
+        begin,
+        end,
+        evaluateNumericValue(value.args[0], begin) ?? 1,
+        value.args[1],
+        context,
+      );
+    case 'outside':
+      return transformOutside(
+        value.target,
+        begin,
+        end,
+        evaluateNumericValue(value.args[0], begin) ?? 1,
+        value.args[1],
+        context,
+      );
+    case 'ribbon':
+    case 'rib':
+      return transformRibbon(
+        value.target,
+        begin,
+        end,
+        evaluateNumericValue(value.args[0], begin) ?? 0,
+        evaluateNumericValue(value.args[1], begin) ?? 1,
+        context,
+      );
+    case 'swingBy':
+      return transformSwingBy(
+        value.target,
+        begin,
+        end,
+        evaluateNumericValue(value.args[0], begin) ?? 0,
+        Math.max(1, Math.floor(evaluateNumericValue(value.args[1], begin) ?? 2)),
+        context,
+      );
+    case 'swing':
+      return transformSwingBy(
+        value.target,
+        begin,
+        end,
+        1 / 3,
+        Math.max(1, Math.floor(evaluateNumericValue(value.args[0], begin) ?? 2)),
+        context,
+      );
+    case 'cpm':
+      return transformFast(
+        value.target,
+        begin,
+        end,
+        (evaluateNumericValue(value.args[0], begin) ?? 60) / 60,
+        context,
+      );
+    case 'sparsity':
+      return transformSlow(
+        value.target,
+        begin,
+        end,
+        evaluateNumericValue(value.args[0], begin) ?? 1,
+        context,
+      );
+    case 'density':
+      return transformFast(
+        value.target,
+        begin,
+        end,
+        evaluateNumericValue(value.args[0], begin) ?? 1,
+        context,
+      );
+    case 'euclidLegato':
+      return applyEuclidLegato(
+        value.target,
+        begin,
+        end,
+        Math.max(0, Math.floor(evaluateNumericValue(value.args[0], begin) ?? 0)),
+        Math.max(1, Math.floor(evaluateNumericValue(value.args[1], begin) ?? 1)),
+        Math.floor(evaluateNumericValue(value.args[2], begin) ?? 0),
+        context,
+      );
+    case 'euclidRot':
+    case 'euclidrot':
+      return applyEuclidRot(
+        value.target,
+        begin,
+        end,
+        Math.max(0, Math.floor(evaluateNumericValue(value.args[0], begin) ?? 0)),
+        Math.max(1, Math.floor(evaluateNumericValue(value.args[1], begin) ?? 1)),
+        Math.floor(evaluateNumericValue(value.args[2], begin) ?? 0),
+        context,
+      );
+    case 'fmap':
+      return applyFmap(targetEvents, value.args[0], begin, context);
     case 'ceil':
       return mapNumericPayload(targetEvents, Math.ceil);
     case 'floor':
@@ -1990,6 +2157,584 @@ function transformRev(currentEvents: PlaybackEvent[], begin: number, end: number
     .sort((left, right) => left.begin - right.begin || left.channel.localeCompare(right.channel));
 }
 
+function transformPalindrome(
+  target: ExpressionValue,
+  currentEvents: PlaybackEvent[],
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  // palindrome = lastOf(2, rev) — reverse every other (odd) cycle
+  const startCycle = Math.floor(begin);
+  const endCycle = Math.ceil(end);
+  const events: PlaybackEvent[] = [];
+
+  for (let cycle = startCycle; cycle < endCycle; cycle += 1) {
+    const windowBegin = Math.max(begin, cycle);
+    const windowEnd = Math.min(end, cycle + 1);
+    if (windowBegin >= windowEnd) continue;
+
+    if (positiveMod(cycle, 2) === 1) {
+      // Odd cycle: reverse
+      const cycleEvents = queryPattern(target, windowBegin, windowEnd, context);
+      events.push(...transformRev(cycleEvents, windowBegin, windowEnd));
+    } else {
+      // Even cycle: normal — use events from currentEvents that fall in this window
+      events.push(...currentEvents.filter((e) => e.begin >= windowBegin && e.begin < windowEnd));
+    }
+  }
+
+  return events.sort((left, right) => left.begin - right.begin || left.channel.localeCompare(right.channel));
+}
+
+function transformIter(
+  target: ExpressionValue,
+  begin: number,
+  end: number,
+  times: number,
+  back: boolean,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  // iter(n) = slowcat of n rotations via early(i/n)
+  // iterBack(n) = same but using late(i/n) instead
+  const startCycle = Math.floor(begin);
+  const endCycle = Math.ceil(end);
+  const events: PlaybackEvent[] = [];
+
+  for (let cycle = startCycle; cycle < endCycle; cycle += 1) {
+    const windowBegin = Math.max(begin, cycle);
+    const windowEnd = Math.min(end, cycle + 1);
+    if (windowBegin >= windowEnd) continue;
+
+    const rotationIndex = positiveMod(cycle, times);
+    const offset = rotationIndex / times;
+
+    if (back) {
+      // iterBack: use late(i/n)
+      const shifted = shiftEvents(
+        queryPattern(target, windowBegin - offset, windowEnd - offset, context),
+        offset,
+        windowBegin,
+        windowEnd,
+      );
+      events.push(...shifted);
+    } else {
+      // iter: use early(i/n)
+      const shifted = shiftEvents(
+        queryPattern(target, windowBegin + offset, windowEnd + offset, context),
+        -offset,
+        windowBegin,
+        windowEnd,
+      );
+      events.push(...shifted);
+    }
+  }
+
+  return events.sort((left, right) => left.begin - right.begin || left.channel.localeCompare(right.channel));
+}
+
+function transformInside(
+  target: ExpressionValue,
+  begin: number,
+  end: number,
+  factor: number,
+  transformExpr: ExpressionValue | undefined,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  // inside(n, f) = pat.slow(n).f().fast(n)
+  // We slow the target, apply the transform, then fast the result
+  if (!Number.isFinite(factor) || factor <= 0 || !transformExpr) {
+    return queryPattern(target, begin, end, context);
+  }
+  // Query the slowed pattern with the transform applied, then speed it up
+  const slowedAndTransformed = queryPattern(transformExpr, begin / factor, end / factor, context);
+  return slowedAndTransformed.map((event) => ({
+    ...event,
+    begin: event.begin * factor,
+    duration: event.duration * factor,
+    end: event.end * factor,
+  }));
+}
+
+function transformOutside(
+  target: ExpressionValue,
+  begin: number,
+  end: number,
+  factor: number,
+  transformExpr: ExpressionValue | undefined,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  // outside(n, f) = pat.fast(n).f().slow(n)
+  // We fast the target, apply the transform, then slow the result
+  if (!Number.isFinite(factor) || factor <= 0 || !transformExpr) {
+    return queryPattern(target, begin, end, context);
+  }
+  // Query the fasted pattern with the transform applied, then slow it
+  const fastedAndTransformed = queryPattern(transformExpr, begin * factor, end * factor, context);
+  return fastedAndTransformed.map((event) => ({
+    ...event,
+    begin: event.begin / factor,
+    duration: event.duration / factor,
+    end: event.end / factor,
+  }));
+}
+
+function transformRibbon(
+  target: ExpressionValue,
+  begin: number,
+  end: number,
+  offset: number,
+  cycles: number,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  // ribbon(offset, cycles) = pat.early(offset) then loop every `cycles` cycles
+  if (!Number.isFinite(offset) || !Number.isFinite(cycles) || cycles <= 0) {
+    return queryPattern(target, begin, end, context);
+  }
+  const startCycle = Math.floor(begin);
+  const endCycle = Math.ceil(end);
+  const events: PlaybackEvent[] = [];
+  const loopLen = cycles;
+
+  for (let cycle = startCycle; cycle < endCycle; cycle += 1) {
+    const windowBegin = Math.max(begin, cycle);
+    const windowEnd = Math.min(end, cycle + 1);
+    if (windowBegin >= windowEnd) continue;
+
+    // Map current cycle into the source window [offset, offset + cycles) with wrapping
+    const sourceCycle = offset + positiveMod(cycle, loopLen);
+    const sourceEvents = queryPattern(target, sourceCycle, sourceCycle + 1, context);
+    const shifted = sourceEvents.map((event) => ({
+      ...event,
+      begin: cycle + (event.begin - sourceCycle),
+      end: cycle + (event.end - sourceCycle),
+      duration: event.duration,
+    }));
+    for (const event of shifted) {
+      const clipped = clipEvent(event, windowBegin, windowEnd);
+      if (clipped) events.push(clipped);
+    }
+  }
+
+  return events.sort((left, right) => left.begin - right.begin || left.channel.localeCompare(right.channel));
+}
+
+function transformSwingBy(
+  target: ExpressionValue,
+  begin: number,
+  end: number,
+  amount: number,
+  subdivisions: number,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  // swingBy(amount, n) = inside(n, late(seq(0, amount/2)))
+  // Delays the second half of each subdivision by amount/2
+  if (!Number.isFinite(amount) || amount === 0 || subdivisions < 1) {
+    return queryPattern(target, begin, end, context);
+  }
+  const events = queryPattern(target, begin, end, context);
+  const halfDelay = amount / 2;
+
+  return events
+    .map((event) => {
+      // Determine which subdivision this event falls in
+      const cycleStart = Math.floor(event.begin);
+      const localPos = event.begin - cycleStart;
+      const slotWidth = 1 / subdivisions;
+      const slotIndex = Math.floor(localPos / slotWidth);
+      const posInSlot = (localPos - slotIndex * slotWidth) / slotWidth;
+
+      // If event is in the second half of its slot, delay it
+      if (posInSlot >= 0.5) {
+        const delay = halfDelay * slotWidth;
+        return {
+          ...event,
+          begin: event.begin + delay,
+          end: event.end + delay,
+        };
+      }
+      return event;
+    })
+    .filter((event) => event.end > begin && event.begin < end)
+    .sort((left, right) => left.begin - right.begin || left.channel.localeCompare(right.channel));
+}
+
+function generateBjorklundPattern(pulses: number, steps: number): boolean[] {
+  if (pulses <= 0 || steps <= 0) return Array(steps).fill(false);
+  if (pulses >= steps) return Array(steps).fill(true);
+
+  // Bjorklund/Euclidean algorithm
+  let pattern: boolean[][] = [
+    ...Array.from({ length: pulses }, () => [true]),
+    ...Array.from({ length: steps - pulses }, () => [false]),
+  ];
+
+  while (true) {
+    const trueGroups = pattern.filter((g) => g[0] === true);
+    const falseGroups = pattern.filter((g) => g[0] === false);
+    if (falseGroups.length <= 1) break;
+
+    const minLen = Math.min(trueGroups.length, falseGroups.length);
+    const merged: boolean[][] = [];
+    for (let i = 0; i < minLen; i++) {
+      merged.push([...(trueGroups[i] ?? []), ...(falseGroups[i] ?? [])]);
+    }
+    const remainder =
+      trueGroups.length > falseGroups.length ? trueGroups.slice(minLen) : falseGroups.slice(minLen);
+    pattern = [...merged, ...remainder];
+  }
+
+  return pattern.flat();
+}
+
+function applyEuclidRot(
+  target: ExpressionValue,
+  begin: number,
+  end: number,
+  pulses: number,
+  steps: number,
+  rotation: number,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  if (pulses <= 0) return [];
+  const rhythm = generateBjorklundPattern(pulses, steps);
+  const rot = ((rotation % steps) + steps) % steps;
+  const rotated = [...rhythm.slice(rot), ...rhythm.slice(0, rot)];
+
+  // Subdivide the target into `steps` segments per cycle, then keep only pulse positions
+  const subdivided = transformFast(target, begin, end, steps, context);
+  return applyEuclideanMask(subdivided, rotated, begin, end);
+}
+
+function applyEuclidLegato(
+  target: ExpressionValue,
+  begin: number,
+  end: number,
+  pulses: number,
+  steps: number,
+  rotation: number,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  if (pulses <= 0) return [];
+  const rhythm = generateBjorklundPattern(pulses, steps);
+  const rot = ((rotation % steps) + steps) % steps;
+  const rotated = [...rhythm.slice(rot), ...rhythm.slice(0, rot)];
+
+  // Find onset positions and compute hold durations
+  const onsetPositions: number[] = [];
+  for (let i = 0; i < rotated.length; i++) {
+    if (rotated[i]) onsetPositions.push(i);
+  }
+  if (onsetPositions.length === 0) return [];
+
+  // Subdivide the target into `steps` segments per cycle
+  const subdivided = transformFast(target, begin, end, steps, context);
+
+  const startCycle = Math.floor(begin);
+  const endCycle = Math.ceil(end);
+  const events: PlaybackEvent[] = [];
+  const stepWidth = 1 / steps;
+
+  for (let cycle = startCycle; cycle < endCycle; cycle++) {
+    const cycleSubdivided = subdivided.filter((e) => e.begin >= cycle && e.begin < cycle + 1);
+
+    for (let oi = 0; oi < onsetPositions.length; oi++) {
+      const onsetStep = onsetPositions[oi] ?? 0;
+      const nextOnsetStep =
+        oi + 1 < onsetPositions.length ? (onsetPositions[oi + 1] ?? 0) : (onsetPositions[0] ?? 0) + steps;
+      const legatoBegin = cycle + onsetStep * stepWidth;
+      const legatoEnd = cycle + nextOnsetStep * stepWidth;
+
+      // Find the subdivided event at this onset step
+      const matchingEvent =
+        cycleSubdivided.find((e) => Math.abs(e.begin - legatoBegin) < stepWidth * 0.5) ?? cycleSubdivided[0];
+
+      if (matchingEvent) {
+        const ev = {
+          ...matchingEvent,
+          begin: legatoBegin,
+          end: legatoEnd,
+          duration: legatoEnd - legatoBegin,
+        };
+        const clipped = clipEvent(ev, begin, end);
+        if (clipped) events.push(clipped);
+      }
+    }
+  }
+
+  return events.sort((left, right) => left.begin - right.begin || left.channel.localeCompare(right.channel));
+}
+
+function applyEuclideanMask(
+  currentEvents: PlaybackEvent[],
+  rhythm: boolean[],
+  _begin: number,
+  _end: number,
+): PlaybackEvent[] {
+  const steps = rhythm.length;
+  if (steps === 0) return [];
+  const stepWidth = 1 / steps;
+
+  return currentEvents.filter((event) => {
+    const cycleStart = Math.floor(event.begin);
+    const localPos = event.begin - cycleStart;
+    const stepIndex = Math.min(steps - 1, Math.floor(localPos / stepWidth));
+    return rhythm[stepIndex];
+  });
+}
+
+type AlignmentMode = 'in' | 'mix' | 'out' | 'reset' | 'restart' | 'squeeze' | 'squeezeout';
+
+function applyAlignedOperation(
+  leftTarget: ExpressionValue,
+  rightTarget: ExpressionValue | undefined,
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+  operator: (left: number, right: number) => number,
+  mode: AlignmentMode,
+): PlaybackEvent[] {
+  if (rightTarget === undefined) {
+    return queryPattern(leftTarget, begin, end, context);
+  }
+
+  switch (mode) {
+    case 'in':
+      return alignIn(leftTarget, rightTarget, begin, end, context, operator);
+    case 'out':
+      return alignOut(leftTarget, rightTarget, begin, end, context, operator);
+    case 'mix':
+      return alignMix(leftTarget, rightTarget, begin, end, context, operator);
+    case 'squeeze':
+      return alignSqueeze(leftTarget, rightTarget, begin, end, context, operator);
+    case 'squeezeout':
+      return alignSqueeze(rightTarget, leftTarget, begin, end, context, (a, b) => operator(b, a));
+    case 'reset':
+      return alignReset(leftTarget, rightTarget, begin, end, context, operator, false);
+    case 'restart':
+      return alignReset(leftTarget, rightTarget, begin, end, context, operator, true);
+    default:
+      return queryPattern(leftTarget, begin, end, context);
+  }
+}
+
+function alignIn(
+  leftTarget: ExpressionValue,
+  rightTarget: ExpressionValue,
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+  operator: (left: number, right: number) => number,
+): PlaybackEvent[] {
+  // LEFT controls structure. For each left event, query right at left's span.
+  const leftEvents = queryPattern(leftTarget, begin, end, context);
+  const events: PlaybackEvent[] = [];
+
+  for (const leftEvent of leftEvents) {
+    const rightEvents = queryPattern(rightTarget, leftEvent.begin, leftEvent.end, context);
+    for (const rightEvent of rightEvents) {
+      const overlapBegin = Math.max(leftEvent.begin, rightEvent.begin);
+      const overlapEnd = Math.min(leftEvent.end, rightEvent.end);
+      if (overlapEnd <= overlapBegin) continue;
+
+      const combined = combineEventValues(leftEvent, rightEvent, operator);
+      events.push({
+        ...combined,
+        begin: overlapBegin,
+        end: overlapEnd,
+        duration: overlapEnd - overlapBegin,
+      });
+    }
+  }
+
+  return events.sort((a, b) => a.begin - b.begin || a.channel.localeCompare(b.channel));
+}
+
+function alignOut(
+  leftTarget: ExpressionValue,
+  rightTarget: ExpressionValue,
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+  operator: (left: number, right: number) => number,
+): PlaybackEvent[] {
+  // RIGHT controls structure. For each right event, query left at right's span.
+  const rightEvents = queryPattern(rightTarget, begin, end, context);
+  const events: PlaybackEvent[] = [];
+
+  for (const rightEvent of rightEvents) {
+    const leftEvents = queryPattern(leftTarget, rightEvent.begin, rightEvent.end, context);
+    for (const leftEvent of leftEvents) {
+      const overlapBegin = Math.max(leftEvent.begin, rightEvent.begin);
+      const overlapEnd = Math.min(leftEvent.end, rightEvent.end);
+      if (overlapEnd <= overlapBegin) continue;
+
+      const combined = combineEventValues(leftEvent, rightEvent, operator);
+      events.push({
+        ...combined,
+        begin: overlapBegin,
+        end: overlapEnd,
+        duration: overlapEnd - overlapBegin,
+      });
+    }
+  }
+
+  return events.sort((a, b) => a.begin - b.begin || a.channel.localeCompare(b.channel));
+}
+
+function alignMix(
+  leftTarget: ExpressionValue,
+  rightTarget: ExpressionValue,
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+  operator: (left: number, right: number) => number,
+): PlaybackEvent[] {
+  // Cross-product: both patterns queried at full window, only overlapping events combine.
+  const leftEvents = queryPattern(leftTarget, begin, end, context);
+  const rightEvents = queryPattern(rightTarget, begin, end, context);
+  const events: PlaybackEvent[] = [];
+
+  for (const leftEvent of leftEvents) {
+    for (const rightEvent of rightEvents) {
+      const overlapBegin = Math.max(leftEvent.begin, rightEvent.begin);
+      const overlapEnd = Math.min(leftEvent.end, rightEvent.end);
+      if (overlapEnd <= overlapBegin) continue;
+
+      const combined = combineEventValues(leftEvent, rightEvent, operator);
+      events.push({
+        ...combined,
+        begin: overlapBegin,
+        end: overlapEnd,
+        duration: overlapEnd - overlapBegin,
+      });
+    }
+  }
+
+  return events.sort((a, b) => a.begin - b.begin || a.channel.localeCompare(b.channel));
+}
+
+function alignSqueeze(
+  outerTarget: ExpressionValue,
+  innerTarget: ExpressionValue,
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+  operator: (left: number, right: number) => number,
+): PlaybackEvent[] {
+  // Squeeze RIGHT into LEFT's event structure.
+  // For each outer (left) event, scale inner (right) to fit into that event's span.
+  const outerEvents = queryPattern(outerTarget, begin, end, context);
+  const events: PlaybackEvent[] = [];
+
+  for (const outerEvent of outerEvents) {
+    const eventSpan = outerEvent.end - outerEvent.begin;
+    if (eventSpan <= 0) continue;
+
+    // Query inner pattern at a full cycle [0,1) and scale to fit outer event
+    const cycleStart = Math.floor(outerEvent.begin);
+    const innerEvents = queryPattern(innerTarget, cycleStart, cycleStart + 1, context);
+
+    for (const innerEvent of innerEvents) {
+      // Scale inner event to fit within outer event's timespan
+      const localBegin = innerEvent.begin - cycleStart;
+      const localEnd = innerEvent.end - cycleStart;
+      const scaledBegin = outerEvent.begin + localBegin * eventSpan;
+      const scaledEnd = outerEvent.begin + localEnd * eventSpan;
+
+      const overlapBegin = Math.max(scaledBegin, outerEvent.begin);
+      const overlapEnd = Math.min(scaledEnd, outerEvent.end);
+      if (overlapEnd <= overlapBegin) continue;
+
+      const combined = combineEventValues(outerEvent, innerEvent, operator);
+      events.push({
+        ...combined,
+        begin: overlapBegin,
+        end: overlapEnd,
+        duration: overlapEnd - overlapBegin,
+      });
+    }
+  }
+
+  return events.sort((a, b) => a.begin - b.begin || a.channel.localeCompare(b.channel));
+}
+
+function alignReset(
+  leftTarget: ExpressionValue,
+  rightTarget: ExpressionValue,
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+  operator: (left: number, right: number) => number,
+  restart: boolean,
+): PlaybackEvent[] {
+  // Reset/restart: for each right event, shift left pattern's cycle position
+  const rightEvents = queryPattern(rightTarget, begin, end, context);
+  const events: PlaybackEvent[] = [];
+
+  for (const rightEvent of rightEvents) {
+    // Determine offset: restart uses absolute begin, reset uses cycle position
+    const offset = restart ? rightEvent.begin : normalizeCyclePhase(rightEvent.begin);
+
+    const leftEvents = queryPattern(leftTarget, begin - offset, end - offset, context).map((e) => ({
+      ...e,
+      begin: e.begin + offset,
+      end: e.end + offset,
+    }));
+
+    for (const leftEvent of leftEvents) {
+      const overlapBegin = Math.max(leftEvent.begin, rightEvent.begin);
+      const overlapEnd = Math.min(leftEvent.end, rightEvent.end);
+      if (overlapEnd <= overlapBegin) continue;
+
+      const combined = combineEventValues(leftEvent, rightEvent, operator);
+      events.push({
+        ...combined,
+        begin: overlapBegin,
+        end: overlapEnd,
+        duration: overlapEnd - overlapBegin,
+      });
+    }
+  }
+
+  return events.sort((a, b) => a.begin - b.begin || a.channel.localeCompare(b.channel));
+}
+
+function combineEventValues(
+  leftEvent: PlaybackEvent,
+  rightEvent: PlaybackEvent,
+  operator: (left: number, right: number) => number,
+): PlaybackEvent {
+  const [leftKey, leftVal] = firstPayloadEntry(leftEvent.payload);
+  const [, rightVal] = firstPayloadEntry(rightEvent.payload);
+
+  if (leftKey && typeof leftVal === 'number' && typeof rightVal === 'number') {
+    return {
+      ...leftEvent,
+      payload: { ...leftEvent.payload, [leftKey]: operator(leftVal, rightVal) },
+    };
+  }
+
+  return leftEvent;
+}
+
+function applyFmap(
+  currentEvents: PlaybackEvent[],
+  transformExpr: ExpressionValue | undefined,
+  begin: number,
+  _context: InternalQueryContext,
+): PlaybackEvent[] {
+  // fmap applies a function to each event's numeric payload value
+  if (transformExpr === undefined) return currentEvents;
+  const factor = evaluateNumericValue(transformExpr, begin);
+  if (factor === undefined) return currentEvents;
+  return currentEvents.map((event) => {
+    const [key, val] = firstPayloadEntry(event.payload);
+    if (!key || typeof val !== 'number') return event;
+    return { ...event, payload: { ...event.payload, [key]: val + factor } };
+  });
+}
+
 function shiftEvents(
   currentEvents: PlaybackEvent[],
   amount: number,
@@ -2341,7 +3086,14 @@ function resolvePropertyValue(value: ExpressionValue | undefined, cycle: number,
     let numeric: number | undefined;
     try {
       numeric = evaluateMiniNumber(value, cycle);
-    } catch {
+    } catch (error) {
+      // Mini notation parse failed — treat the raw string as a literal value.
+      // This is expected for non-numeric strings like sound names.
+      if (process.env.NODE_ENV === 'test' && process.env.TUSSEL_DEBUG) {
+        console.warn(
+          `[tussel/core] resolvePropertyValue mini parse failed for "${value}": ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       return value;
     }
     return numeric ?? value;
@@ -2962,6 +3714,9 @@ function coerceSignalNumber(value: unknown): number {
 }
 
 function seededRandom(seed: number): number {
+  // GLSL-style sin hash. Has known pattern artifacts at extreme seeds,
+  // but changing this PRNG would break audio parity with Strudel since
+  // degrade/sometimesBy depend on deterministic random sequences.
   const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
   return x - Math.floor(x);
 }
@@ -3032,6 +3787,7 @@ function smoothNoise(value: number): number {
 export class Scheduler {
   private clearIntervalFn: typeof clearInterval;
   private cycleAtCpsChange = 0;
+  private dispatchErrorCount = 0;
   private intervalHandle: ReturnType<typeof setInterval> | undefined;
   private lastBegin = 0;
   private lastEnd = 0;
@@ -3100,6 +3856,18 @@ export class Scheduler {
     this.lastEnd = 0;
     this.lastTick = 0;
     this.numTicksSinceCpsChange = 0;
+    this.dispatchErrorCount = 0;
+  }
+
+  private logDispatchError(source: string, error: unknown): void {
+    this.dispatchErrorCount += 1;
+    if (this.dispatchErrorCount <= MAX_CHANNEL_WARNINGS) {
+      console.error(
+        `[tussel/core] ${source} error (${this.dispatchErrorCount}/${MAX_CHANNEL_WARNINGS}): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } else if (this.dispatchErrorCount === MAX_CHANNEL_WARNINGS + 1) {
+      console.error(`[tussel/core] ${source} — suppressing further errors.`);
+    }
   }
 
   private tick = (): void => {
@@ -3145,31 +3913,19 @@ export class Scheduler {
           try {
             const result = this.options.onExternalDispatch?.(dispatch, targetTime);
             if (result instanceof Promise) {
-              result.catch((error) =>
-                console.error(
-                  `[tussel/core] onExternalDispatch error: ${error instanceof Error ? error.message : String(error)}`,
-                ),
-              );
+              result.catch((error) => this.logDispatchError('onExternalDispatch', error));
             }
           } catch (error) {
-            console.error(
-              `[tussel/core] onExternalDispatch error: ${error instanceof Error ? error.message : String(error)}`,
-            );
+            this.logDispatchError('onExternalDispatch', error);
           }
         }
         try {
           const result = this.options.onTrigger(event, targetTime);
           if (result instanceof Promise) {
-            result.catch((error) =>
-              console.error(
-                `[tussel/core] onTrigger error: ${error instanceof Error ? error.message : String(error)}`,
-              ),
-            );
+            result.catch((error) => this.logDispatchError('onTrigger', error));
           }
         } catch (error) {
-          console.error(
-            `[tussel/core] onTrigger error: ${error instanceof Error ? error.message : String(error)}`,
-          );
+          this.logDispatchError('onTrigger', error);
         }
       }
 

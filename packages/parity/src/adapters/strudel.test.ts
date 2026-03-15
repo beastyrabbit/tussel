@@ -201,16 +201,14 @@ describe('resolveStrudelSourceCode', () => {
   });
 
   it('throws when source has neither code nor path', async () => {
-    await expect(
-      resolveStrudelSourceCode({ shape: 'pattern' }),
-    ).rejects.toThrow('requires either code or path');
+    await expect(resolveStrudelSourceCode({ shape: 'pattern' })).rejects.toThrow(
+      'requires either code or path',
+    );
   });
 
   it('reads from a file path when code is not provided', async () => {
     // Use a known file in the repo as the path target
-    const testPath = path.resolve(
-      '/mnt/storage/workspace/projects/tussel/packages/parity/package.json',
-    );
+    const testPath = path.resolve('/mnt/storage/workspace/projects/tussel/packages/parity/package.json');
     const result = await resolveStrudelSourceCode({
       path: testPath,
       shape: 'pattern',

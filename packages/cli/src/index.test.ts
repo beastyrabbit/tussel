@@ -120,9 +120,7 @@ describe('@tussel/cli', () => {
     const deps = createDeps();
     vi.mocked(deps.checkScene).mockRejectedValue(new Error('ENOENT: no such file or directory'));
 
-    await expect(
-      main(['node', 'tussel', 'check', 'nonexistent.scene.ts'], deps),
-    ).rejects.toThrow('ENOENT');
+    await expect(main(['node', 'tussel', 'check', 'nonexistent.scene.ts'], deps)).rejects.toThrow('ENOENT');
   });
 
   it('propagates errors from convertScene for invalid paths', async () => {
@@ -139,9 +137,9 @@ describe('@tussel/cli', () => {
     const writeOut = vi.fn();
     const program = createThrowingProgram(deps, { writeOut });
 
-    await expect(
-      program.parseAsync(['node', 'tussel', '--help'], { from: 'node' }),
-    ).rejects.toThrow(CommanderError);
+    await expect(program.parseAsync(['node', 'tussel', '--help'], { from: 'node' })).rejects.toThrow(
+      CommanderError,
+    );
 
     expect(writeOut).toHaveBeenCalledWith(expect.stringContaining('tussel'));
   });
@@ -151,9 +149,9 @@ describe('@tussel/cli', () => {
     const writeOut = vi.fn();
     const program = createThrowingProgram(deps, { writeOut });
 
-    await expect(
-      program.parseAsync(['node', 'tussel', 'run', '--help'], { from: 'node' }),
-    ).rejects.toThrow(CommanderError);
+    await expect(program.parseAsync(['node', 'tussel', 'run', '--help'], { from: 'node' })).rejects.toThrow(
+      CommanderError,
+    );
 
     expect(writeOut).toHaveBeenCalledWith(expect.stringContaining('--backend'));
   });
