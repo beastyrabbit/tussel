@@ -16,6 +16,7 @@ import {
   type SceneSpec,
   sceneSchema,
   stableJson,
+  TusselValidationError,
 } from '@tussel/ir';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import chokidar, { type FSWatcher } from 'chokidar';
@@ -120,7 +121,7 @@ export async function prepareScene(
     case 'scene-json': {
       const raw = JSON.parse(await readFile(absoluteEntry, 'utf8')) as unknown;
       if (!validateSceneJson(raw)) {
-        throw new Error(ajv.errorsText(validateSceneJson.errors));
+        throw new TusselValidationError(ajv.errorsText(validateSceneJson.errors));
       }
       generatedPath = path.join(
         cacheDir,
@@ -188,7 +189,7 @@ export async function prepareScene(
 
   const diagnostics = typecheckFile(generatedPath);
   if (diagnostics.length > 0) {
-    throw new Error(formatDiagnostics(diagnostics));
+    throw new TusselValidationError(formatDiagnostics(diagnostics));
   }
 
   const scene = normalizeImportedScene(await executeSceneModule(generatedPath), importSource, options);
@@ -225,7 +226,7 @@ export async function importExternalSource(
 ): Promise<ImportedScene> {
   const prepared = await prepareScene(entryPath, options);
   if (!isExternalSourceKind(prepared.kind)) {
-    throw new Error(`Expected external source, received ${prepared.kind}`);
+    throw new TusselValidationError(`Expected external source, received ${prepared.kind}`);
   }
   return prepared;
 }
@@ -249,7 +250,7 @@ export async function convertScene(
     case 'hydra-js': {
       const hydraModule = renderHydraModule(prepared.scene);
       if (!hydraModule) {
-        throw new Error('Scene does not contain Hydra metadata to export.');
+        throw new TusselValidationError('Scene does not contain Hydra metadata to export.');
       }
       return hydraModule;
     }
@@ -280,11 +281,13 @@ export async function runScene(
     sinkless: backend === 'offline',
   });
   let watcher: FSWatcher | undefined;
+  let lastGoodScene: PreparedScene | undefined;
 
   const loadAndApply = async (): Promise<PreparedScene | undefined> => {
     try {
       const prepared = await prepareScene(entryPath, options);
       await engine.updateScene(prepared.scene);
+      lastGoodScene = prepared;
       printSuccess(prepared);
       if (watcher) {
         await watcher.close();
@@ -298,7 +301,10 @@ export async function runScene(
       return prepared;
     } catch (error) {
       console.error(pc.red((error as Error).message));
-      return undefined;
+      if (lastGoodScene) {
+        console.error(pc.yellow('[tussel] Keeping last good scene running.'));
+      }
+      return lastGoodScene ?? undefined;
     }
   };
 
@@ -492,7 +498,7 @@ function detectSourceKind(entryPath: string): SourceKind {
   if (entryPath.endsWith('.tidal')) {
     return 'tidal';
   }
-  throw new Error(`Unsupported entry type for ${entryPath}`);
+  throw new TusselValidationError(`Unsupported entry type for ${entryPath}`);
 }
 
 function createRootReferenceExpression(rootEntry: string): ts.Expression {
@@ -520,7 +526,7 @@ function transformScriptToSceneModule(
   const rootExpressionIndex = resolveRootExpressionIndex(sourceFile, options);
 
   if (rootExpressionIndex === undefined && !options.rootEntry) {
-    throw new Error('Script files must end with a bare expression to become the live root');
+    throw new TusselValidationError('Script files must end with a bare expression to become the live root');
   }
 
   const factory = ts.factory;
@@ -658,7 +664,9 @@ function resolveRootExpressionIndex(
       return undefined;
     }
     if (candidateIndexes.length > 1) {
-      throw new Error('Ambiguous external script root. Pass --entry <binding-or-root> to select a binding.');
+      throw new TusselValidationError(
+        'Ambiguous external script root. Pass --entry <binding-or-root> to select a binding.',
+      );
     }
     return candidateIndexes[0];
   }
@@ -1033,7 +1041,7 @@ function collectCustomParamNames(value: unknown, names = new Set<string>()): Set
 function typecheckFile(filePath: string): readonly ts.Diagnostic[] {
   const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
   if (!configPath) {
-    throw new Error('Unable to locate tsconfig.json');
+    throw new TusselValidationError('Unable to locate tsconfig.json');
   }
   const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath));

@@ -1,3 +1,4 @@
+import { TusselParseError } from '@tussel/ir';
 import { inferMiniSteps, queryMini, showFirstCycle } from '@tussel/mini';
 import { describe, expect, it } from 'vitest';
 
@@ -107,5 +108,24 @@ describe('mini', () => {
       'e: 0.46875 - 0.5',
       'f: 0.5 - 1',
     ]);
+  });
+
+  describe('structured parse errors (Tier 1 — error taxonomy)', () => {
+    it('throws TusselParseError for unterminated [ group', () => {
+      expect(() => showFirstCycle('[a b')).toThrow(TusselParseError);
+    });
+
+    it('throws TusselParseError for unterminated < group', () => {
+      expect(() => showFirstCycle('<a b')).toThrow(TusselParseError);
+    });
+
+    it('TusselParseError has correct error code', () => {
+      try {
+        showFirstCycle('[a b');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TusselParseError);
+        expect((error as TusselParseError).code).toBe('TUSSEL_PARSE_ERROR');
+      }
+    });
   });
 });

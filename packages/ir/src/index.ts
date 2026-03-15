@@ -3,6 +3,8 @@ export * from './errors.js';
 export * from './hydra.js';
 export * from './input.js';
 
+import { TusselValidationError } from './errors.js';
+
 export type PrimitiveValue = boolean | null | number | string;
 export type ExprType = 'pattern' | 'scene' | 'signal' | 'value';
 
@@ -331,7 +333,7 @@ export function renderValue(value: unknown): string {
   }
 
   if (!isPlainObject(value)) {
-    throw new Error(`Unable to render non-structural value: ${String(value)}`);
+    throw new TusselValidationError(`Unable to render non-structural value: ${String(value)}`);
   }
 
   const entries = Object.entries(value).filter(([, entry]) => entry !== undefined);
@@ -407,24 +409,24 @@ export function coerceFiniteNumber(value: unknown): number | undefined {
 
 export function assertSceneSpec(value: unknown): asserts value is SceneSpec {
   if (!isPlainObject(value)) {
-    throw new Error('Scene must be an object');
+    throw new TusselValidationError('Scene must be an object');
   }
 
   if (!('transport' in value) || !isPlainObject(value.transport)) {
-    throw new Error('Scene.transport must be an object');
+    throw new TusselValidationError('Scene.transport must be an object');
   }
 
   if (!('samples' in value) || !Array.isArray(value.samples)) {
-    throw new Error('Scene.samples must be an array');
+    throw new TusselValidationError('Scene.samples must be an array');
   }
 
   if (!('channels' in value) || !isPlainObject(value.channels)) {
-    throw new Error('Scene.channels must be an object');
+    throw new TusselValidationError('Scene.channels must be an object');
   }
 
   for (const [channelName, channel] of Object.entries(value.channels)) {
     if (!isPlainObject(channel) || !('node' in channel) || !isExpressionValue(channel.node)) {
-      throw new Error(`Scene.channels.${channelName} must include a structural node`);
+      throw new TusselValidationError(`Scene.channels.${channelName} must include a structural node`);
     }
   }
 }

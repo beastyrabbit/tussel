@@ -1,3 +1,5 @@
+import { TusselParseError } from '@tussel/ir';
+
 export interface MiniEvent {
   begin: number;
   end: number;
@@ -52,7 +54,7 @@ class Parser {
     }
 
     if (terminator && !closed) {
-      throw new Error(`Unterminated ${terminator === ']' ? '[' : '<'} group in mini source`);
+      throw new TusselParseError(`Unterminated ${terminator === ']' ? '[' : '<'} group in mini source`);
     }
 
     return items;
@@ -166,7 +168,7 @@ class Parser {
     const raw = this.source.slice(start, this.index);
     const value = Number(raw);
     if (!Number.isFinite(value) || value <= 0) {
-      throw new Error(`Invalid mini numeric postfix "${raw}"`);
+      throw new TusselParseError(`Invalid mini numeric postfix "${raw}"`);
     }
     return value;
   }
@@ -183,7 +185,7 @@ class Parser {
 
     const token = this.source.slice(start, this.index);
     if (!token) {
-      throw new Error(`Unexpected token in mini source "${this.source}"`);
+      throw new TusselParseError(`Unexpected token in mini source "${this.source}"`);
     }
     return token;
   }
@@ -539,7 +541,7 @@ function prefixGroupContent(prefix: string, content: string): string {
 function consumeGroup(source: string, openIndex: number): { content: string; endIndex: number } {
   const opener = source[openIndex];
   if (opener !== '[' && opener !== '<') {
-    throw new Error(`Expected group opener at ${openIndex}`);
+    throw new TusselParseError(`Expected group opener at ${openIndex}`);
   }
 
   const closer = matchingCloser(opener);
@@ -561,7 +563,7 @@ function consumeGroup(source: string, openIndex: number): { content: string; end
     cursor += 1;
   }
 
-  throw new Error(`Unterminated ${opener} group in mini source`);
+  throw new TusselParseError(`Unterminated ${opener} group in mini source`);
 }
 
 function matchingCloser(opener: '<' | '['): '>' | ']' {

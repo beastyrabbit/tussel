@@ -738,6 +738,127 @@ describe('H.03 — concurrent tick guard', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Async onTrigger dispatch safety (Tier 1 fix — scheduler async handling)
+// ---------------------------------------------------------------------------
+describe('scheduler async onTrigger dispatch', () => {
+  it('handles async onTrigger without blocking subsequent events', () => {
+    let currentTime = 0;
+    let intervalCallback: (() => void) | undefined;
+    const triggerOrder: string[] = [];
+    let resolveFirst: (() => void) | undefined;
+
+    const scheduler = new Scheduler({
+      clearIntervalFn: (() => {}) as unknown as typeof clearInterval,
+      getTime: () => currentTime,
+      interval: 0.1,
+      latency: 0,
+      onTrigger: (event) => {
+        triggerOrder.push(String(event.payload.s));
+        if (triggerOrder.length === 1) {
+          // Return a promise from the first trigger
+          return new Promise<void>((resolve) => {
+            resolveFirst = resolve;
+          });
+        }
+      },
+      overlap: 0.1,
+      setIntervalFn: ((callback: Parameters<typeof setInterval>[0]) => {
+        intervalCallback = callback as () => void;
+        return 1 as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval,
+      windowDuration: 0.05,
+    });
+
+    scheduler.setScene(createFastScene('bd'));
+    scheduler.start();
+    scheduler.stop();
+
+    // All events should have been dispatched even though the first one
+    // returned a promise that hasn't resolved yet.
+    expect(triggerOrder.length).toBeGreaterThan(1);
+    // Clean up pending promise
+    resolveFirst?.();
+  });
+
+  it('catches rejected async onTrigger without crashing', () => {
+    let currentTime = 0;
+    let intervalCallback: (() => void) | undefined;
+    const errors: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => {
+      errors.push(String(args[0]));
+    };
+
+    const scheduler = new Scheduler({
+      clearIntervalFn: (() => {}) as unknown as typeof clearInterval,
+      getTime: () => currentTime,
+      interval: 0.05,
+      latency: 0,
+      onTrigger: () => {
+        return Promise.reject(new Error('trigger failed'));
+      },
+      overlap: 0,
+      setIntervalFn: ((callback: Parameters<typeof setInterval>[0]) => {
+        intervalCallback = callback as () => void;
+        return 1 as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval,
+      windowDuration: 0.05,
+    });
+
+    scheduler.setScene(createFastScene('bd'));
+
+    // Should not throw even though onTrigger rejects
+    expect(() => {
+      scheduler.start();
+      scheduler.stop();
+    }).not.toThrow();
+
+    console.error = originalError;
+  });
+
+  it('catches rejected async onExternalDispatch without crashing', () => {
+    let currentTime = 0;
+    const originalError = console.error;
+    console.error = () => {};
+
+    const scheduler = new Scheduler({
+      clearIntervalFn: (() => {}) as unknown as typeof clearInterval,
+      getTime: () => currentTime,
+      interval: 0.05,
+      latency: 0,
+      onExternalDispatch: () => {
+        return Promise.reject(new Error('dispatch failed'));
+      },
+      onTrigger: () => {},
+      overlap: 0,
+      setIntervalFn: ((callback: Parameters<typeof setInterval>[0]) => {
+        return 1 as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval,
+      windowDuration: 0.05,
+    });
+
+    scheduler.setScene(
+      defineScene({
+        channels: {
+          midi: {
+            node: note('c4').midiport('test').midichan(1).fast(20),
+          },
+        },
+        samples: [],
+        transport: { cps: 1 },
+      }),
+    );
+
+    expect(() => {
+      scheduler.start();
+      scheduler.stop();
+    }).not.toThrow();
+
+    console.error = originalError;
+  });
+});
+
 function createFastScene(sound: string, withTransport = true) {
   return defineScene({
     channels: {

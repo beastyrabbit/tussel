@@ -1,3 +1,5 @@
+import { TusselInputError } from './errors.js';
+
 export interface CsoundInstrumentSpec {
   body: string;
   name: string;
@@ -75,7 +77,7 @@ export function registerCsoundCode(code: string, source = 'inline'): string[] {
 
 export function resolveOrcUrl(url: string): string {
   if (typeof url !== 'string' || url.trim() === '') {
-    throw new Error('loadOrc: expected url string');
+    throw new TusselInputError('loadOrc: expected url string');
   }
 
   const trimmed = url.trim();
@@ -94,7 +96,7 @@ export async function loadOrc(url: string): Promise<void> {
     sourceLoads().get(resolvedUrl) ??
     (async () => {
       if (typeof fetch !== 'function') {
-        throw new Error(`loadOrc: fetch is unavailable for ${resolvedUrl}`);
+        throw new TusselInputError(`loadOrc: fetch is unavailable for ${resolvedUrl}`);
       }
 
       const controller = new AbortController();
@@ -107,26 +109,26 @@ export async function loadOrc(url: string): Promise<void> {
       }
 
       if (!response.ok) {
-        throw new Error(
+        throw new TusselInputError(
           `loadOrc: failed to fetch ${resolvedUrl} (${response.status} ${response.statusText})`,
         );
       }
 
       const contentType = response.headers.get('content-type') ?? '';
       if (contentType && !contentType.includes('text') && !contentType.includes('octet-stream')) {
-        throw new Error(`loadOrc: unexpected content-type "${contentType}" for ${resolvedUrl}`);
+        throw new TusselInputError(`loadOrc: unexpected content-type "${contentType}" for ${resolvedUrl}`);
       }
 
       const contentLength = response.headers.get('content-length');
       if (contentLength && Number(contentLength) > ORC_MAX_SIZE_BYTES) {
-        throw new Error(
+        throw new TusselInputError(
           `loadOrc: response too large (${contentLength} bytes, limit ${ORC_MAX_SIZE_BYTES}) for ${resolvedUrl}`,
         );
       }
 
       const code = await response.text();
       if (code.length > ORC_MAX_SIZE_BYTES) {
-        throw new Error(
+        throw new TusselInputError(
           `loadOrc: body too large (${code.length} bytes, limit ${ORC_MAX_SIZE_BYTES}) for ${resolvedUrl}`,
         );
       }

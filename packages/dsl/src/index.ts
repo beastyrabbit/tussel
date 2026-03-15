@@ -21,6 +21,7 @@ import {
   type SceneSpec,
   type TransportSpec,
   TusselHydraError,
+  TusselValidationError,
 } from '@tussel/ir';
 
 export * from '@tussel/ir';
@@ -88,7 +89,7 @@ function normalizeValue(value: unknown): ExpressionValue {
     ) as ExpressionValue;
   }
 
-  throw new Error(`Unsupported structural value: ${String(value)}`);
+  throw new TusselValidationError(`Unsupported structural value: ${String(value)}`);
 }
 
 class BaseBuilder<TKind extends BuilderKind> implements BuilderState<TKind> {
@@ -758,7 +759,7 @@ function applyPatternTransform(target: PatternBuilder, transform: unknown): Patt
 function toPatternBuilder(value: unknown): PatternBuilder {
   const normalized = normalizeValue(value);
   if (!isExpressionNode(normalized) || normalized.exprType !== 'pattern') {
-    throw new Error('Pattern transform must return a pattern expression');
+    throw new TusselValidationError('Pattern transform must return a pattern expression');
   }
   return createBuilder('pattern', normalized);
 }
@@ -1257,7 +1258,7 @@ function normalizeSceneInput(input: DslSceneInput | SceneSpec): SceneSpec {
   }
 
   if (Object.keys(channels).length === 0) {
-    throw new Error(
+    throw new TusselValidationError(
       'defineScene() requires at least one channel or a root expression. Received an empty scene.',
     );
   }

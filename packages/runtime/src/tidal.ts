@@ -1,3 +1,5 @@
+import { TusselParseError } from '@tussel/ir';
+
 interface ParsedTidalProgram {
   bindings: Map<string, string>;
   channels: Array<{ channel: string; expr: string }>;
@@ -180,7 +182,7 @@ function resolveChannels(
     if (binding) {
       return [{ channel: entry, expr: binding }];
     }
-    throw new Error(
+    throw new TusselParseError(
       `Unable to resolve tidal entry "${entry}". Available bindings: ${[...program.bindings.keys()].join(', ')}`,
     );
   }
@@ -197,16 +199,16 @@ function resolveChannels(
   }
 
   if (program.bindings.size > 1) {
-    throw new Error('Ambiguous tidal source. Pass --entry <binding-or-root> to select a binding.');
+    throw new TusselParseError('Ambiguous tidal source. Pass --entry <binding-or-root> to select a binding.');
   }
 
-  throw new Error('Tidal source did not contain a runnable root.');
+  throw new TusselParseError('Tidal source did not contain a runnable root.');
 }
 
 function translateExpr(expr: string, bindings: Map<string, string>): string {
   const trimmed = trimOuter(expr);
   if (!trimmed) {
-    throw new Error('Empty tidal expression');
+    throw new TusselParseError('Empty tidal expression');
   }
 
   const dollarIndex = findTopLevelOperator(trimmed, '$');
@@ -228,7 +230,7 @@ function translateAtom(expr: string, bindings: Map<string, string>): string {
   const trimmed = trimOuter(expr);
   const tokens = tokenize(trimmed);
   if (tokens.length === 0) {
-    throw new Error(`Unsupported tidal expression: ${expr}`);
+    throw new TusselParseError(`Unsupported tidal expression: ${expr}`);
   }
 
   if (tokens.length === 1) {
@@ -243,7 +245,7 @@ function translateAtom(expr: string, bindings: Map<string, string>): string {
     const callee = head === 'sound' ? 's' : head === 'note' ? 'n' : head;
     const argument = rest.join(' ').trim();
     if (!argument) {
-      throw new Error(`Missing tidal argument for ${head}`);
+      throw new TusselParseError(`Missing tidal argument for ${head}`);
     }
     return `${callee}(${translateArgument(argument, bindings)})`;
   }
@@ -252,7 +254,7 @@ function translateAtom(expr: string, bindings: Map<string, string>): string {
     return `(${translateExpr(trimmed.slice(1, -1), bindings)})`;
   }
 
-  throw new Error(`Unsupported tidal atom: ${expr}`);
+  throw new TusselParseError(`Unsupported tidal atom: ${expr}`);
 }
 
 function applyPrefix(prefix: string, target: string, bindings: Map<string, string>): string {
@@ -262,14 +264,14 @@ function applyPrefix(prefix: string, target: string, bindings: Map<string, strin
   }
   const [head, ...rest] = tokens;
   if (!head || !METHOD_NAMES.has(head)) {
-    throw new Error(`Unsupported tidal transform: ${prefix}`);
+    throw new TusselParseError(`Unsupported tidal transform: ${prefix}`);
   }
   if (NO_ARG_METHODS.has(head)) {
     return `${target}.${head}()`;
   }
   const argument = rest.join(' ').trim();
   if (!argument) {
-    throw new Error(`Missing tidal argument for ${head}`);
+    throw new TusselParseError(`Missing tidal argument for ${head}`);
   }
   return `${target}.${head}(${translateArgument(argument, bindings)})`;
 }
@@ -278,12 +280,12 @@ function applyControl(target: string, control: string, bindings: Map<string, str
   const tokens = tokenize(control);
   const [head, ...rest] = tokens;
   if (!head) {
-    throw new Error(`Unsupported tidal control: ${control}`);
+    throw new TusselParseError(`Unsupported tidal control: ${control}`);
   }
   if (BASE_CALLS.has(head)) {
     const argument = rest.join(' ').trim();
     if (!argument) {
-      throw new Error(`Missing tidal control value for ${head}`);
+      throw new TusselParseError(`Missing tidal control value for ${head}`);
     }
     if (head === 'sound' || head === 's') {
       return `${target}.s(${translateArgument(argument, bindings)})`;
@@ -291,14 +293,14 @@ function applyControl(target: string, control: string, bindings: Map<string, str
     return `${target}.note(${translateArgument(argument, bindings)})`;
   }
   if (!METHOD_NAMES.has(head)) {
-    throw new Error(`Unsupported tidal control: ${control}`);
+    throw new TusselParseError(`Unsupported tidal control: ${control}`);
   }
   if (NO_ARG_METHODS.has(head)) {
     return `${target}.${head}()`;
   }
   const argument = rest.join(' ').trim();
   if (!argument) {
-    throw new Error(`Missing tidal control value for ${head}`);
+    throw new TusselParseError(`Missing tidal control value for ${head}`);
   }
   return `${target}.${head}(${translateArgument(argument, bindings)})`;
 }
@@ -306,7 +308,7 @@ function applyControl(target: string, control: string, bindings: Map<string, str
 function translateArgument(argument: string, bindings: Map<string, string>): string {
   const trimmed = trimOuter(argument);
   if (!trimmed) {
-    throw new Error('Missing tidal argument');
+    throw new TusselParseError('Missing tidal argument');
   }
   if (isQuoted(trimmed)) {
     return JSON.stringify(unquote(trimmed));
@@ -320,13 +322,13 @@ function translateArgument(argument: string, bindings: Map<string, string>): str
   if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
     return trimmed;
   }
-  throw new Error(`Unsupported tidal argument: ${argument}`);
+  throw new TusselParseError(`Unsupported tidal argument: ${argument}`);
 }
 
 function parseNumericLiteral(value: string, context: string): number {
   const numeric = Number(value.trim());
   if (!Number.isFinite(numeric)) {
-    throw new Error(`Expected numeric literal for ${context}, received ${value}`);
+    throw new TusselParseError(`Expected numeric literal for ${context}, received ${value}`);
   }
   return numeric;
 }

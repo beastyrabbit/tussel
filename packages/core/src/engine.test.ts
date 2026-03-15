@@ -1,4 +1,4 @@
-import { collectExternalDispatches, queryScene } from '@tussel/core';
+import { collectExternalDispatches, queryScene, Scheduler } from '@tussel/core';
 import {
   add,
   cat,
@@ -20,6 +20,7 @@ import {
   value,
 } from '@tussel/dsl';
 import type { ExpressionValue, SceneSpec } from '@tussel/ir';
+import { TusselCoreError } from '@tussel/ir';
 import { describe, expect, it, vi } from 'vitest';
 import { evaluateNumericValue } from './index.js';
 
@@ -1771,5 +1772,124 @@ describe('pattern composition event verification (E.13-E.17)', () => {
     }
     // slow(2) stretches the single note over 2 cycles, so duration = 2
     expect(slowEvents[0]?.duration).toBeGreaterThan(fastEvents[0]?.duration ?? 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tier 0 fix validations: MIDI DSL methods, div-by-zero, fmap, lcm overflow
+// ---------------------------------------------------------------------------
+
+describe('MIDI DSL property methods (Tier 0 fix 1.1)', () => {
+  it('ccn annotates events with ccn property', () => {
+    const events = query(s('bd').ccn(74));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.ccn).toBe(74);
+  });
+
+  it('ccv annotates events with ccv property', () => {
+    const events = query(s('bd').ccv(100));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.ccv).toBe(100);
+  });
+
+  it('midicmd annotates events with midicmd property', () => {
+    const events = query(s('bd').midicmd('start'));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.midicmd).toBe('start');
+  });
+
+  it('midibend annotates events with midibend property', () => {
+    const events = query(s('bd').midibend(8192));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.midibend).toBe(8192);
+  });
+
+  it('miditouch annotates events with miditouch property', () => {
+    const events = query(s('bd').miditouch(64));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.miditouch).toBe(64);
+  });
+
+  it('ccn and ccv chain together for full CC messages', () => {
+    const events = query(s('bd').ccn(74).ccv(100));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.ccn).toBe(74);
+    expect(events[0]?.payload.ccv).toBe(100);
+  });
+});
+
+describe('division by zero guard (Tier 0 fix 1.3)', () => {
+  it('div by zero returns 0 instead of Infinity', () => {
+    const events = query(note('10').div(0));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.note).toBe(0);
+  });
+
+  it('div by zero in a pattern context returns 0', () => {
+    const events = query(note('5').div('0'));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.note).toBe(0);
+  });
+
+  it('div by non-zero works normally', () => {
+    const events = query(note('10').div(2));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.note).toBe(5);
+  });
+});
+
+describe('fmap applies addition (Tier 0 fix 1.2)', () => {
+  it('fmap adds a scalar to each event value', () => {
+    const events = query(note('5').fmap(3));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.note).toBe(8);
+  });
+
+  it('fmap with 0 is identity', () => {
+    const events = query(note('7').fmap(0));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.note).toBe(7);
+  });
+
+  it('fmap with negative subtracts', () => {
+    const events = query(note('10').fmap(-3));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.note).toBe(7);
+  });
+});
+
+describe('evaluateMiniNumber epsilon (Tier 0 fix 1.4)', () => {
+  it('evaluates mini numbers at cycle boundaries', () => {
+    expect(evaluateNumericValue('42', 0)).toBe(42);
+    expect(evaluateNumericValue('3.14', 0)).toBeCloseTo(3.14, 6);
+  });
+
+  it('evaluates mini number at fractional cycle positions', () => {
+    expect(evaluateNumericValue('1 2', 0)).toBe(1);
+    expect(evaluateNumericValue('1 2', 0.5)).toBe(2);
+  });
+
+  it('handles large cycle numbers without epsilon miss', () => {
+    expect(evaluateNumericValue('99', 1_000_000)).toBe(99);
+    expect(evaluateNumericValue('99', 10_000_000)).toBe(99);
+  });
+});
+
+describe('lcmIntegers overflow safety (Tier 0 fix 1.5)', () => {
+  it('handles large numbers without overflow', () => {
+    // A pattern with many subdivisions exercising the lcm path
+    const events = query(note('0 1 2 3 4 5 6 7 8 9 10 11').fast(13));
+    expect(events.length).toBeGreaterThan(0);
+  });
+});
+
+describe('scheduler error types (Tier 1 fix)', () => {
+  it('throws TusselCoreError when started without a scene', () => {
+    const scheduler = new Scheduler({
+      getTime: () => 0,
+      onTrigger: () => {},
+    });
+    expect(() => scheduler.start()).toThrow(TusselCoreError);
+    expect(() => scheduler.start()).toThrow('Scheduler requires a scene before start');
   });
 });

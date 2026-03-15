@@ -417,16 +417,21 @@ export async function renderSceneToWavBuffer(
   const sampleRate = options.sampleRate ?? 48_000;
   const seconds = options.seconds;
   if (!Number.isFinite(seconds) || seconds <= 0) {
-    throw new RangeError(`renderSceneToWavBuffer() requires seconds > 0, received ${seconds}.`);
+    throw new TusselAudioError(`renderSceneToWavBuffer() requires seconds > 0, received ${seconds}.`, {
+      code: 'TUSSEL_AUDIO_INVALID_PARAM',
+    });
   }
   if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
-    throw new RangeError(`renderSceneToWavBuffer() requires sampleRate > 0, received ${sampleRate}.`);
+    throw new TusselAudioError(`renderSceneToWavBuffer() requires sampleRate > 0, received ${sampleRate}.`, {
+      code: 'TUSSEL_AUDIO_INVALID_PARAM',
+    });
   }
   const totalFrames = Math.ceil(sampleRate * seconds);
   const MAX_BUFFER_FRAMES = 48_000 * 600; // 10 minutes at 48kHz
   if (totalFrames > MAX_BUFFER_FRAMES) {
-    throw new RangeError(
+    throw new TusselAudioError(
       `renderSceneToWavBuffer() buffer too large: ${totalFrames} frames exceeds limit of ${MAX_BUFFER_FRAMES} (${seconds}s at ${sampleRate}Hz).`,
+      { code: 'TUSSEL_AUDIO_BUFFER_OVERFLOW' },
     );
   }
   // NOTE: CWD-relative default — assumes process is started from the project root
@@ -1618,13 +1623,20 @@ async function resolveManifest(ref: string, cacheDir: string): Promise<SampleMan
   // NOTE: CWD-relative — security check assumes process is started from the project root
   const cwd = process.cwd();
   if (!path.isAbsolute(ref) && !fullPath.startsWith(cwd)) {
-    throw new Error(`Sample ref "${ref}" resolves outside the project directory.`);
+    throw new TusselAudioError(`Sample ref "${ref}" resolves outside the project directory.`, {
+      code: 'TUSSEL_AUDIO_SAMPLE_PATH_ESCAPE',
+    });
   }
   const stats = await stat(fullPath);
   if (stats.isSymbolicLink?.()) {
     const realTarget = await realpath(fullPath);
     if (!realTarget.startsWith(cwd)) {
-      throw new Error(`Sample ref "${ref}" symlink target resolves outside the project directory.`);
+      throw new TusselAudioError(
+        `Sample ref "${ref}" symlink target resolves outside the project directory.`,
+        {
+          code: 'TUSSEL_AUDIO_SAMPLE_PATH_ESCAPE',
+        },
+      );
     }
   }
   const manifestPath = stats.isDirectory() ? path.join(fullPath, 'strudel.json') : fullPath;
@@ -1635,11 +1647,15 @@ async function resolveManifest(ref: string, cacheDir: string): Promise<SampleMan
 async function resolveGithubManifest(ref: string, cacheDir: string): Promise<SampleManifestCacheEntry> {
   const [, rest] = ref.split(':');
   if (!rest) {
-    throw new Error(`Invalid github sample ref: ${ref}`);
+    throw new TusselAudioError(`Invalid github sample ref: ${ref}`, {
+      code: 'TUSSEL_AUDIO_SAMPLE_INVALID_REF',
+    });
   }
   const [owner, repo = 'samples', branch = 'main'] = rest.split('/');
   if (!owner) {
-    throw new Error(`Invalid github sample ref: ${ref}`);
+    throw new TusselAudioError(`Invalid github sample ref: ${ref}`, {
+      code: 'TUSSEL_AUDIO_SAMPLE_INVALID_REF',
+    });
   }
   const rootDir = path.join(cacheDir, 'github', owner, repo, branch);
   const manifestPath = path.join(rootDir, 'strudel.json');
@@ -1649,7 +1665,9 @@ async function resolveGithubManifest(ref: string, cacheDir: string): Promise<Sam
     const manifestUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/strudel.json`;
     const response = await fetch(manifestUrl, { signal: AbortSignal.timeout(10_000) });
     if (!response.ok) {
-      throw new Error(`Unable to fetch sample manifest: ${manifestUrl}`);
+      throw new TusselAudioError(`Unable to fetch sample manifest: ${manifestUrl}`, {
+        code: 'TUSSEL_AUDIO_SAMPLE_FETCH_FAILED',
+      });
     }
     await writeFile(manifestPath, await response.text());
   }
@@ -1723,7 +1741,9 @@ async function cacheGithubAsset(
     const assetUrl = resolveGithubAssetUrl(file, options.base, options.owner, options.repo, options.branch);
     const response = await fetch(assetUrl, { signal: AbortSignal.timeout(30_000) });
     if (!response.ok) {
-      throw new Error(`Unable to fetch sample asset: ${assetUrl}`);
+      throw new TusselAudioError(`Unable to fetch sample asset: ${assetUrl}`, {
+        code: 'TUSSEL_AUDIO_SAMPLE_FETCH_FAILED',
+      });
     }
     const buffer = Buffer.from(await response.arrayBuffer());
     await writeFile(localFile, buffer);

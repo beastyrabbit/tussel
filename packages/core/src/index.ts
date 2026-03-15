@@ -169,6 +169,11 @@ const PROPERTY_METHODS = new Set([
   'velocity',
   'vowel',
   'color',
+  'ccn',
+  'ccv',
+  'midicmd',
+  'midibend',
+  'miditouch',
   '_scope',
   'punchcard',
   '_punchcard',
@@ -554,12 +559,8 @@ function queryPattern(
         'restart',
       );
     case 'div':
-      return applyNumericOperation(
-        targetEvents,
-        value.args[0],
-        begin,
-        context,
-        (left, right) => left / right,
+      return applyNumericOperation(targetEvents, value.args[0], begin, context, (left, right) =>
+        right === 0 ? 0 : left / right,
       );
     case 'compress':
       return transformCompress(
@@ -1803,7 +1804,7 @@ function leastCommonMultiple(values: number[]): number {
 }
 
 function lcmIntegers(left: number, right: number): number {
-  return Math.abs(left * right) / gcdIntegers(left, right);
+  return Math.abs(left / gcdIntegers(left, right)) * right;
 }
 
 function gcdIntegers(left: number, right: number): number {
@@ -2770,15 +2771,13 @@ function applyFmap(
   begin: number,
   _context: InternalQueryContext,
 ): PlaybackEvent[] {
-  // fmap applies a function to each event's numeric payload value
+  // NOTE: Despite the name "fmap" (functor map), the current IR can only pass
+  // scalar values — not arbitrary functions.  When a scalar is provided the
+  // operation is addition, mirroring Strudel's `withValue(v => v + n)` shorthand.
   if (transformExpr === undefined) return currentEvents;
   const factor = evaluateNumericValue(transformExpr, begin);
   if (factor === undefined) return currentEvents;
-  return currentEvents.map((event) => {
-    const [key, val] = firstPayloadEntry(event.payload);
-    if (!key || typeof val !== 'number') return event;
-    return { ...event, payload: { ...event.payload, [key]: val + factor } };
-  });
+  return mapNumericPayload(currentEvents, (val) => val + factor);
 }
 
 function shiftEvents(
@@ -3561,7 +3560,7 @@ function ensureOctave(note: string, octave: number): string {
 }
 
 function evaluateMiniNumber(source: string, cycle: number): number | undefined {
-  const hits = queryMini(source, cycle, cycle + Number.EPSILON * 10).find(
+  const hits = queryMini(source, cycle, cycle + 1e-9).find(
     (event) => event.begin <= cycle && event.end > cycle,
   );
   if (!hits) {
@@ -3892,7 +3891,9 @@ export class Scheduler {
       return;
     }
     if (!this.scene) {
-      throw new Error('Scheduler requires a scene before start');
+      throw new TusselCoreError('Scheduler requires a scene before start', {
+        code: 'TUSSEL_SCHEDULER_NO_SCENE',
+      });
     }
     this.started = true;
     this.tick();

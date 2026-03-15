@@ -1,3 +1,4 @@
+import { TusselParseError } from '@tussel/ir';
 import { inferMiniSteps, parseMini, queryMini, showFirstCycle } from '@tussel/mini';
 import { describe, expect, it } from 'vitest';
 
@@ -1478,6 +1479,585 @@ describe('mini edge cases', () => {
       // *1.5 on a group: repeat 1.5 times -> a, b, a (three events)
       expect(events).toHaveLength(3);
       expect(events).toEqual(['a: 0 - 0.333333', 'a: 0.666667 - 1', 'b: 0.333333 - 0.666667']);
+    });
+  });
+
+  // ── 35. Multiplication by non-integers (extended) ──────────────────
+  describe('multiplication by non-integers (extended)', () => {
+    it('a*0.25 produces 1 event spanning 4x the cycle', () => {
+      // repeat count 0.25: width = 1/0.25 = 4. Loop: i=0 < 0.25 is false? No.
+      // 0 < 0.25 is true so 1 iteration. Event spans [0, 4].
+      const events = showFirstCycle('a*0.25');
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBe('a: 0 - 4');
+    });
+
+    it('a*0.5 produces 1 event spanning 2x the cycle', () => {
+      const events = showFirstCycle('a*0.5');
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBe('a: 0 - 2');
+    });
+
+    it('a*1.5 inside a group produces correct subdivision', () => {
+      const events = queryMini('[a*1.5 b]', 0, 1);
+      // a*1.5 occupies half the group, b occupies the other half
+      // Within a's half, *1.5 repeats: 2 iterations of width (0.5/1.5)
+      const aEvents = events.filter((e) => e.value === 'a');
+      expect(aEvents).toHaveLength(2);
+      expect(events.filter((e) => e.value === 'b')).toHaveLength(1);
+    });
+
+    it('a*3.7 produces 4 events (floor(3.7)+1 iterations)', () => {
+      const events = queryMini('a*3.7', 0, 1);
+      // Loop: i=0,1,2,3 (3 < 3.7 is true), so 4 iterations
+      expect(events).toHaveLength(4);
+      const width = 1 / 3.7;
+      for (let i = 0; i < 4; i++) {
+        expect(events[i]?.begin).toBeCloseTo(width * i, 5);
+        expect(events[i]?.end).toBeCloseTo(width * (i + 1), 5);
+      }
+    });
+
+    it('[a b c]*0.5 produces only partial group (2 of 3 items)', () => {
+      // *0.5: width per group = 1/0.5 = 2. Loop: i=0 < 0.5 is false? No.
+      // 0 < 0.5 is true, so 1 iteration. The group [a b c] spans [0, 2].
+      // Within [0,1] query we see a at [0, 2/3] and b at [2/3, 4/3].
+      const events = queryMini('[a b c]*0.5', 0, 1);
+      expect(events.length).toBeGreaterThanOrEqual(2);
+      expect(events.some((e) => e.value === 'a')).toBe(true);
+      expect(events.some((e) => e.value === 'b')).toBe(true);
+    });
+
+    it('a*1.5/2.5 chains fractional multiply and divide', () => {
+      // *1.5 creates repeat(count=1.5), then /2.5 multiplies factor by 2.5
+      const events = showFirstCycle('a*1.5/2.5 b');
+      const aEvents = events.filter((e) => e.startsWith('a'));
+      const bEvents = events.filter((e) => e.startsWith('b'));
+      expect(aEvents).toHaveLength(2);
+      expect(bEvents).toHaveLength(1);
+    });
+  });
+
+  // ── 36. Unicode input (Greek, CJK, mixed) ─────────────────────────
+  describe('unicode input (Greek, CJK, mixed)', () => {
+    it('Greek letters α β γ parse as three tokens', () => {
+      const events = showFirstCycle('α β γ');
+      expect(events).toHaveLength(3);
+      expect(events).toEqual(['α: 0 - 0.333333', 'β: 0.333333 - 0.666667', 'γ: 0.666667 - 1']);
+    });
+
+    it('Japanese characters 日 本 parse as two tokens', () => {
+      const events = showFirstCycle('日 本');
+      expect(events).toHaveLength(2);
+      expect(events).toEqual(['日: 0 - 0.5', '本: 0.5 - 1']);
+    });
+
+    it('Greek letters work inside groups', () => {
+      const events = showFirstCycle('[α β γ]');
+      expect(events).toHaveLength(3);
+      expect(events[0]).toContain('α');
+      expect(events[1]).toContain('β');
+      expect(events[2]).toContain('γ');
+    });
+
+    it('Japanese characters work inside groups', () => {
+      const events = showFirstCycle('[日 本 語]');
+      expect(events).toHaveLength(3);
+      expect(events[0]).toContain('日');
+      expect(events[1]).toContain('本');
+      expect(events[2]).toContain('語');
+    });
+
+    it('Greek letters with postfix operators', () => {
+      const events = showFirstCycle('α*2 β');
+      expect(events).toHaveLength(3);
+      expect(events.filter((e) => e.includes('α'))).toHaveLength(2);
+      expect(events.filter((e) => e.includes('β'))).toHaveLength(1);
+    });
+
+    it('CJK characters with division postfix', () => {
+      const events = showFirstCycle('日/2 本');
+      // 日 has factor 2, 本 has factor 1 => total 3
+      expect(events).toHaveLength(2);
+      expect(events[0]).toBe('日: 0 - 0.666667');
+      expect(events[1]).toBe('本: 0.666667 - 1');
+    });
+
+    it('mixed ASCII and Greek in sequence', () => {
+      const events = showFirstCycle('bd α sd β');
+      expect(events).toHaveLength(4);
+      const values = events.map((e) => e.split(':')[0]);
+      expect(values).toContain('bd');
+      expect(values).toContain('α');
+      expect(values).toContain('sd');
+      expect(values).toContain('β');
+    });
+
+    it('unicode tokens in slowcat alternate across cycles', () => {
+      const c0 = queryMini('<α β>', 0, 1);
+      const c1 = queryMini('<α β>', 1, 2);
+      expect(c0[0]?.value).toBe('α');
+      expect(c1[0]?.value).toBe('β');
+    });
+
+    it('unicode tokens in stacked groups', () => {
+      const events = showFirstCycle('α,β');
+      expect(events).toHaveLength(2);
+      expect(events).toEqual(['α: 0 - 1', 'β: 0 - 1']);
+    });
+  });
+
+  // ── 37. Very long patterns (200+ items, stress tests) ─────────────
+  describe('very long patterns (200+ items, stress tests)', () => {
+    it('300 items parse correctly', () => {
+      const pattern = Array.from({ length: 300 }, (_, i) => `n${i}`).join(' ');
+      expect(showFirstCycle(pattern)).toHaveLength(300);
+    });
+
+    it('1000 items parse without crashing', () => {
+      const pattern = Array.from({ length: 1000 }, (_, i) => `t${i}`).join(' ');
+      expect(showFirstCycle(pattern)).toHaveLength(1000);
+    });
+
+    it('200 items each with postfix *2 produce 400 events', () => {
+      const pattern = Array.from({ length: 200 }, (_, i) => `x${i}*2`).join(' ');
+      const events = queryMini(pattern, 0, 1);
+      expect(events).toHaveLength(400);
+    });
+
+    it('200 items with alternating rests produce 100 events', () => {
+      const items = Array.from({ length: 200 }, (_, i) => (i % 2 === 0 ? 'a' : '~'));
+      const events = showFirstCycle(items.join(' '));
+      expect(events).toHaveLength(100);
+    });
+
+    it('50 groups of 5 items each produce 250 events', () => {
+      const groups = Array.from({ length: 50 }, () => {
+        const inner = Array.from({ length: 5 }, (_, j) => `s${j}`).join(' ');
+        return `[${inner}]`;
+      });
+      const events = showFirstCycle(groups.join(' '));
+      expect(events).toHaveLength(250);
+    });
+
+    it('inferMiniSteps on 200+ items returns correct count', () => {
+      const pattern = Array.from({ length: 250 }, (_, i) => `n${i}`).join(' ');
+      expect(inferMiniSteps(pattern)).toBe(250);
+    });
+  });
+
+  // ── 38. Deeply nested Euclidean rhythms ────────────────────────────
+  describe('deeply nested Euclidean rhythms', () => {
+    it('[a(3,8) [b(5,13) c(7,16)]] produces correct hit counts', () => {
+      const events = showFirstCycle('[a(3,8) [b(5,13) c(7,16)]]');
+      const aEvents = events.filter((e) => e.startsWith('a'));
+      const bEvents = events.filter((e) => e.startsWith('b'));
+      const cEvents = events.filter((e) => e.startsWith('c'));
+      // a(3,8) = 3 hits, b(5,13) = 5 hits, c(7,16) = 7 hits
+      expect(aEvents).toHaveLength(3);
+      expect(bEvents).toHaveLength(5);
+      expect(cEvents).toHaveLength(7);
+      // Total events = 3 + 5 + 7 = 15
+      expect(events).toHaveLength(15);
+    });
+
+    it('[a(3,8) [b(5,13) c(7,16)]] a events occupy first half of cycle', () => {
+      const events = queryMini('[a(3,8) [b(5,13) c(7,16)]]', 0, 1);
+      const aEvents = events.filter((e) => e.value === 'a');
+      // The top-level group has 2 items: a(3,8) and [b(5,13) c(7,16)]
+      // Each gets half the cycle. a events should be in [0, 0.5].
+      for (const event of aEvents) {
+        expect(event.begin).toBeGreaterThanOrEqual(0);
+        expect(event.end).toBeLessThanOrEqual(0.5 + 1e-9);
+      }
+    });
+
+    it('[a(3,8) [b(5,13) c(7,16)]] b and c events occupy second half', () => {
+      const events = queryMini('[a(3,8) [b(5,13) c(7,16)]]', 0, 1);
+      const bcEvents = events.filter((e) => e.value === 'b' || e.value === 'c');
+      for (const event of bcEvents) {
+        expect(event.begin).toBeGreaterThanOrEqual(0.5 - 1e-9);
+        expect(event.end).toBeLessThanOrEqual(1 + 1e-9);
+      }
+    });
+
+    it('euclidean inside a deeply nested group: [[a(2,3)] b]', () => {
+      const events = showFirstCycle('[[a(2,3)] b]');
+      const aEvents = events.filter((e) => e.startsWith('a'));
+      expect(aEvents).toHaveLength(2);
+      expect(events.filter((e) => e.startsWith('b'))).toHaveLength(1);
+    });
+
+    it('three-level deep euclidean: [[[a(3,5)]]]', () => {
+      const events = showFirstCycle('[[[a(3,5)]]]');
+      expect(events.filter((e) => e.startsWith('a'))).toHaveLength(3);
+    });
+
+    it('euclidean with rotation inside nested group', () => {
+      const events = showFirstCycle('[a(3,8,2) [b(2,5,1)]]');
+      expect(events.filter((e) => e.startsWith('a'))).toHaveLength(3);
+      expect(events.filter((e) => e.startsWith('b'))).toHaveLength(2);
+    });
+
+    it('stacked euclidean patterns in nested groups: [[a(3,8), b(5,8)]]', () => {
+      const events = showFirstCycle('[[a(3,8), b(5,8)]]');
+      expect(events.filter((e) => e.startsWith('a'))).toHaveLength(3);
+      expect(events.filter((e) => e.startsWith('b'))).toHaveLength(5);
+    });
+  });
+
+  // ── 39. Decimal pattern weights (extended) ─────────────────────────
+  describe('decimal pattern weights (extended)', () => {
+    it('three items with all decimal weights: [a@0.3 b@0.5 c@0.2]', () => {
+      const events = queryMini('[a@0.3 b@0.5 c@0.2]', 0, 1);
+      // total factor = 0.3 + 0.5 + 0.2 = 1.0
+      // a occupies 0.3, b occupies 0.5, c occupies 0.2
+      expect(events).toHaveLength(3);
+      const aEvent = events.find((e) => e.value === 'a');
+      const bEvent = events.find((e) => e.value === 'b');
+      const cEvent = events.find((e) => e.value === 'c');
+      expect(aEvent?.begin).toBeCloseTo(0, 10);
+      expect(aEvent?.end).toBeCloseTo(0.3, 5);
+      expect(bEvent?.begin).toBeCloseTo(0.3, 5);
+      expect(bEvent?.end).toBeCloseTo(0.8, 5);
+      expect(cEvent?.begin).toBeCloseTo(0.8, 5);
+      expect(cEvent?.end).toBeCloseTo(1, 5);
+    });
+
+    it('@0.01 gives a very tiny weight', () => {
+      const events = queryMini('[a@0.01 b]', 0, 1);
+      expect(events).toHaveLength(2);
+      const aEvent = events.find((e) => e.value === 'a');
+      // a factor 0.01, b factor 1 => total 1.01
+      // a occupies 0.01/1.01 ≈ 0.0099
+      expect(aEvent?.end).toBeCloseTo(0.01 / 1.01, 4);
+    });
+
+    it('@10 gives 10x weight relative to normal items', () => {
+      const events = queryMini('[a@10 b]', 0, 1);
+      // a factor 10, b factor 1 => total 11
+      const aEvent = events.find((e) => e.value === 'a');
+      expect(aEvent?.end).toBeCloseTo(10 / 11, 5);
+    });
+
+    it('decimal weight combined with repeat: a@0.5*2 in a group', () => {
+      const events = queryMini('[a@0.5*2 b]', 0, 1);
+      // @0.5 creates stretch with factor 0.5, then *2 repeats
+      const aEvents = events.filter((e) => e.value === 'a');
+      expect(aEvents).toHaveLength(2);
+    });
+
+    it('equal decimal weights produce equal spacing', () => {
+      const events = queryMini('[a@0.5 b@0.5]', 0, 1);
+      expect(events).toHaveLength(2);
+      const aEvent = events.find((e) => e.value === 'a');
+      const bEvent = events.find((e) => e.value === 'b');
+      expect(aEvent?.begin).toBeCloseTo(0, 10);
+      expect(aEvent?.end).toBeCloseTo(0.5, 10);
+      expect(bEvent?.begin).toBeCloseTo(0.5, 10);
+      expect(bEvent?.end).toBeCloseTo(1, 10);
+    });
+  });
+
+  // ── 40. Numeric postfix validation edge cases ──────────────────────
+  describe('numeric postfix validation edge cases', () => {
+    it('a*0 throws "Invalid mini numeric postfix"', () => {
+      expect(() => parseMini('a*0')).toThrow('Invalid mini numeric postfix "0"');
+    });
+
+    it('a!0 throws "Invalid mini numeric postfix"', () => {
+      expect(() => parseMini('a!0')).toThrow('Invalid mini numeric postfix "0"');
+    });
+
+    it('a@0 throws "Invalid mini numeric postfix"', () => {
+      expect(() => parseMini('a@0')).toThrow('Invalid mini numeric postfix "0"');
+    });
+
+    it('a/0 throws "Invalid mini numeric postfix"', () => {
+      expect(() => parseMini('a/0')).toThrow('Invalid mini numeric postfix "0"');
+    });
+
+    it('a*-1 throws (readNumber cannot parse negative sign)', () => {
+      // readNumber reads only digits and dots; "-" is not consumed,
+      // leaving raw = "" which is NaN, triggering the error
+      expect(() => parseMini('a*-1')).toThrow('Invalid mini numeric postfix');
+    });
+
+    it('a/-1 throws (same readNumber issue)', () => {
+      expect(() => parseMini('a/-1')).toThrow('Invalid mini numeric postfix');
+    });
+
+    it('a!-1 throws (same readNumber issue)', () => {
+      expect(() => parseMini('a!-1')).toThrow('Invalid mini numeric postfix');
+    });
+
+    it('a@-1 throws (same readNumber issue)', () => {
+      expect(() => parseMini('a@-1')).toThrow('Invalid mini numeric postfix');
+    });
+
+    it('a*1 is valid and equivalent to a single event', () => {
+      expect(showFirstCycle('a*1')).toEqual(['a: 0 - 1']);
+    });
+
+    it('a!1 is valid and equivalent to a single event', () => {
+      expect(showFirstCycle('a!1')).toEqual(['a: 0 - 1']);
+    });
+
+    it('a@1 is valid (stretch factor 1, no-op)', () => {
+      expect(showFirstCycle('[a@1 b]')).toEqual(['a: 0 - 0.5', 'b: 0.5 - 1']);
+    });
+
+    it('a/1 is valid (factor stays 1)', () => {
+      expect(showFirstCycle('a/1 b')).toEqual(['a: 0 - 0.5', 'b: 0.5 - 1']);
+    });
+
+    it('a*abc throws (non-numeric postfix)', () => {
+      expect(() => parseMini('a*abc')).toThrow('Invalid mini numeric postfix');
+    });
+
+    it('a* at end of input throws', () => {
+      expect(() => parseMini('a*')).toThrow('Invalid mini numeric postfix');
+    });
+
+    it('thrown errors are instances of TusselParseError', () => {
+      try {
+        parseMini('a*0');
+        expect.fail('should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TusselParseError);
+      }
+    });
+  });
+
+  // ── 41. Mixed rest and literal patterns ────────────────────────────
+  describe('mixed rest and literal patterns', () => {
+    it('alternating rest-literal pattern: [~ a ~ b ~ c]', () => {
+      const events = showFirstCycle('[~ a ~ b ~ c]');
+      expect(events).toHaveLength(3);
+      expect(events).toEqual(['a: 0.166667 - 0.333333', 'b: 0.5 - 0.666667', 'c: 0.833333 - 1']);
+    });
+
+    it('rests at start and end: [~ ~ a ~ ~]', () => {
+      const events = showFirstCycle('[~ ~ a ~ ~]');
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBe('a: 0.4 - 0.6');
+    });
+
+    it('mixed - and ~ rest symbols: a - b ~ c - d', () => {
+      const events = showFirstCycle('a - b ~ c - d');
+      expect(events).toHaveLength(4);
+      expect(events).toEqual([
+        'a: 0 - 0.142857',
+        'b: 0.285714 - 0.428571',
+        'c: 0.571429 - 0.714286',
+        'd: 0.857143 - 1',
+      ]);
+    });
+
+    it('mostly rests with one literal: [~ ~ ~ ~ a]', () => {
+      const events = showFirstCycle('[~ ~ ~ ~ a]');
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBe('a: 0.8 - 1');
+    });
+
+    it('rest with stretch in mixed pattern: [~@2 a ~@3 b]', () => {
+      const events = queryMini('[~@2 a ~@3 b]', 0, 1);
+      // rest1 factor 2, a factor 1, rest2 factor 3, b factor 1 => total 7
+      expect(events).toHaveLength(2);
+      const aEvent = events.find((e) => e.value === 'a');
+      const bEvent = events.find((e) => e.value === 'b');
+      expect(aEvent?.begin).toBeCloseTo(2 / 7, 5);
+      expect(aEvent?.end).toBeCloseTo(3 / 7, 5);
+      expect(bEvent?.begin).toBeCloseTo(6 / 7, 5);
+      expect(bEvent?.end).toBeCloseTo(1, 5);
+    });
+
+    it('rest with repeat: ~*3 produces silence (no events)', () => {
+      const events = showFirstCycle('~*3');
+      expect(events).toEqual([]);
+    });
+
+    it('rests preserve spacing between literal events: a ~ ~ ~ b', () => {
+      const events = showFirstCycle('a ~ ~ ~ b');
+      expect(events).toHaveLength(2);
+      expect(events[0]).toBe('a: 0 - 0.2');
+      expect(events[1]).toBe('b: 0.8 - 1');
+    });
+
+    it('- rest with repeat: -*2 a produces 1 event', () => {
+      const events = showFirstCycle('[-*2 a]');
+      // rest*2 occupies 1 slot but repeats the rest 2x; a occupies 1 slot
+      // rest produces no events, a starts at 0.5
+      expect(events).toHaveLength(1);
+      expect(events[0]).toContain('a');
+    });
+  });
+
+  // ── 42. Empty groups [] and <> ─────────────────────────────────────
+  describe('empty groups [] and <>', () => {
+    it('[] produces no events', () => {
+      expect(showFirstCycle('[]')).toEqual([]);
+    });
+
+    it('<> produces no events', () => {
+      expect(showFirstCycle('<>')).toEqual([]);
+    });
+
+    it('parseMini([]) produces a group node with no items', () => {
+      const node = parseMini('[]');
+      expect(node.kind).toBe('seq');
+      if (node.kind === 'seq') {
+        expect(node.items).toHaveLength(1);
+        const group = node.items[0];
+        expect(group?.kind).toBe('group');
+        if (group?.kind === 'group') {
+          expect(group.items).toEqual([]);
+        }
+      }
+    });
+
+    it('parseMini(<>) produces a slowcat node with no items', () => {
+      const node = parseMini('<>');
+      expect(node.kind).toBe('seq');
+      if (node.kind === 'seq') {
+        expect(node.items).toHaveLength(1);
+        const slowcat = node.items[0];
+        expect(slowcat?.kind).toBe('slowcat');
+        if (slowcat?.kind === 'slowcat') {
+          expect(slowcat.items).toEqual([]);
+        }
+      }
+    });
+
+    it('queryMini(<>, 0, 3) produces no events across multiple cycles', () => {
+      expect(queryMini('<>', 0, 3)).toEqual([]);
+    });
+
+    it('empty group inside a sequence: [[] a] produces only a', () => {
+      const events = showFirstCycle('[[] a]');
+      // [] is an empty group occupying one slot, a occupies another
+      // [] produces no events, but takes space
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBe('a: 0.5 - 1');
+    });
+
+    it('empty group between items: [a [] b]', () => {
+      const events = showFirstCycle('[a [] b]');
+      // 3 items: a, [], b — each gets 1/3 of the cycle
+      // [] produces no events
+      expect(events).toHaveLength(2);
+      expect(events).toEqual(['a: 0 - 0.333333', 'b: 0.666667 - 1']);
+    });
+
+    it('inferMiniSteps for [] returns 1 (the empty group counts as 1 seq item)', () => {
+      expect(inferMiniSteps('[]')).toBe(1);
+    });
+
+    it('inferMiniSteps for <> returns 1', () => {
+      expect(inferMiniSteps('<>')).toBe(1);
+    });
+  });
+
+  // ── 43. Single-item groups [a] and <a> ─────────────────────────────
+  describe('single-item groups [a] and <a>', () => {
+    it('[a] produces the same output as bare a', () => {
+      expect(showFirstCycle('[a]')).toEqual(showFirstCycle('a'));
+    });
+
+    it('<a> produces the same output as bare a for cycle 0', () => {
+      expect(showFirstCycle('<a>')).toEqual(showFirstCycle('a'));
+    });
+
+    it('[a] parseMini produces group with one literal item', () => {
+      const node = parseMini('[a]');
+      expect(node.kind).toBe('seq');
+      if (node.kind === 'seq') {
+        expect(node.items).toHaveLength(1);
+        const group = node.items[0];
+        expect(group?.kind).toBe('group');
+        if (group?.kind === 'group') {
+          expect(group.items).toHaveLength(1);
+          expect(group.items[0]?.kind).toBe('literal');
+        }
+      }
+    });
+
+    it('<a> repeats the same item across multiple cycles', () => {
+      const events = queryMini('<a>', 0, 3);
+      expect(events).toHaveLength(3);
+      expect(events.every((e) => e.value === 'a')).toBe(true);
+    });
+
+    it('[a] with postfix: [a]*2 doubles the event', () => {
+      const events = showFirstCycle('[a]*2');
+      expect(events).toHaveLength(2);
+      expect(events).toEqual(['a: 0 - 0.5', 'a: 0.5 - 1']);
+    });
+
+    it('single-item group in a sequence: [a] b c', () => {
+      const events = showFirstCycle('[a] b c');
+      expect(events).toHaveLength(3);
+      expect(events).toEqual(['a: 0 - 0.333333', 'b: 0.333333 - 0.666667', 'c: 0.666667 - 1']);
+    });
+
+    it('nested single-item groups: [[a]]', () => {
+      expect(showFirstCycle('[[a]]')).toEqual(['a: 0 - 1']);
+    });
+
+    it('inferMiniSteps for [a] returns 1', () => {
+      expect(inferMiniSteps('[a]')).toBe(1);
+    });
+
+    it('inferMiniSteps for <a> returns 1', () => {
+      expect(inferMiniSteps('<a>')).toBe(1);
+    });
+  });
+
+  // ── 44. Patterns with only whitespace ──────────────────────────────
+  describe('patterns with only whitespace', () => {
+    it('single space returns empty', () => {
+      expect(showFirstCycle(' ')).toEqual([]);
+    });
+
+    it('multiple spaces return empty', () => {
+      expect(showFirstCycle('     ')).toEqual([]);
+    });
+
+    it('tab characters return empty', () => {
+      expect(showFirstCycle('\t\t\t')).toEqual([]);
+    });
+
+    it('newline characters return empty', () => {
+      expect(showFirstCycle('\n\n\n')).toEqual([]);
+    });
+
+    it('carriage return + newline returns empty', () => {
+      expect(showFirstCycle('\r\n\r\n')).toEqual([]);
+    });
+
+    it('mixed whitespace (spaces, tabs, newlines) returns empty', () => {
+      expect(showFirstCycle('  \t  \n  \t\n  ')).toEqual([]);
+    });
+
+    it('parseMini on whitespace returns seq with no items', () => {
+      expect(parseMini('  \t\n  ')).toEqual({ kind: 'seq', items: [], factor: 1 });
+    });
+
+    it('inferMiniSteps on whitespace returns 0', () => {
+      expect(inferMiniSteps('  \t\n  ')).toBe(0);
+    });
+
+    it('queryMini on whitespace returns empty', () => {
+      expect(queryMini('  \t  ', 0, 1)).toEqual([]);
+    });
+
+    it('whitespace between tokens is handled normally', () => {
+      // Extra whitespace should not create empty tokens
+      expect(showFirstCycle('  a   b   c  ')).toEqual([
+        'a: 0 - 0.333333',
+        'b: 0.333333 - 0.666667',
+        'c: 0.666667 - 1',
+      ]);
     });
   });
 });
