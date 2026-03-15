@@ -1,7 +1,9 @@
+import { queryScene } from '@tussel/core';
 import {
   __tusselRecorder,
   add,
   areStringPrototypeExtensionsInstalled,
+  cat,
   cc,
   clearHydra,
   compress,
@@ -38,6 +40,7 @@ import {
   saw,
   scene,
   scramble,
+  seq,
   setcpm,
   setcps,
   setInputValue,
@@ -429,7 +432,7 @@ describe('G.03 — createParam and createParams', () => {
     >;
     const result = chained.wobbleG03?.(0.8);
     expect(result).toBeDefined();
-    expect(result!.show()).toBe('s("bd").wobbleG03(0.8)');
+    expect(result?.show()).toBe('s("bd").wobbleG03(0.8)');
   });
 
   it('createParams creates multiple independent param factories', () => {
@@ -733,5 +736,41 @@ describe('G.07 — exported signal constants', () => {
     expect(perlin.show()).toBe('perlin');
     // cosine is not in SIGNAL_IDENTIFIERS so renders with parens
     expect(cosine.show()).toBe('cosine()');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// N.05: Evaluation tests — verify DSL combinators produce correct events
+// ---------------------------------------------------------------------------
+describe('N.05 — DSL combinator evaluation through queryScene', () => {
+  function evalQuery(builder: unknown, begin = 0, end = 1) {
+    const scene = defineScene({
+      channels: { ch: { node: builder as import('@tussel/ir').ExpressionValue } },
+    });
+    return queryScene(scene, begin, end, { cps: 1 });
+  }
+
+  it('stack(note("0"), note("7")) produces 2 events with notes 0 and 7', () => {
+    const events = evalQuery(stack(note('0'), note('7')));
+    expect(events).toHaveLength(2);
+    const notes = events.map((e) => e.payload.note).sort();
+    expect(notes).toEqual([0, 7]);
+  });
+
+  it('cat(note("0"), note("1")) alternates: cycle 0 has note 0, cycle 1 has note 1', () => {
+    const cycle0 = evalQuery(cat(note('0'), note('1')), 0, 1);
+    expect(cycle0).toHaveLength(1);
+    expect(cycle0[0]?.payload.note).toBe(0);
+
+    const cycle1 = evalQuery(cat(note('0'), note('1')), 1, 2);
+    expect(cycle1).toHaveLength(1);
+    expect(cycle1[0]?.payload.note).toBe(1);
+  });
+
+  it('seq(note("c"), note("e"), note("g")) produces 3 events within one cycle', () => {
+    const events = evalQuery(note(seq('c', 'e', 'g')));
+    expect(events).toHaveLength(3);
+    const notes = events.map((e) => e.payload.note);
+    expect(notes).toEqual(['c', 'e', 'g']);
   });
 });

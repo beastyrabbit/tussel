@@ -155,6 +155,7 @@ const PROPERTY_METHODS = new Set([
   'struct',
   'sustain',
   'velocity',
+  'vowel',
   'color',
   '_scope',
   'punchcard',

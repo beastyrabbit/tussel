@@ -531,6 +531,10 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('velocity', [value]);
   }
 
+  vowel(value: unknown): PatternBuilder {
+    return this.method('vowel', [value]);
+  }
+
   superimpose(...transforms: unknown[]): PatternBuilder {
     return stack(this, ...transforms.map((transform) => applyPatternTransform(this, transform)));
   }

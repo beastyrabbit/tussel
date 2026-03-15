@@ -919,3 +919,28 @@ describe('audio signal correctness (D.08–D.25)', () => {
     expect(uniqueValues.size).toBeGreaterThan(10);
   });
 });
+
+// ---------------------------------------------------------------------------
+// N.03: Audio output smoke test — verify event-to-audio pipeline produces sound
+// ---------------------------------------------------------------------------
+describe('audio output smoke test (N.03)', () => {
+  it('renders a simple note pattern to WAV and produces non-silent output', async () => {
+    const scene = defineScene({
+      channels: {
+        lead: {
+          node: note('c4 e4 g4').gain(0.5),
+        },
+      },
+      samples: [],
+      transport: { cps: 1 },
+    });
+
+    const wav = await renderSceneToWavBuffer(scene, { seconds: 1 });
+
+    // Verify the buffer is a valid WAV (starts with RIFF header and has PCM data)
+    expect(wav.byteLength).toBeGreaterThan(44);
+
+    // Verify non-silence: at least some samples must be non-zero
+    expect(maxSampleMagnitude(wav)).toBeGreaterThan(0);
+  });
+});

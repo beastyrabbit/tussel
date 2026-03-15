@@ -1,3 +1,4 @@
+import { queryScene } from '@tussel/core';
 import {
   areStringPrototypeExtensionsInstalled,
   cat,
@@ -1188,5 +1189,44 @@ describe('normalizeValue with complex nesting', () => {
     expect(() => {
       s('bd').set(Symbol('test') as unknown);
     }).toThrow('Unsupported structural value');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// N.04: Execution tests — verify patterns produce correct events via queryScene
+// ---------------------------------------------------------------------------
+describe('N.04 — builder execution through queryScene', () => {
+  function buildAndQuery(builder: PatternBuilder, begin = 0, end = 1) {
+    const scene = defineScene({
+      channels: { ch: { node: builder } },
+    });
+    return queryScene(scene, begin, end, { cps: 1 });
+  }
+
+  it('s("bd sd").fast(2) produces 4 events per cycle', () => {
+    const events = buildAndQuery(s('bd sd').fast(2));
+    expect(events).toHaveLength(4);
+    const sounds = events.map((e) => e.payload.s);
+    expect(sounds).toEqual(['bd', 'sd', 'bd', 'sd']);
+  });
+
+  it('note("0 1 2").rev() produces reversed note order', () => {
+    const events = buildAndQuery(note('0 1 2').rev());
+    expect(events).toHaveLength(3);
+    const notes = events.map((e) => e.payload.note);
+    expect(notes).toEqual([2, 1, 0]);
+  });
+
+  it('note("0 1").add(10) produces notes 10 and 11', () => {
+    const events = buildAndQuery(note('0 1').add(10));
+    expect(events).toHaveLength(2);
+    const notes = events.map((e) => e.payload.note);
+    expect(notes).toEqual([10, 11]);
+  });
+
+  it('s("bd").gain(0.5) carries gain 0.5 in the event payload', () => {
+    const events = buildAndQuery(s('bd').gain(0.5));
+    expect(events).toHaveLength(1);
+    expect(events[0]?.payload.gain).toBe(0.5);
   });
 });

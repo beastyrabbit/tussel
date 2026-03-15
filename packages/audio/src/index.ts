@@ -837,6 +837,11 @@ function connectOutputChain(
     current = filter;
   }
 
+  const vowelValue = typeof payload.vowel === 'string' ? payload.vowel.trim().toLowerCase() : undefined;
+  if (vowelValue && VOWEL_FORMANTS[vowelValue]) {
+    current = createVowelFilter(context, current, vowelValue);
+  }
+
   const shapeAmount = coerceFiniteNumber(payload.shape);
   if (shapeAmount !== undefined && shapeAmount > 0) {
     const shaper = new WaveShaperNode(context);
@@ -1383,6 +1388,67 @@ function createPhaserChain(
   }
 
   return current;
+}
+
+// -- Vowel formant filter ------------------------------------------------
+// Based on Strudel/WebDirt formant data.
+// Each vowel is modeled as 5 parallel bandpass filters with specific
+// frequency, gain, and Q values that shape the spectrum to resemble
+// a human vocal tract producing that vowel sound.
+
+interface VowelFormant {
+  freqs: readonly number[];
+  gains: readonly number[];
+  qs: readonly number[];
+}
+
+const VOWEL_FORMANTS: Record<string, VowelFormant> = {
+  a: {
+    freqs: [660, 1120, 2750, 3000, 3350],
+    gains: [1, 0.5012, 0.0708, 0.0631, 0.0126],
+    qs: [80, 90, 120, 130, 140],
+  },
+  e: {
+    freqs: [440, 1800, 2700, 3000, 3300],
+    gains: [1, 0.1995, 0.1259, 0.1, 0.1],
+    qs: [70, 80, 100, 120, 120],
+  },
+  i: {
+    freqs: [270, 1850, 2900, 3350, 3590],
+    gains: [1, 0.0631, 0.0631, 0.0158, 0.0158],
+    qs: [40, 90, 100, 120, 120],
+  },
+  o: {
+    freqs: [430, 820, 2700, 3000, 3300],
+    gains: [1, 0.3162, 0.0501, 0.0794, 0.01995],
+    qs: [40, 80, 100, 120, 120],
+  },
+  u: {
+    freqs: [370, 630, 2750, 3000, 3400],
+    gains: [1, 0.1, 0.0708, 0.0316, 0.01995],
+    qs: [40, 60, 100, 120, 120],
+  },
+};
+
+function createVowelFilter(context: AnyContext, input: AudioNode, vowel: string): AudioNode {
+  const formant = VOWEL_FORMANTS[vowel];
+  if (!formant) return input;
+
+  const output = new GainNode(context, { gain: 8 }); // makeup gain
+
+  for (let i = 0; i < 5; i++) {
+    const filter = new BiquadFilterNode(context, {
+      frequency: formant.freqs[i] ?? 1000,
+      Q: formant.qs[i] ?? 80,
+      type: 'bandpass',
+    });
+    const bandGain = new GainNode(context, { gain: formant.gains[i] ?? 0.1 });
+    input.connect(filter);
+    filter.connect(bandGain);
+    bandGain.connect(output);
+  }
+
+  return output;
 }
 
 function getImpulseResponse(context: AnyContext, size: number): AudioBuffer {
