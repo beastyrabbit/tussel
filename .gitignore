@@ -4,6 +4,7 @@ node_modules
 coverage
 dist
 *.log
+*.wav
 .astro
 
 # Build artifacts that should never exist in src/ directories

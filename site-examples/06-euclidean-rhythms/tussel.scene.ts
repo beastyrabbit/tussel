@@ -1,7 +1,7 @@
 import { defineScene, s, stack } from '@tussel/dsl';
 
 export default defineScene({
-  samples: [],
+  samples: [{ ref: './examples/assets/basic-kit' }],
   transport: { cps: 0.5 },
   master: {},
   channels: {
