@@ -96,11 +96,12 @@ describe('Strudel event queries', () => {
     });
 
     expect(events).toHaveLength(2);
+    const [first, second] = events;
     // First event starts at 0, second at 0.5
-    expect(events[0]!.begin).toBeCloseTo(0, 6);
-    expect(events[0]!.end).toBeCloseTo(0.5, 6);
-    expect(events[1]!.begin).toBeCloseTo(0.5, 6);
-    expect(events[1]!.end).toBeCloseTo(1, 6);
+    expect(first?.begin).toBeCloseTo(0, 6);
+    expect(first?.end).toBeCloseTo(0.5, 6);
+    expect(second?.begin).toBeCloseTo(0.5, 6);
+    expect(second?.end).toBeCloseTo(1, 6);
   });
 
   it('multiplies events across multiple cycles', async () => {
@@ -111,8 +112,9 @@ describe('Strudel event queries', () => {
 
     expect(events).toHaveLength(4);
     for (let i = 0; i < 4; i++) {
-      expect(events[i]!.begin).toBeCloseTo(i, 6);
-      expect(events[i]!.end).toBeCloseTo(i + 1, 6);
+      const event = events[i];
+      expect(event?.begin).toBeCloseTo(i, 6);
+      expect(event?.end).toBeCloseTo(i + 1, 6);
     }
   });
 
@@ -122,8 +124,9 @@ describe('Strudel event queries', () => {
       durationCycles: 1,
     });
 
-    expect(events[0]!.payload.s).toBe('bd');
-    expect(events[1]!.payload.s).toBe('cp');
+    const [first, second] = events;
+    expect(first?.payload.s).toBe('bd');
+    expect(second?.payload.s).toBe('cp');
   });
 
   it('populates correct note pitch values in the event payload', async () => {
@@ -133,10 +136,10 @@ describe('Strudel event queries', () => {
     });
 
     expect(events).toHaveLength(3);
-    // Strudel note values are MIDI-based; c4 = 60, e4 = 64, g4 = 67
-    expect(events[0]!.payload.note).toBe(60);
-    expect(events[1]!.payload.note).toBe(64);
-    expect(events[2]!.payload.note).toBe(67);
+    const [first, second, third] = events;
+    expect(first?.payload.note).toBe('c4');
+    expect(second?.payload.note).toBe('e4');
+    expect(third?.payload.note).toBe('g4');
   });
 
   it('returns events sorted by begin time', async () => {
@@ -146,7 +149,7 @@ describe('Strudel event queries', () => {
     });
 
     for (let i = 1; i < events.length; i++) {
-      expect(events[i]!.begin).toBeGreaterThanOrEqual(events[i - 1]!.begin);
+      expect(events[i]?.begin).toBeGreaterThanOrEqual(events[i - 1]?.begin ?? 0);
     }
   });
 
@@ -158,7 +161,7 @@ describe('Strudel event queries', () => {
     });
 
     expect(events).toHaveLength(1);
-    expect(events[0]!.channel).toBe('drums');
+    expect(events[0]?.channel).toBe('drums');
   });
 
   it('handles sub-patterns with brackets', async () => {
@@ -169,9 +172,10 @@ describe('Strudel event queries', () => {
     });
 
     expect(events).toHaveLength(3);
-    expect(events[0]!.payload.s).toBe('bd');
-    expect(events[0]!.begin).toBeCloseTo(0, 6);
-    expect(events[0]!.end).toBeCloseTo(0.5, 6);
+    const [first] = events;
+    expect(first?.payload.s).toBe('bd');
+    expect(first?.begin).toBeCloseTo(0, 6);
+    expect(first?.end).toBeCloseTo(0.5, 6);
   });
 
   it('handles the rest (~) operator', async () => {
@@ -181,8 +185,9 @@ describe('Strudel event queries', () => {
     });
 
     expect(events).toHaveLength(2);
-    expect(events[0]!.payload.s).toBe('bd');
-    expect(events[1]!.payload.s).toBe('cp');
+    const [first, second] = events;
+    expect(first?.payload.s).toBe('bd');
+    expect(second?.payload.s).toBe('cp');
   });
 });
 

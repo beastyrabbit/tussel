@@ -83,7 +83,7 @@ describe('daemon runtime', () => {
 
 function startRunner(entryPath: string): Runner {
   const cliPath = path.resolve('packages', 'cli', 'bin', 'tussel.js');
-  const child = spawn(process.execPath, [cliPath, 'run', entryPath, '--backend', 'offline', '--watch'], {
+  const child = spawn(process.execPath, [cliPath, 'run', entryPath, '--backend', 'offline'], {
     cwd: process.cwd(),
     stdio: 'pipe',
   });

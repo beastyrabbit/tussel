@@ -1,9 +1,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { stableJson } from '@tussel/ir';
+import { resolveTusselCacheDir, stableJson } from '@tussel/ir';
 import type { FixtureRunResult, ParityRunSummary } from './schema.js';
 
-const PARITY_CACHE = path.resolve('.tussel-cache', 'parity');
+const PARITY_CACHE = resolveTusselCacheDir('parity');
 
 export async function writeSummary(results: FixtureRunResult[]): Promise<ParityRunSummary> {
   await mkdir(PARITY_CACHE, { recursive: true });

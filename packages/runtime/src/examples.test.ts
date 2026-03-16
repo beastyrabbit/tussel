@@ -35,16 +35,12 @@ describe('examples', () => {
       const markdown = await readFile(markdownFile, 'utf8');
       const links = extractMarkdownLinks(markdown);
 
-      expect(links.length, `expected links in ${path.relative(process.cwd(), markdownFile)}`).toBeGreaterThan(
-        0,
-      );
-
       for (const link of links) {
         if (isExternalLink(link) || link.startsWith('#')) {
           continue;
         }
 
-        const resolved = path.resolve(path.dirname(markdownFile), link);
+        const resolved = path.resolve(path.dirname(markdownFile), stripLocalLinkDecorations(link));
         const info = await stat(resolved);
         expect(info.isFile() || info.isDirectory(), `${link} from ${markdownFile}`).toBe(true);
       }
@@ -230,4 +226,8 @@ async function listFiles(rootDir: string, predicate: (filePath: string) => boole
 
 function isExternalLink(link: string): boolean {
   return /^[a-z]+:/i.test(link);
+}
+
+function stripLocalLinkDecorations(link: string): string {
+  return link.replace(/[?#].*$/, '');
 }

@@ -248,4 +248,25 @@ describe('Tidal dialect translation', () => {
     expect(module).not.toContain('cps:');
     expect(module).not.toContain('bpm:');
   });
+
+  // ---------------------------------------------------------------------------
+  // Circular binding detection (audit fix 1)
+  // ---------------------------------------------------------------------------
+
+  it('throws on circular binding a = b, b = a', () => {
+    expect(() => translateTidalToStrudelProgram('a = b\nb = a\nd1 $ a')).toThrow('Circular binding');
+  });
+
+  it('throws on self-referential binding x = x', () => {
+    expect(() => translateTidalToStrudelProgram('x = x\nd1 $ x')).toThrow('Circular binding');
+  });
+
+  it('resolves valid binding chains without error', () => {
+    const result = translateTidalToStrudelProgram('a = s "bd"\nb = a\nd1 $ b');
+    expect(result.channels[0]?.expr).toBe('s("bd")');
+  });
+
+  it('throws on indirect circular binding a = b, b = c, c = a', () => {
+    expect(() => translateTidalToStrudelProgram('a = b\nb = c\nc = a\nd1 $ a')).toThrow('Circular binding');
+  });
 });

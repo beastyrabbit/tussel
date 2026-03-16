@@ -10,6 +10,16 @@ export interface AudioToleranceThresholds {
   rmsDelta?: number;
 }
 
+/**
+ * Selects which comparison strategy to use for audio parity checks.
+ *
+ * - `'exact'`      — byte-identical PCM data (strictest, no tolerance).
+ * - `'rms'`        — pass when the RMS of the difference signal is within threshold.
+ * - `'max-delta'`  — pass when no individual sample exceeds the threshold.
+ * - `'tolerance'`  — pass when *both* RMS and max-delta are within thresholds (default tolerant mode).
+ */
+export type AudioCompareMode = 'exact' | 'max-delta' | 'rms' | 'tolerance';
+
 export interface ParityFixture {
   compare: {
     audio?: 'exact-pcm16' | 'tolerance';

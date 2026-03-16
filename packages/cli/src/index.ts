@@ -10,7 +10,7 @@ import {
   renderScene,
   runScene,
 } from '@tussel/runtime';
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 interface CliDeps {
@@ -35,6 +35,23 @@ const defaultDeps: CliDeps = {
   writeFile,
 };
 
+const RUN_BACKENDS = ['offline', 'realtime'] as const;
+const CONVERT_TARGETS = ['hydra-js', 'scene-json', 'scene-ts', 'script-ts'] as const;
+
+function parseBackend(value: string): 'offline' | 'realtime' {
+  if ((RUN_BACKENDS as readonly string[]).includes(value)) {
+    return value as 'offline' | 'realtime';
+  }
+  throw new InvalidArgumentError(`backend must be one of: ${RUN_BACKENDS.join(', ')}`);
+}
+
+function parseTarget(value: string): NativeSourceKind {
+  if ((CONVERT_TARGETS as readonly string[]).includes(value)) {
+    return value as NativeSourceKind;
+  }
+  throw new InvalidArgumentError(`target must be one of: ${CONVERT_TARGETS.join(', ')}`);
+}
+
 export function createProgram(deps: CliDeps = defaultDeps): Command {
   const program = new Command();
   program.name('tussel').description('Local-first TypeScript livecoding runtime');
@@ -42,7 +59,7 @@ export function createProgram(deps: CliDeps = defaultDeps): Command {
   program
     .command('run')
     .argument('<entry>', 'Entry file (*.script.ts, *.scene.ts, *.scene.json, *.strudel.*, *.tidal)')
-    .option('--backend <backend>', 'Audio backend mode', 'realtime')
+    .option('--backend <backend>', 'Audio backend mode', parseBackend, 'realtime')
     .option('--entry <binding-or-root>', 'Select the root binding for external whole-script imports')
     .option('--no-watch', 'Disable file watching (watch is enabled by default)')
     .action(
@@ -78,7 +95,7 @@ export function createProgram(deps: CliDeps = defaultDeps): Command {
   program
     .command('convert')
     .argument('<entry>', 'Entry file (*.script.ts, *.scene.ts, *.scene.json, *.strudel.*, *.tidal)')
-    .requiredOption('--to <kind>', 'Target format: hydra-js | script-ts | scene-ts | scene-json')
+    .requiredOption('--to <kind>', 'Target format: hydra-js | script-ts | scene-ts | scene-json', parseTarget)
     .option('--entry <binding-or-root>', 'Select the root binding for external whole-script imports')
     .option('--out <file>', 'Write output to a file instead of stdout')
     .action(async (entry: string, options: { entry?: string; out?: string; to: NativeSourceKind }) => {
@@ -95,7 +112,7 @@ export function createProgram(deps: CliDeps = defaultDeps): Command {
     .command('import')
     .argument('<entry>', 'External entry file (*.strudel.js, *.strudel.mjs, *.strudel.ts, *.tidal)')
     .option('--entry <binding-or-root>', 'Select the root binding for external whole-script imports')
-    .option('--to <kind>', 'Target format: hydra-js | scene-ts | script-ts | scene-json', 'scene-ts')
+    .option('--to <kind>', 'Target format: hydra-js | scene-ts | script-ts | scene-json', parseTarget, 'scene-ts')
     .option('--out <file>', 'Write output to a file instead of stdout')
     .action(async (entry: string, options: { entry?: string; out?: string; to: NativeSourceKind }) => {
       await deps.importExternalSource(entry, { entry: options.entry });

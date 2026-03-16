@@ -1893,3 +1893,24 @@ describe('scheduler error types (Tier 1 fix)', () => {
     expect(() => scheduler.start()).toThrow('Scheduler requires a scene before start');
   });
 });
+
+// ---------------------------------------------------------------------------
+// hurry() speed annotation (audit fix 5)
+// ---------------------------------------------------------------------------
+
+describe('hurry() speed annotation', () => {
+  it('hurry(2) produces events with speed: 2 in payload', () => {
+    const events = query(n('0').s('sine').hurry(2));
+    expect(events.length).toBeGreaterThan(0);
+    for (const event of events) {
+      expect(event.payload.speed).toBe(2);
+    }
+  });
+
+  it('hurry(2) produces 2x the events of the un-hurried pattern', () => {
+    const normal = query(n('0 1 2 3').s('sine'));
+    const hurried = query(n('0 1 2 3').s('sine').hurry(2));
+    // hurry(2) = fast(2) + speed(2) — doubles event density
+    expect(hurried.length).toBe(normal.length * 2);
+  });
+});

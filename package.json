@@ -9,8 +9,10 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
+    "build:packages": "pnpm -r --filter './packages/*' run build",
     "check": "pnpm lint && pnpm build && pnpm test",
     "clean": "rm -rf .tussel-cache coverage",
+    "clean:artifacts": "find packages/*/src -type f \\( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' \\) ! -name 'globals.d.ts' -delete",
     "format": "biome format --write .",
     "lint": "biome check .",
     "parity": "pnpm exec tsx packages/parity/src/cli.ts",

@@ -3,3 +3,10 @@ node_modules
 coverage
 dist
 *.log
+
+# Build artifacts that should never exist in src/ directories
+# (tsconfig.build.json targets outDir: ./dist, but stale builds may leave these)
+packages/*/src/**/*.js
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts
+!packages/*/src/globals.d.ts

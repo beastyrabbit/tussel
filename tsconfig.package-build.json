@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "declaration": true,
+    "declarationMap": false,
+    "noEmit": false,
+    "paths": {},
+    "rewriteRelativeImportExtensions": true,
+    "sourceMap": true,
+    "types": ["node"]
+  }
+}

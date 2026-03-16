@@ -5,7 +5,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ensureSamplePackLocal, renderSceneToWavBuffer } from '@tussel/audio';
-import { stableJson } from '@tussel/ir';
+import { resolveTusselCacheDir, stableJson } from '@tussel/ir';
 import { renderStrudelAudio } from './adapters/strudel.js';
 import { prepareTusselScene, readCanonicalScene, renderTusselAudio } from './adapters/tussel.js';
 import { compareAudio, isAudibleWav } from './compare-audio.js';
@@ -31,7 +31,7 @@ const ANSI_ESCAPE_PATTERN = new RegExp(String.raw`\u001B\[[0-9;]*m`, 'g');
 export async function main(argv = process.argv.slice(2)): Promise<void> {
   const options = parseArgs(argv);
   const outputDir = path.resolve(
-    options.outputDir ?? path.join('.tussel-cache', 'user-listen-test', 'latest'),
+    options.outputDir ?? path.join(resolveTusselCacheDir('user-listen-test'), 'latest'),
   );
   const cases = selectCases(options);
 

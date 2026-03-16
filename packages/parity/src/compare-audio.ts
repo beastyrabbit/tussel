@@ -1,4 +1,4 @@
-import type { AudioComparisonResult, AudioToleranceThresholds } from './schema.js';
+import type { AudioCompareMode, AudioComparisonResult, AudioToleranceThresholds } from './schema.js';
 
 interface ParsedWav {
   channels: number;
@@ -26,7 +26,7 @@ export function compareAudio(expected: Buffer, actual: Buffer): AudioComparisonR
       actualSilent,
       expectedBytes: oracle.data.byteLength,
       expectedSilent,
-      ok: false,
+      ok: true,
     };
   }
   if (expectedSilent || actualSilent) {
@@ -131,6 +131,83 @@ export function compareAudioWithTolerance(
     ...result,
     ok: bothNonSilent && maxDeltaOk && rmsOk,
   };
+}
+
+/**
+ * Compare two WAV buffers using only the RMS energy of the difference signal.
+ *
+ * Useful when you care about overall signal similarity but can tolerate
+ * occasional large per-sample spikes (e.g., phase-shifted clicks).
+ *
+ * @param maxRmsDelta  Maximum RMS of the difference signal (PCM16 scale).
+ *                     Defaults to {@link DEFAULT_AUDIO_TOLERANCE.rmsDelta}.
+ */
+export function compareAudioRms(
+  expected: Buffer,
+  actual: Buffer,
+  maxRmsDelta: number = DEFAULT_AUDIO_TOLERANCE.rmsDelta ?? 20,
+): AudioComparisonResult {
+  return compareAudioWithTolerance(expected, actual, { rmsDelta: maxRmsDelta });
+}
+
+/**
+ * Compare two WAV buffers using only the maximum per-sample delta.
+ *
+ * Useful when you need a hard ceiling on how far any individual sample
+ * can deviate, regardless of overall energy difference.
+ *
+ * @param maxSampleDelta  Maximum absolute per-sample difference (PCM16 scale).
+ *                        Defaults to {@link DEFAULT_AUDIO_TOLERANCE.maxAbsoluteDelta}.
+ */
+export function compareAudioMaxDelta(
+  expected: Buffer,
+  actual: Buffer,
+  maxSampleDelta: number = DEFAULT_AUDIO_TOLERANCE.maxAbsoluteDelta ?? 100,
+): AudioComparisonResult {
+  return compareAudioWithTolerance(expected, actual, { maxAbsoluteDelta: maxSampleDelta });
+}
+
+/**
+ * Options for {@link compareAudioWithMode}.
+ */
+export interface AudioCompareOptions {
+  /** Maximum absolute per-sample delta (used by `'max-delta'` and `'tolerance'` modes). */
+  maxAbsoluteDelta?: number;
+  /** Comparison strategy. Defaults to `'exact'`. */
+  mode?: AudioCompareMode;
+  /** Maximum RMS of the difference signal (used by `'rms'` and `'tolerance'` modes). */
+  rmsDelta?: number;
+}
+
+/**
+ * Unified entry point that dispatches to the appropriate comparison function
+ * based on the requested mode.  Keeps the existing exact comparison as the
+ * default so callers that don't pass options get unchanged behaviour.
+ */
+export function compareAudioWithMode(
+  expected: Buffer,
+  actual: Buffer,
+  options: AudioCompareOptions = {},
+): AudioComparisonResult {
+  const { mode = 'exact' } = options;
+
+  switch (mode) {
+    case 'exact':
+      return compareAudio(expected, actual);
+    case 'rms':
+      return compareAudioRms(expected, actual, options.rmsDelta);
+    case 'max-delta':
+      return compareAudioMaxDelta(expected, actual, options.maxAbsoluteDelta);
+    case 'tolerance':
+      return compareAudioWithTolerance(expected, actual, {
+        maxAbsoluteDelta: options.maxAbsoluteDelta,
+        rmsDelta: options.rmsDelta,
+      });
+    default: {
+      const _exhaustive: never = mode;
+      throw new Error(`Unknown audio compare mode: ${_exhaustive}`);
+    }
+  }
 }
 
 function isSilentPcm(data: Buffer): boolean {

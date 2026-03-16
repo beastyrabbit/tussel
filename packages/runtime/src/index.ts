@@ -1,18 +1,24 @@
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { Worker } from 'node:worker_threads';
 import { RealtimeAudioEngine, renderSceneToFile } from '@tussel/audio';
 import { type ExternalDispatchEvent, type PlaybackEvent, type QueryContext, queryScene } from '@tussel/core';
 import * as tusselDsl from '@tussel/dsl';
 import {
   collectCustomParamNames as collectCustomParamNamesFromIR,
+  createLogger,
+  findNearestPackageJsonDir,
   type HydraSceneSpec,
   isExpressionNode,
   isPlainObject,
   type MetadataSpec,
   normalizeHydraSceneSpec,
+  resolveProjectRoot,
   renderValue,
+  resolveTusselCacheDir,
   type SceneSpec,
   sceneSchema,
   stableJson,
@@ -27,6 +33,8 @@ import ts from 'typescript';
 export { translateTidalToStrudelProgram } from './tidal.js';
 
 import { normalizeStrudelSource } from './strudel-normalize.js';
+
+const runtimeLogger = createLogger('tussel/runtime');
 import { translateTidalToSceneModule } from './tidal.js';
 
 export { normalizeStrudelSource } from './strudel-normalize.js';
@@ -42,6 +50,7 @@ export interface ImportedScene {
   hydraArtifactPath?: string;
   kind: SourceKind;
   importSource?: 'strudel' | 'tidal';
+  projectRoot?: string;
   scene: SceneSpec;
 }
 
@@ -49,6 +58,7 @@ export type PreparedScene = ImportedScene;
 
 export interface PrepareSceneOptions {
   entry?: string;
+  projectRoot?: string;
 }
 
 export interface RunSceneOptions extends PrepareSceneOptions {
@@ -78,21 +88,26 @@ const DEFAULT_STRUDEL_SAMPLE_NAMES = ['bd', 'hh', 'rim', 'sd'] as const;
 /** Resolve relative to this source file so the path is correct regardless of CWD. */
 const PACKAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_STRUDEL_SAMPLE_PACK = path.resolve(PACKAGE_DIR, '..', '..', 'reference', 'assets', 'basic-kit');
-const workspaceAliasPlugin: Plugin = {
-  name: 'tussel-workspace-alias',
-  setup(build) {
-    build.onResolve({ filter: /^@tussel\/(.+)$/ }, (args) => {
-      const match = /^@tussel\/(.+)$/.exec(args.path);
-      const packageName = match?.[1];
-      if (!packageName) {
-        return null;
-      }
-      return {
-        path: path.resolve(process.cwd(), 'packages', packageName, 'src', 'index.ts'),
-      };
-    });
-  },
-};
+const WORKSPACE_ROOT = path.resolve(PACKAGE_DIR, '..', '..');
+const WORKER_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), `scene-worker${path.extname(fileURLToPath(import.meta.url))}`);
+
+function createWorkspaceAliasPlugin(): Plugin {
+  return {
+    name: 'tussel-workspace-alias',
+    setup(build) {
+      build.onResolve({ filter: /^@tussel\/(.+)$/ }, (args) => {
+        const match = /^@tussel\/(.+)$/.exec(args.path);
+        const packageName = match?.[1];
+        if (!packageName || packageName.includes('..') || packageName.includes('/') || packageName.includes('\\')) {
+          return null;
+        }
+
+        const workspaceEntry = path.resolve(WORKSPACE_ROOT, 'packages', packageName, 'src', 'index.ts');
+        return existsSync(workspaceEntry) ? { path: workspaceEntry } : null;
+      });
+    },
+  };
+}
 
 export async function prepareScene(
   entryPath: string,
@@ -100,8 +115,9 @@ export async function prepareScene(
 ): Promise<PreparedScene> {
   const absoluteEntry = path.resolve(entryPath);
   const kind = detectSourceKind(absoluteEntry);
-  const cacheDir = path.resolve('.tussel-cache', 'generated');
-  const importedCacheDir = path.resolve('.tussel-cache', 'imported');
+  const projectRoot = resolveSceneProjectRoot(absoluteEntry, options.projectRoot);
+  const cacheDir = resolveTusselCacheDir('generated', projectRoot);
+  const importedCacheDir = resolveTusselCacheDir('imported', projectRoot);
   await mkdir(cacheDir, { recursive: true });
   await mkdir(importedCacheDir, { recursive: true });
 
@@ -111,7 +127,7 @@ export async function prepareScene(
     case 'script-ts': {
       const source = await readFile(absoluteEntry, 'utf8');
       const metadata = parseMetadata(source);
-      generatedPath = path.join(cacheDir, `${path.basename(absoluteEntry, '.script.ts')}.generated.scene.ts`);
+      generatedPath = path.join(cacheDir, `${cacheArtifactStem(absoluteEntry, source)}.generated.scene.ts`);
       const transformed = transformScriptToSceneModule(source, metadata, absoluteEntry, generatedPath, {
         scriptKind: ts.ScriptKind.TS,
       });
@@ -123,28 +139,24 @@ export async function prepareScene(
       if (!validateSceneJson(raw)) {
         throw new TusselValidationError(ajv.errorsText(validateSceneJson.errors));
       }
-      generatedPath = path.join(
-        cacheDir,
-        `${path.basename(absoluteEntry, '.scene.json')}.generated.scene.ts`,
-      );
+      generatedPath = path.join(cacheDir, `${cacheArtifactStem(absoluteEntry, stableJson(raw))}.generated.scene.ts`);
       await writeFile(generatedPath, renderSceneModule(raw as SceneSpec));
       break;
     }
-    case 'scene-ts':
-      generatedPath = path.join(cacheDir, `${path.basename(absoluteEntry, '.scene.ts')}.generated.scene.ts`);
+    case 'scene-ts': {
+      const source = await readFile(absoluteEntry, 'utf8');
+      generatedPath = path.join(cacheDir, `${cacheArtifactStem(absoluteEntry, source)}.generated.scene.ts`);
       await writeFile(
         generatedPath,
         `export { default } from ${JSON.stringify(relativeModuleSpecifier(generatedPath, absoluteEntry))};\n`,
       );
       break;
+    }
     case 'strudel-ts': {
       const rawSource = await readFile(absoluteEntry, 'utf8');
       const metadata = parseMetadata(rawSource);
       const source = normalizeStrudelSource(rawSource);
-      generatedPath = path.join(
-        cacheDir,
-        `${path.basename(absoluteEntry, '.strudel.ts')}.generated.scene.ts`,
-      );
+      generatedPath = path.join(cacheDir, `${cacheArtifactStem(absoluteEntry, rawSource)}.generated.scene.ts`);
       await writeFile(
         generatedPath,
         withTsNoCheck(
@@ -163,8 +175,7 @@ export async function prepareScene(
       const rawSource = await readFile(absoluteEntry, 'utf8');
       const metadata = parseMetadata(rawSource);
       const source = normalizeStrudelSource(rawSource);
-      const extension = kind === 'strudel-js' ? '.strudel.js' : '.strudel.mjs';
-      generatedPath = path.join(cacheDir, `${path.basename(absoluteEntry, extension)}.generated.scene.ts`);
+      generatedPath = path.join(cacheDir, `${cacheArtifactStem(absoluteEntry, rawSource)}.generated.scene.ts`);
       await writeFile(
         generatedPath,
         withTsNoCheck(
@@ -180,27 +191,28 @@ export async function prepareScene(
     }
     case 'tidal': {
       const source = await readFile(absoluteEntry, 'utf8');
-      generatedPath = path.join(cacheDir, `${path.basename(absoluteEntry, '.tidal')}.generated.scene.ts`);
+      generatedPath = path.join(cacheDir, `${cacheArtifactStem(absoluteEntry, source)}.generated.scene.ts`);
       await writeFile(generatedPath, withTsNoCheck(translateTidalToSceneModule(source, options)));
       importSource = 'tidal';
       break;
     }
   }
 
-  const diagnostics = typecheckFile(generatedPath);
+  const diagnostics = typecheckFile(generatedPath, projectRoot);
   if (diagnostics.length > 0) {
     throw new TusselValidationError(formatDiagnostics(diagnostics));
   }
 
-  const scene = normalizeImportedScene(await executeSceneModule(generatedPath), importSource, options);
+  const scene = normalizeImportedScene(await executeSceneModule(generatedPath, projectRoot), importSource, options);
   const canonicalSceneTsPath = path.join(importedCacheDir, `${cacheStem(absoluteEntry)}.imported.scene.ts`);
   await writeFile(canonicalSceneTsPath, renderSceneModule(scene));
   const hydraArtifactPath = await writeHydraArtifactForScene(
     scene,
     path.join(importedCacheDir, `${cacheStem(absoluteEntry)}.hydra.js`),
   );
-  const dependencies = await collectDependencies(absoluteEntry);
-  return { canonicalSceneTsPath, dependencies, generatedPath, hydraArtifactPath, importSource, kind, scene };
+  const dependencies = await collectDependencies(absoluteEntry, projectRoot);
+  assertSupportedScene(scene);
+  return { canonicalSceneTsPath, dependencies, generatedPath, hydraArtifactPath, importSource, kind, projectRoot, scene };
 }
 
 export async function prepareSceneFromSource(
@@ -214,10 +226,12 @@ export async function prepareSceneFromSource(
   const sourceName = options.filename
     ? `${path.basename(options.filename, extension)}-${hash.slice(0, 8)}${extension}`
     : fallbackName;
-  const sourceFile = path.resolve('.tussel-cache', 'sources', sourceName);
+  const projectRoot =
+    options.projectRoot ?? (options.filename ? resolveProjectBaseForFilename(options.filename) : resolveProjectRoot());
+  const sourceFile = path.join(resolveTusselCacheDir('sources', projectRoot), sourceName);
   await mkdir(path.dirname(sourceFile), { recursive: true });
   await writeFile(sourceFile, code);
-  return prepareScene(sourceFile, options);
+  return prepareScene(sourceFile, { ...options, projectRoot });
 }
 
 export async function importExternalSource(
@@ -276,40 +290,70 @@ export async function runScene(
   backend: 'offline' | 'realtime',
   options: RunSceneOptions = {},
 ): Promise<void> {
+  const absoluteEntry = path.resolve(entryPath);
+  const projectRoot = resolveSceneProjectRoot(absoluteEntry, options.projectRoot);
   const engine = new RealtimeAudioEngine({
+    projectRoot,
     onExternalDispatch: options.onExternalDispatch,
     sinkless: backend === 'offline',
   });
   let watcher: FSWatcher | undefined;
   let lastGoodScene: PreparedScene | undefined;
+  let reloadScheduled = false;
+  let drainingReloads: Promise<void> | undefined;
+  let shuttingDown = false;
 
-  const loadAndApply = async (): Promise<PreparedScene | undefined> => {
+  const refreshWatcher = async (pathsToWatch: string[]): Promise<void> => {
+    if (watcher) {
+      try {
+        await watcher.close();
+      } catch {
+        // watcher already closed
+      }
+      watcher = undefined;
+    }
+    if (!watch || shuttingDown) {
+      return;
+    }
+    watcher = await watchDependencies(pathsToWatch, async () => {
+      await requestReload();
+    });
+  };
+
+  const loadAndApply = async (): Promise<void> => {
     try {
-      const prepared = await prepareScene(entryPath, options);
+      const prepared = await prepareScene(absoluteEntry, { ...options, projectRoot });
       await engine.updateScene(prepared.scene);
       lastGoodScene = prepared;
       printSuccess(prepared);
-      if (watcher) {
-        await watcher.close();
-        watcher = undefined;
-      }
-      if (watch) {
-        watcher = await watchDependencies(prepared.dependencies, async () => {
-          await loadAndApply();
-        });
-      }
-      return prepared;
+      await refreshWatcher(prepared.dependencies);
     } catch (error) {
-      console.error(pc.red((error as Error).message));
+      runtimeLogger.error((error as Error).message, { code: 'TUSSEL_SCENE_LOAD_ERROR' });
       if (lastGoodScene) {
-        console.error(pc.yellow('[tussel] Keeping last good scene running.'));
+        runtimeLogger.warn('Keeping last good scene running.', { code: 'TUSSEL_SCENE_FALLBACK' });
       }
-      return lastGoodScene ?? undefined;
+      await refreshWatcher(await collectWatchDependencies(absoluteEntry, projectRoot));
     }
   };
 
-  const initial = await loadAndApply();
-  if (!initial) {
+  const requestReload = async (): Promise<void> => {
+    reloadScheduled = true;
+    if (drainingReloads) {
+      return drainingReloads;
+    }
+    drainingReloads = (async () => {
+      while (reloadScheduled && !shuttingDown) {
+        reloadScheduled = false;
+        await loadAndApply();
+      }
+    })().finally(() => {
+      drainingReloads = undefined;
+    });
+    return drainingReloads;
+  };
+
+  await requestReload();
+  if (!lastGoodScene) {
     process.exitCode = 1;
   }
 
@@ -319,6 +363,7 @@ export async function runScene(
 
   await new Promise<void>((resolve) => {
     const handleSignal = async () => {
+      shuttingDown = true;
       await watcher?.close();
       await engine.stop();
       resolve();
@@ -336,7 +381,7 @@ export async function renderScene(
   options: PrepareSceneOptions = {},
 ): Promise<void> {
   const prepared = await prepareScene(entryPath, options);
-  await renderSceneToFile(prepared.scene, path.resolve(outputPath), seconds);
+  await renderSceneToFile(prepared.scene, path.resolve(outputPath), seconds, undefined, prepared.projectRoot);
 }
 
 function isExternalSourceKind(kind: SourceKind): kind is ExternalSourceKind {
@@ -474,6 +519,41 @@ function pruneEmptySceneSections(scene: SceneSpec): SceneSpec {
 
 function hashContent(value: string): string {
   return createHash('sha1').update(value).digest('hex');
+}
+
+function resolveSceneProjectRoot(entryPath: string, projectRoot?: string): string {
+  if (projectRoot) {
+    return resolveProjectRoot(projectRoot);
+  }
+
+  const absoluteEntry = path.resolve(entryPath);
+  return findNearestPackageJsonDir(path.dirname(absoluteEntry)) ?? path.dirname(absoluteEntry);
+}
+
+function cacheArtifactStem(entryPath: string, content: string): string {
+  const sourceKind = detectSourceKind(entryPath);
+  const stem = path.basename(entryPath, extensionForSourceKind(sourceKind));
+  const hash = hashContent(`${path.resolve(entryPath)}:${content}`).slice(0, 12);
+  return `${stem}-${hash}`;
+}
+
+function resolveTypecheckConfig(projectRoot: string): string {
+  const projectConfig = ts.findConfigFile(projectRoot, ts.sys.fileExists, 'tsconfig.json');
+  if (projectConfig) {
+    return projectConfig;
+  }
+
+  const workspaceConfig = ts.findConfigFile(WORKSPACE_ROOT, ts.sys.fileExists, 'tsconfig.json');
+  if (workspaceConfig) {
+    return workspaceConfig;
+  }
+
+  throw new TusselValidationError('Unable to locate tsconfig.json');
+}
+
+function resolveProjectBaseForFilename(filename: string): string {
+  const absoluteFilename = path.resolve(filename);
+  return findNearestPackageJsonDir(path.dirname(absoluteFilename)) ?? path.dirname(absoluteFilename);
 }
 
 function detectSourceKind(entryPath: string): SourceKind {
@@ -968,6 +1048,7 @@ const BUILTIN_PATTERN_METHODS = new Set([
   'punchcard',
   'range',
   'rarely',
+  'release',
   'rev',
   'rootNotes',
   'room',
@@ -985,6 +1066,8 @@ const BUILTIN_PATTERN_METHODS = new Set([
   'slow',
   'slowGap',
   'sound',
+  'sometimes',
+  'sometimesBy',
   'speed',
   'struct',
   'sub',
@@ -1038,17 +1121,16 @@ function collectCustomParamNames(value: unknown, names = new Set<string>()): Set
   return collectCustomParamNamesFromIR(value, BUILTIN_DSL_CALLS, BUILTIN_PATTERN_METHODS, names);
 }
 
-function typecheckFile(filePath: string): readonly ts.Diagnostic[] {
-  const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
-  if (!configPath) {
-    throw new TusselValidationError('Unable to locate tsconfig.json');
-  }
+function typecheckFile(filePath: string, projectRoot: string): readonly ts.Diagnostic[] {
+  const configPath = resolveTypecheckConfig(projectRoot);
   const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath));
-  const rootNames = [...new Set([...parsed.fileNames, filePath])];
+  const supportFiles = [path.join(WORKSPACE_ROOT, 'global.d.ts')].filter((candidate) => existsSync(candidate));
   const program = ts.createProgram({
-    options: parsed.options,
-    rootNames,
+    // Runtime-generated wrappers re-export `.ts` sources from the cache, so
+    // published consumers must not depend on their project tsconfig opting in.
+    options: { ...parsed.options, allowImportingTsExtensions: true, noEmit: true },
+    rootNames: [...supportFiles, filePath],
   });
   return ts.getPreEmitDiagnostics(program);
 }
@@ -1056,33 +1138,98 @@ function typecheckFile(filePath: string): readonly ts.Diagnostic[] {
 function formatDiagnostics(diagnostics: readonly ts.Diagnostic[]): string {
   const host: ts.FormatDiagnosticsHost = {
     getCanonicalFileName: (value) => value,
-    getCurrentDirectory: () => process.cwd(),
+    getCurrentDirectory: () => WORKSPACE_ROOT,
     getNewLine: () => '\n',
   };
   return ts.formatDiagnosticsWithColorAndContext(diagnostics, host);
 }
 
-async function executeSceneModule(modulePath: string): Promise<SceneSpec> {
-  const bundlePath = path.join(
-    path.resolve('.tussel-cache', 'bundled'),
-    `${path.basename(modulePath, '.ts')}.bundle.mjs`,
-  );
+async function executeSceneModule(modulePath: string, projectRoot: string): Promise<SceneSpec> {
+  const bundleDir = resolveTusselCacheDir('bundled', projectRoot);
+  const source = await readFile(modulePath, 'utf8');
+  const bundlePath = path.join(bundleDir, `${hashContent(`${modulePath}:${source}`)}.bundle.mjs`);
+  const workerBundlePath = path.join(bundleDir, `${hashContent(WORKER_PATH)}.scene-worker.bundle.mjs`);
   await mkdir(path.dirname(bundlePath), { recursive: true });
   await esbuild({
-    absWorkingDir: process.cwd(),
+    absWorkingDir: projectRoot,
     bundle: true,
     entryPoints: [modulePath],
     format: 'esm',
     outfile: bundlePath,
     platform: 'node',
-    plugins: [workspaceAliasPlugin],
+    plugins: [createWorkspaceAliasPlugin()],
     sourcemap: 'inline',
     target: 'node20',
   });
+  await esbuild({
+    absWorkingDir: WORKSPACE_ROOT,
+    bundle: true,
+    entryPoints: [WORKER_PATH],
+    format: 'esm',
+    outfile: workerBundlePath,
+    platform: 'node',
+    plugins: [createWorkspaceAliasPlugin()],
+    sourcemap: 'inline',
+    target: 'node20',
+  });
+
+  if (requiresHostExecution(source)) {
+    return executeSceneModuleInProcess(bundlePath);
+  }
+
+  return new Promise<SceneSpec>((resolve, reject) => {
+    const worker = new Worker(pathToFileURL(workerBundlePath), {
+      stderr: true,
+      stdout: true,
+      workerData: { modulePath: bundlePath },
+    });
+
+    let stderr = '';
+    let settled = false;
+    const resolveOnce = (scene: SceneSpec) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(scene);
+    };
+    const rejectOnce = (error: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(error);
+    };
+    worker.stderr?.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    worker.on('message', (message: { message?: string; ok: boolean; scene?: SceneSpec; stack?: string }) => {
+      if (message.ok && message.scene) {
+        resolveOnce(message.scene);
+        return;
+      }
+      rejectOnce(new TusselValidationError([message.message, message.stack, stderr.trim()].filter(Boolean).join('\n')));
+    });
+    worker.on('error', (error) => rejectOnce(error instanceof Error ? error : new Error(String(error))));
+    worker.on('exit', (code) => {
+      if (code !== 0) {
+        rejectOnce(
+          new TusselValidationError(
+            stderr.trim() || `Scene worker exited with code ${code ?? 'unknown'} while loading ${modulePath}.`,
+          ),
+        );
+      }
+    });
+  });
+}
+
+async function executeSceneModuleInProcess(bundlePath: string): Promise<SceneSpec> {
   const restoreGlobals = snapshotDslGlobals();
   tusselDsl.installStringPrototypeExtensions();
   try {
     const loaded = await import(`${pathToFileURL(bundlePath).href}?t=${Date.now()}`);
+    tusselDsl.assertSceneSpec(loaded.default);
     return loaded.default as SceneSpec;
   } finally {
     tusselDsl.uninstallStringPrototypeExtensions();
@@ -1111,11 +1258,12 @@ function snapshotDslGlobals(): () => void {
   };
 }
 
-async function collectDependencies(entryPath: string): Promise<string[]> {
-  const configPath = ts.findConfigFile(process.cwd(), ts.sys.fileExists, 'tsconfig.json');
-  if (!configPath) {
-    return [entryPath];
-  }
+function requiresHostExecution(source: string): boolean {
+  return /\bset(?:Gamepad|Input|Midi|Motion)Value\s*\(/.test(source);
+}
+
+async function collectDependencies(entryPath: string, projectRoot: string): Promise<string[]> {
+  const configPath = resolveTypecheckConfig(projectRoot);
   const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath));
   const seen = new Set<string>();
@@ -1133,25 +1281,124 @@ async function collectDependencies(entryPath: string): Promise<string[]> {
 
     const source = await readFile(absolute, 'utf8');
     const sourceFile = ts.createSourceFile(absolute, source, ts.ScriptTarget.Latest, true);
-    for (const statement of sourceFile.statements) {
-      if (
-        !ts.isImportDeclaration(statement) ||
-        !statement.moduleSpecifier ||
-        !ts.isStringLiteral(statement.moduleSpecifier)
-      ) {
-        continue;
-      }
-
-      const specifier = statement.moduleSpecifier.text;
-      const resolved = ts.resolveModuleName(specifier, absolute, parsed.options, ts.sys).resolvedModule;
-      if (resolved?.resolvedFileName) {
-        await visit(resolved.resolvedFileName);
+    for (const specifier of collectModuleSpecifiers(sourceFile)) {
+      for (const candidate of resolveDependencyCandidates(specifier, absolute, parsed.options)) {
+        if (seen.has(candidate) || !existsSync(candidate)) {
+          continue;
+        }
+        await visit(candidate);
       }
     }
   };
 
   await visit(entryPath);
   return [...seen];
+}
+
+async function collectWatchDependencies(entryPath: string, projectRoot: string): Promise<string[]> {
+  try {
+    const configPath = resolveTypecheckConfig(projectRoot);
+    const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
+    const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath));
+    const dependencies = await collectDependencies(entryPath, projectRoot);
+    const entrySource = await readFile(path.resolve(entryPath), 'utf8');
+    const entryFile = ts.createSourceFile(path.resolve(entryPath), entrySource, ts.ScriptTarget.Latest, true);
+    for (const specifier of collectModuleSpecifiers(entryFile)) {
+      for (const candidate of resolveDependencyCandidates(specifier, path.resolve(entryPath), parsed.options)) {
+        if (!dependencies.includes(candidate)) {
+          dependencies.push(candidate);
+        }
+      }
+    }
+    return dependencies;
+  } catch {
+    return [path.resolve(entryPath)];
+  }
+}
+
+function collectModuleSpecifiers(sourceFile: ts.SourceFile): string[] {
+  const specifiers = new Set<string>();
+
+  const addSpecifier = (literal: ts.StringLiteralLike | ts.NoSubstitutionTemplateLiteral | undefined): void => {
+    const text = literal?.text?.trim();
+    if (text) {
+      specifiers.add(text);
+    }
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      (ts.isStringLiteral(node.moduleSpecifier) || ts.isNoSubstitutionTemplateLiteral(node.moduleSpecifier))
+    ) {
+      addSpecifier(node.moduleSpecifier);
+    }
+
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1
+    ) {
+      const [argument] = node.arguments;
+      if (argument && (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument))) {
+        addSpecifier(argument);
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return [...specifiers];
+}
+
+function resolveDependencyCandidates(
+  specifier: string,
+  containingFile: string,
+  compilerOptions: ts.CompilerOptions,
+): string[] {
+  const resolved = ts.resolveModuleName(specifier, containingFile, compilerOptions, ts.sys).resolvedModule;
+  if (resolved?.resolvedFileName) {
+    return [path.resolve(resolved.resolvedFileName)];
+  }
+
+  if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
+    return [];
+  }
+
+  const containingDir = path.dirname(containingFile);
+  const basePath = path.resolve(containingDir, specifier);
+  if (path.extname(basePath)) {
+    return [basePath];
+  }
+
+  return [
+    `${basePath}.ts`,
+    `${basePath}.tsx`,
+    `${basePath}.mts`,
+    `${basePath}.cts`,
+    `${basePath}.js`,
+    `${basePath}.mjs`,
+    `${basePath}.cjs`,
+    path.join(basePath, 'index.ts'),
+    path.join(basePath, 'index.tsx'),
+    path.join(basePath, 'index.mts'),
+    path.join(basePath, 'index.cts'),
+    path.join(basePath, 'index.js'),
+    path.join(basePath, 'index.mjs'),
+    path.join(basePath, 'index.cjs'),
+  ].map((candidate) => path.resolve(candidate));
+}
+
+function assertSupportedScene(scene: SceneSpec): void {
+  const customParams = [...collectCustomParamNames(scene)];
+  if (customParams.length > 0) {
+    throw new TusselValidationError(
+      `Unsupported custom params in runtime execution: ${customParams.sort().join(', ')}. ` +
+        'createParam() and createParams() are not executable yet.',
+    );
+  }
 }
 
 async function watchDependencies(pathsToWatch: string[], reload: () => Promise<void>): Promise<FSWatcher> {
@@ -1165,14 +1412,18 @@ async function watchDependencies(pathsToWatch: string[], reload: () => Promise<v
       void reload();
     }, 100);
   });
+  watcher.on('close', () => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = undefined;
+    }
+  });
   return watcher;
 }
 
 function printSuccess(prepared: PreparedScene): void {
   const channels = Object.keys(prepared.scene.channels).length;
-  console.log(
-    pc.green(
-      `Loaded ${prepared.kind} with ${channels} channel${channels === 1 ? '' : 's'} from ${prepared.generatedPath}`,
-    ),
+  runtimeLogger.info(
+    `Loaded ${prepared.kind} with ${channels} channel${channels === 1 ? '' : 's'} from ${prepared.generatedPath}`,
   );
 }

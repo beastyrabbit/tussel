@@ -1,7 +1,9 @@
+import { mkdir, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { defineScene, loadCsound, note, resetCsoundRegistry, s, stack } from '@tussel/dsl';
+import { createFixtureDirectory, writeFixtureFile } from '@tussel/testkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { renderSceneToWavBuffer, resolveCsoundVoiceSpec } from './index.js';
+import { ensureSamplePackLocal, renderSceneToWavBuffer, resolveCsoundVoiceSpec } from './index.js';
 
 const BASIC_KIT = path.resolve('reference', 'assets', 'basic-kit');
 
@@ -24,6 +26,57 @@ describe('audio engine defaults', () => {
 
     const wav = await renderSceneToWavBuffer(scene, { seconds: 2 });
     expect(maxSampleMagnitude(wav)).toBeGreaterThan(0);
+  });
+
+  it('treats bpm-only transport the same as the equivalent cps value offline', async () => {
+    const sceneFromBpm = defineScene({
+      channels: {
+        lead: {
+          node: note('c4 e4 g4'),
+        },
+      },
+      samples: [],
+      transport: { bpm: 120 },
+    });
+    const sceneFromCps = defineScene({
+      channels: {
+        lead: {
+          node: note('c4 e4 g4'),
+        },
+      },
+      samples: [],
+      transport: { cps: 2 },
+    });
+
+    const [fromBpm, fromCps] = await Promise.all([
+      renderSceneToWavBuffer(sceneFromBpm, { seconds: 1 }),
+      renderSceneToWavBuffer(sceneFromCps, { seconds: 1 }),
+    ]);
+
+    expect(fromBpm.equals(fromCps)).toBe(true);
+  });
+
+  it('rejects local sample refs that escape the project root', async () => {
+    const rootDir = await createFixtureDirectory('tussel-audio-root-');
+    const outsideDir = await createFixtureDirectory('tussel-audio-outside-');
+    const escapedManifest = await writeFixtureFile(outsideDir, 'strudel.json', JSON.stringify({ bd: 'bd.wav' }));
+
+    await expect(
+      ensureSamplePackLocal(path.relative(rootDir, escapedManifest), undefined, rootDir),
+    ).rejects.toThrow('outside the project directory');
+  });
+
+  it('rejects symlinked sample refs whose real target escapes the project root', async () => {
+    const rootDir = await createFixtureDirectory('tussel-audio-symlink-root-');
+    const outsideDir = await createFixtureDirectory('tussel-audio-symlink-outside-');
+    const linkDir = path.join(rootDir, 'link-pack');
+
+    await mkdir(rootDir, { recursive: true });
+    await symlink(outsideDir, linkDir, 'dir');
+
+    await expect(ensureSamplePackLocal('./link-pack', undefined, rootDir)).rejects.toThrow(
+      'symlink target resolves outside the project directory',
+    );
   });
 
   it('adds an audible delay tail after the dry note window', async () => {

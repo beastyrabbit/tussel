@@ -1,5 +1,5 @@
-import { type ExternalDispatchEvent, Scheduler } from '@tussel/core';
-import { defineScene, note, type SceneSpec, s, stack, value } from '@tussel/dsl';
+import { type ExternalDispatchEvent, Scheduler, type SchedulerOptions } from '@tussel/core';
+import { defineScene, expr, note, type SceneSpec, s, stack, value } from '@tussel/dsl';
 import { describe, expect, it } from 'vitest';
 
 describe('scheduler', () => {
@@ -56,6 +56,53 @@ describe('scheduler', () => {
     expect(changedBatch[2]).toBeCloseTo(0.11, 6);
   });
 
+  it('reevaluates transport.bpm automation while the scene is running', () => {
+    const harness = createHarness();
+    harness.scheduler.setScene(
+      defineScene({
+        channels: {
+          drums: {
+            node: s('bd').fast(20),
+          },
+        },
+        samples: [],
+        transport: { bpm: value('60 180').expr },
+      }),
+    );
+
+    harness.scheduler.start();
+    const initialCps = harness.scheduler.cps;
+    harness.tickAt(0.5);
+    harness.scheduler.stop();
+
+    expect(initialCps).toBeCloseTo(1, 6);
+    expect(harness.scheduler.cps).not.toBe(initialCps);
+  });
+
+  it('reevaluates bpm transport automation while running', () => {
+    const harness = createHarness();
+    harness.scheduler.setScene(
+      defineScene({
+        channels: {
+          lead: {
+            node: s('bd').fast(20),
+          },
+        },
+        samples: [],
+        transport: { bpm: expr('value', ['60 120'], 'pattern') },
+      }),
+    );
+    harness.scheduler.start();
+
+    for (let index = 1; index <= 12; index += 1) {
+      harness.tickAt(index * 0.05);
+    }
+
+    harness.scheduler.stop();
+
+    expect(harness.scheduler.cps).toBe(2);
+  });
+
   it('uses the latest scene after a hot swap while running', () => {
     const harness = createHarness();
     harness.scheduler.setScene(createFastScene('bd'));
@@ -89,7 +136,7 @@ describe('scheduler', () => {
     harness.tickAt(0.1);
 
     expect(harness.triggers).toHaveLength(scheduledBeforeStop);
-    expect(harness.clearedHandles).toEqual([1]);
+    expect(harness.clearedHandles).toHaveLength(1);
   });
 
   it('handles empty and muted scenes without failing', () => {
@@ -348,8 +395,9 @@ describe('scheduler concurrent tick handling', () => {
     const triggers: Array<{ targetTime: number }> = [];
     let tickCallCount = 0;
 
+    const timers = createFakeTimers();
     const scheduler = new Scheduler({
-      clearIntervalFn: (() => {}) as unknown as typeof clearInterval,
+      clearIntervalFn: timers.clearIntervalFn,
       getTime: () => currentTime,
       interval: 0.05,
       latency: 0,
@@ -358,16 +406,13 @@ describe('scheduler concurrent tick handling', () => {
         triggers.push({ targetTime });
         // Attempt re-entrant tick: call the interval callback from
         // within the onTrigger handler
-        if (tickCallCount === 1 && intervalCallback) {
+        if (tickCallCount === 1 && timers.getCallback()) {
           currentTime = 0.06;
-          intervalCallback();
+          timers.getCallback()?.();
         }
       },
       overlap: 0,
-      setIntervalFn: ((callback: Parameters<typeof setInterval>[0]) => {
-        intervalCallback = callback as () => void;
-        return 1 as unknown as ReturnType<typeof setInterval>;
-      }) as unknown as typeof setInterval,
+      setIntervalFn: timers.setIntervalFn,
       windowDuration: 0.05,
     });
 
@@ -634,30 +679,27 @@ describe('H.02 — long-running stability', () => {
 describe('H.03 — concurrent tick guard', () => {
   it('ticking boolean prevents re-entrant tick from producing extra triggers', () => {
     let currentTime = 0;
-    let intervalCallback: (() => void) | undefined;
+    const timers = createFakeTimers();
     const triggers: Array<{ targetTime: number }> = [];
     let reEntrantCallsMade = 0;
     let firstTickDone = false;
 
     const scheduler = new Scheduler({
-      clearIntervalFn: (() => {}) as unknown as typeof clearInterval,
+      clearIntervalFn: timers.clearIntervalFn,
       getTime: () => currentTime,
       interval: 0.05,
       latency: 0,
       onTrigger: (_event, targetTime) => {
         triggers.push({ targetTime });
         // Only attempt re-entrancy on the second tick (after intervalCallback is set)
-        if (firstTickDone && triggers.length === 2 && intervalCallback) {
+        if (firstTickDone && triggers.length === 2 && timers.getCallback()) {
           reEntrantCallsMade++;
           currentTime = 0.12;
-          intervalCallback();
+          timers.getCallback()?.();
         }
       },
       overlap: 0,
-      setIntervalFn: ((callback: Parameters<typeof setInterval>[0]) => {
-        intervalCallback = callback as () => void;
-        return 1 as unknown as ReturnType<typeof setInterval>;
-      }) as unknown as typeof setInterval,
+      setIntervalFn: timers.setIntervalFn,
       windowDuration: 0.05,
     });
 
@@ -668,7 +710,7 @@ describe('H.03 — concurrent tick guard', () => {
 
     // Manually trigger a second tick where re-entrancy is attempted
     currentTime = 0.05;
-    intervalCallback!();
+    timers.getCallback()!();
     scheduler.stop();
 
     // We made exactly one re-entrant call attempt
@@ -744,12 +786,12 @@ describe('H.03 — concurrent tick guard', () => {
 describe('scheduler async onTrigger dispatch', () => {
   it('handles async onTrigger without blocking subsequent events', () => {
     let currentTime = 0;
-    let intervalCallback: (() => void) | undefined;
+    const timers = createFakeTimers();
     const triggerOrder: string[] = [];
     let resolveFirst: (() => void) | undefined;
 
     const scheduler = new Scheduler({
-      clearIntervalFn: (() => {}) as unknown as typeof clearInterval,
+      clearIntervalFn: timers.clearIntervalFn,
       getTime: () => currentTime,
       interval: 0.1,
       latency: 0,
@@ -763,10 +805,7 @@ describe('scheduler async onTrigger dispatch', () => {
         }
       },
       overlap: 0.1,
-      setIntervalFn: ((callback: Parameters<typeof setInterval>[0]) => {
-        intervalCallback = callback as () => void;
-        return 1 as unknown as ReturnType<typeof setInterval>;
-      }) as unknown as typeof setInterval,
+      setIntervalFn: timers.setIntervalFn,
       windowDuration: 0.05,
     });
 
@@ -783,7 +822,7 @@ describe('scheduler async onTrigger dispatch', () => {
 
   it('catches rejected async onTrigger without crashing', () => {
     let currentTime = 0;
-    let intervalCallback: (() => void) | undefined;
+    const timers = createFakeTimers();
     const errors: string[] = [];
     const originalError = console.error;
     console.error = (...args: unknown[]) => {
@@ -791,7 +830,7 @@ describe('scheduler async onTrigger dispatch', () => {
     };
 
     const scheduler = new Scheduler({
-      clearIntervalFn: (() => {}) as unknown as typeof clearInterval,
+      clearIntervalFn: timers.clearIntervalFn,
       getTime: () => currentTime,
       interval: 0.05,
       latency: 0,
@@ -799,10 +838,7 @@ describe('scheduler async onTrigger dispatch', () => {
         return Promise.reject(new Error('trigger failed'));
       },
       overlap: 0,
-      setIntervalFn: ((callback: Parameters<typeof setInterval>[0]) => {
-        intervalCallback = callback as () => void;
-        return 1 as unknown as ReturnType<typeof setInterval>;
-      }) as unknown as typeof setInterval,
+      setIntervalFn: timers.setIntervalFn,
       windowDuration: 0.05,
     });
 
@@ -819,11 +855,12 @@ describe('scheduler async onTrigger dispatch', () => {
 
   it('catches rejected async onExternalDispatch without crashing', () => {
     let currentTime = 0;
+    const timers = createFakeTimers();
     const originalError = console.error;
     console.error = () => {};
 
     const scheduler = new Scheduler({
-      clearIntervalFn: (() => {}) as unknown as typeof clearInterval,
+      clearIntervalFn: timers.clearIntervalFn,
       getTime: () => currentTime,
       interval: 0.05,
       latency: 0,
@@ -832,9 +869,7 @@ describe('scheduler async onTrigger dispatch', () => {
       },
       onTrigger: () => {},
       overlap: 0,
-      setIntervalFn: ((callback: Parameters<typeof setInterval>[0]) => {
-        return 1 as unknown as ReturnType<typeof setInterval>;
-      }) as unknown as typeof setInterval,
+      setIntervalFn: timers.setIntervalFn,
       windowDuration: 0.05,
     });
 
@@ -871,6 +906,29 @@ function createFastScene(sound: string, withTransport = true) {
   });
 }
 
+/**
+ * Centralized fake timer factory for scheduler tests.
+ * The `as unknown as` casts are isolated here — all tests use this helper
+ * instead of repeating inline casts.
+ */
+function createFakeTimers() {
+  let intervalCallback: (() => void) | undefined;
+  const clearedHandles: number[] = [];
+  let handleCounter = 0;
+
+  return {
+    clearIntervalFn: ((handle: unknown) => {
+      clearedHandles.push(Number(handle));
+    }) as NonNullable<SchedulerOptions['clearIntervalFn']>,
+    clearedHandles,
+    getCallback: () => intervalCallback,
+    setIntervalFn: ((callback: () => void) => {
+      intervalCallback = callback;
+      return ++handleCounter as unknown as ReturnType<typeof setInterval>;
+    }) as NonNullable<SchedulerOptions['setIntervalFn']>,
+  };
+}
+
 function createHarness() {
   return createHarnessWithOptions({});
 }
@@ -882,8 +940,7 @@ function createHarnessWithOptions(opts: {
   windowDuration?: number;
 }) {
   let currentTime = 0;
-  let intervalCallback: (() => void) | undefined;
-  const clearedHandles: number[] = [];
+  const timers = createFakeTimers();
   const dispatches: ExternalDispatchEvent[] = [];
   const triggers: Array<{
     event: Parameters<ConstructorParameters<typeof Scheduler>[0]['onTrigger']>[0];
@@ -891,9 +948,7 @@ function createHarnessWithOptions(opts: {
   }> = [];
 
   const scheduler = new Scheduler({
-    clearIntervalFn: ((handle: ReturnType<typeof setInterval>) => {
-      clearedHandles.push(Number(handle));
-    }) as unknown as typeof clearInterval,
+    clearIntervalFn: timers.clearIntervalFn,
     getTime: () => currentTime,
     interval: opts.interval ?? 0.05,
     latency: opts.latency ?? 0,
@@ -904,23 +959,17 @@ function createHarnessWithOptions(opts: {
       triggers.push({ event, targetTime });
     },
     overlap: opts.overlap ?? 0,
-    setIntervalFn: ((callback: Parameters<typeof setInterval>[0]) => {
-      if (typeof callback !== 'function') {
-        throw new TypeError('expected scheduler interval callback');
-      }
-      intervalCallback = callback;
-      return 1 as unknown as ReturnType<typeof setInterval>;
-    }) as unknown as typeof setInterval,
+    setIntervalFn: timers.setIntervalFn,
     windowDuration: opts.windowDuration ?? 0.05,
   });
 
   return {
-    clearedHandles,
+    clearedHandles: timers.clearedHandles,
     dispatches,
     scheduler,
     tickAt(time: number) {
       currentTime = time;
-      intervalCallback?.();
+      timers.getCallback()?.();
     },
     triggers,
   };

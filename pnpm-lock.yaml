@@ -87,7 +87,11 @@ importers:
 
   packages/ir: {}
 
-  packages/mini: {}
+  packages/mini:
+    dependencies:
+      '@tussel/ir':
+        specifier: workspace:*
+        version: link:../ir
 
   packages/parity:
     dependencies:

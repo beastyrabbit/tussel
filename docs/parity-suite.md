@@ -2,7 +2,7 @@
 
 The parity suite is the reference backbone for Tussel.
 
-- Tidal is the event-semantic oracle.
+- Tidal parity is currently mediated through Strudel translation, not a native Tidal runtime.
 - Strudel is the exact offline audio oracle for admitted fixtures.
 - Tussel is assumed wrong until the suite says otherwise.
 - Committed fixtures are hard-fail only: no skips, no xfails, no commented-out parity cases.
@@ -16,6 +16,7 @@ Related docs:
 ## Commands
 
 ```sh
+pnpm parity:setup
 pnpm parity:doctor
 pnpm parity:build
 pnpm parity:run
@@ -25,6 +26,10 @@ pnpm parity:level3
 pnpm parity:level4
 pnpm parity:level5
 ```
+
+`pnpm parity:setup` installs the `.ref/strudel` submodule dependencies that the audio oracle requires. `pnpm parity:doctor` validates both the checkout and the pinned reference revisions, including the expected pnpm install metadata under `.ref/strudel/node_modules`.
+
+CI runs the same contract in order: `pnpm parity:setup`, `pnpm parity:doctor`, then parity levels 1 through 5.
 
 You can also call the runner directly:
 
@@ -58,10 +63,10 @@ Use `--entry <binding-or-root>` when an external whole-script source is ambiguou
 
 ## Fixture Levels
 
-- Level 1: parser and basic event parity against Tidal
-- Level 2: timing/control parity against Tidal
-- Level 3: sample-only exact WAV parity against Strudel plus exact events against Tidal
-- Level 4: deterministic synth/filter exact WAV parity against Strudel plus exact events against Tidal
+- Level 1: parser and basic event parity against Strudel-mediated Tidal translation
+- Level 2: timing/control parity against Strudel-mediated Tidal translation
+- Level 3: sample-only exact WAV parity against Strudel plus exact events against Strudel-mediated Tidal translation
+- Level 4: deterministic synth/filter exact WAV parity against Strudel plus exact events against Strudel-mediated Tidal translation
 - Level 5: mixed full-scene parity with both external imports enabled
 
 Fixtures live under `reference/fixtures/level-1` through `reference/fixtures/level-5`.

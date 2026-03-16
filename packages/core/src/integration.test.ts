@@ -8,9 +8,9 @@ import { describe, expect, it } from 'vitest';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeScene(node: unknown, channel = 'main'): SceneSpec {
+function makeScene(node: { expr: import('@tussel/ir').ExpressionValue }, channel = 'main'): SceneSpec {
   return defineScene({
-    channels: { [channel]: { node: node as import('@tussel/ir').ExpressionValue } },
+    channels: { [channel]: { node: node.expr } },
   });
 }
 
@@ -41,7 +41,7 @@ describe('I.01: full pipeline from mini notation to events', () => {
     // Step 2: Create a scene using the DSL with the same mini pattern
     const scene = defineScene({
       channels: {
-        drums: { node: s('bd sd hh cp') as unknown as import('@tussel/ir').ExpressionValue },
+        drums: { node: s('bd sd hh cp').expr },
       },
     });
 
@@ -66,7 +66,7 @@ describe('I.01: full pipeline from mini notation to events', () => {
   it('produces consistent events across multiple cycles', () => {
     const scene = defineScene({
       channels: {
-        drums: { node: s('bd sd hh cp') as unknown as import('@tussel/ir').ExpressionValue },
+        drums: { node: s('bd sd hh cp').expr },
       },
     });
 
@@ -92,7 +92,7 @@ describe('I.03: format conversion roundtrip', () => {
     // Step 1: Create a scene using DSL
     const original = defineScene({
       channels: {
-        lead: { node: note('c e g').fast(2).gain(0.5) as unknown as import('@tussel/ir').ExpressionValue },
+        lead: { node: note('c e g').fast(2).gain(0.5).expr },
       },
     });
 
@@ -113,8 +113,8 @@ describe('I.03: format conversion roundtrip', () => {
   it('preserves complex DSL structures through serialization', () => {
     const original = defineScene({
       channels: {
-        bass: { node: note('c3 e3').slow(2) as unknown as import('@tussel/ir').ExpressionValue },
-        lead: { node: note('c5 e5 g5').fast(2) as unknown as import('@tussel/ir').ExpressionValue },
+        bass: { node: note('c3 e3').slow(2).expr },
+        lead: { node: note('c5 e5 g5').fast(2).expr },
       },
       transport: { cps: 0.5 },
     });
@@ -137,10 +137,10 @@ describe('I.04: multi-channel mixing', () => {
   it('produces independent events for 4 channels', () => {
     const scene = defineScene({
       channels: {
-        bass: { node: note('c2 e2') as unknown as import('@tussel/ir').ExpressionValue },
-        drums: { node: s('bd sd hh cp') as unknown as import('@tussel/ir').ExpressionValue },
-        lead: { node: note('c5 e5 g5') as unknown as import('@tussel/ir').ExpressionValue },
-        pad: { node: note('c4').slow(2) as unknown as import('@tussel/ir').ExpressionValue },
+        bass: { node: note('c2 e2').expr },
+        drums: { node: s('bd sd hh cp').expr },
+        lead: { node: note('c5 e5 g5').expr },
+        pad: { node: note('c4').slow(2).expr },
       },
     });
 
@@ -166,9 +166,9 @@ describe('I.04: multi-channel mixing', () => {
   it('events are sorted by begin time across channels', () => {
     const scene = defineScene({
       channels: {
-        a: { node: note('c e g b') as unknown as import('@tussel/ir').ExpressionValue },
-        b: { node: s('bd sd hh') as unknown as import('@tussel/ir').ExpressionValue },
-        c: { node: note('d f') as unknown as import('@tussel/ir').ExpressionValue },
+        a: { node: note('c e g b').expr },
+        b: { node: s('bd sd hh').expr },
+        c: { node: note('d f').expr },
       },
     });
 
@@ -183,8 +183,8 @@ describe('I.04: multi-channel mixing', () => {
   it('channels with different subdivisions do not interfere', () => {
     const scene = defineScene({
       channels: {
-        fast: { node: note('c').fast(8) as unknown as import('@tussel/ir').ExpressionValue },
-        slow: { node: note('d').slow(4) as unknown as import('@tussel/ir').ExpressionValue },
+        fast: { node: note('c').fast(8).expr },
+        slow: { node: note('d').slow(4).expr },
       },
     });
 

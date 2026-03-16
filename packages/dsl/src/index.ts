@@ -3,6 +3,7 @@ import {
   type ChannelSpec,
   cloneExpressionValue,
   createCallExpression,
+  createLogger,
   createMethodExpression,
   type ExpressionNode,
   type ExpressionValue,
@@ -23,6 +24,8 @@ import {
   TusselHydraError,
   TusselValidationError,
 } from '@tussel/ir';
+
+const dslLogger = createLogger('tussel/dsl');
 
 export * from '@tussel/ir';
 
@@ -61,7 +64,16 @@ function isBuilderLike(value: unknown): value is BuilderLike {
   );
 }
 
-function normalizeValue(value: unknown): ExpressionValue {
+const MAX_NORMALIZE_DEPTH = 32;
+
+function normalizeValue(value: unknown, depth = 0): ExpressionValue {
+  if (depth > MAX_NORMALIZE_DEPTH) {
+    throw new TusselValidationError(
+      `normalizeValue() exceeded maximum recursion depth (${MAX_NORMALIZE_DEPTH}). ` +
+        'Check for circular or deeply nested structures.',
+    );
+  }
+
   if (isBuilderLike(value)) {
     return cloneExpressionValue(value.expr);
   }
@@ -80,12 +92,12 @@ function normalizeValue(value: unknown): ExpressionValue {
   }
 
   if (Array.isArray(value)) {
-    return value.map((entry) => normalizeValue(entry));
+    return value.map((entry) => normalizeValue(entry, depth + 1));
   }
 
   if (isPlainObject(value)) {
     return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, normalizeValue(entry)]),
+      Object.entries(value).map(([key, entry]) => [key, normalizeValue(entry, depth + 1)]),
     ) as ExpressionValue;
   }
 
@@ -1041,11 +1053,15 @@ function registerCustomPatternMethod(name: string): void {
     configurable: true,
     enumerable: false,
     value(this: PatternBuilder, ...args: unknown[]) {
-      return (
-        this as PatternBuilder & {
-          method: (methodName: string, methodArgs: unknown[]) => PatternBuilder;
-        }
-      ).method(name, args);
+      return createBuilder(
+        'pattern',
+        createMethodExpression(
+          this.expr,
+          name,
+          args.map((entry) => normalizeValue(entry)),
+          'pattern',
+        ),
+      );
     },
     writable: true,
   });
@@ -1150,11 +1166,22 @@ interface StringExtensionState {
   refCount: number;
 }
 
+function isStringExtensionState(value: unknown): value is StringExtensionState {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'installedMethods' in value &&
+    value.installedMethods instanceof Set &&
+    'refCount' in value &&
+    typeof value.refCount === 'number'
+  );
+}
+
 function getStringExtensionState(): StringExtensionState {
   const globalState = globalThis as Record<PropertyKey, unknown>;
   const existing = globalState[STRING_EXTENSION_STATE_KEY];
-  if (existing && typeof existing === 'object') {
-    return existing as StringExtensionState;
+  if (isStringExtensionState(existing)) {
+    return existing;
   }
 
   const state: StringExtensionState = {
@@ -1165,6 +1192,16 @@ function getStringExtensionState(): StringExtensionState {
   return state;
 }
 
+/**
+ * Install pattern methods onto String.prototype so that `'bd'.fast(2)` works.
+ *
+ * Uses reference counting: the first call installs, subsequent calls increment
+ * a counter. Matching calls to {@link uninstallStringPrototypeExtensions}
+ * decrement the counter; the extensions are only removed when it reaches zero.
+ *
+ * **Warning:** This pollutes the global String.prototype. Prefer
+ * {@link withStringExtensions} for scoped usage that guarantees cleanup.
+ */
 export function installStringPrototypeExtensions(): void {
   const state = getStringExtensionState();
   if (state.refCount > 0) {
@@ -1174,6 +1211,12 @@ export function installStringPrototypeExtensions(): void {
 
   for (const method of STRING_PATTERN_METHODS) {
     if (Object.hasOwn(String.prototype, method)) {
+      dslLogger.warnOnce(
+        `TUSSEL_STRING_PROTO_CONFLICT:${method}`,
+        `String.prototype.${method} already exists — skipping Tussel extension. ` +
+          'Another library may have added it, or it is a native method.',
+        { method },
+      );
       continue;
     }
 
@@ -1187,8 +1230,17 @@ export function installStringPrototypeExtensions(): void {
           return String(this);
         }
         const builder = value(String(this));
-        const fn = builder[method] as (...methodArgs: unknown[]) => PatternBuilder;
-        return fn.apply(builder, args);
+        if (!(method in builder)) {
+          throw new TypeError(`PatternBuilder has no method '${method}'`);
+        }
+        // Safety: verified method exists via `in` check above and is a known
+        // STRING_PATTERN_METHODS entry.  The keyof cast is needed because
+        // PatternBuilder lacks an index signature.
+        const fn: unknown = builder[method as keyof typeof builder];
+        if (typeof fn !== 'function') {
+          throw new TypeError(`PatternBuilder.${method} is not callable`);
+        }
+        return (fn as Function).apply(builder, args);
       },
       writable: true,
     });
@@ -1219,6 +1271,27 @@ export function areStringPrototypeExtensionsInstalled(): boolean {
   return getStringExtensionState().refCount > 0;
 }
 
+/**
+ * Execute a function with String.prototype extensions installed, guaranteeing
+ * cleanup even if the function throws. This is the recommended way to use
+ * String.prototype extensions — it prevents pollution from leaking into
+ * unrelated code.
+ *
+ * ```typescript
+ * const scene = await withStringExtensions(() => defineScene({
+ *   kick: 'bd'.fast(4),
+ * }));
+ * ```
+ */
+export async function withStringExtensions<T>(fn: () => T | Promise<T>): Promise<T> {
+  installStringPrototypeExtensions();
+  try {
+    return await fn();
+  } finally {
+    uninstallStringPrototypeExtensions();
+  }
+}
+
 export function scene<TScene extends DslSceneInput>(input: TScene): TScene {
   return input;
 }
@@ -1232,14 +1305,24 @@ export function defineScene(input: DslSceneInput | SceneSpec): SceneSpec {
   return normalized;
 }
 
+function asSceneInput(value: ExpressionValue): SceneInput {
+  if (!isPlainObject(value)) {
+    throw new TusselValidationError(
+      'normalizeSceneInput() expected a plain object, received ' + typeof value,
+    );
+  }
+  return value as SceneInput;
+}
+
 function normalizeSceneInput(input: DslSceneInput | SceneSpec): SceneSpec {
-  const sceneInput = normalizeValue(input) as SceneInput & Record<string, unknown>;
-  const transport = { ...(sceneInput.transport ?? {}) } as TransportSpec;
+  const normalized = normalizeValue(input);
+  const sceneInput = asSceneInput(normalized);
+  const transport: TransportSpec = { ...(sceneInput.transport ?? {}) };
   const samples = (sceneInput.samples ?? []).map((entry) =>
-    normalizeSampleSource(entry as SampleSourceSpec | string),
+    normalizeSampleSource(entry),
   );
-  let metadata = sceneInput.metadata as MetadataSpec | undefined;
-  let master = sceneInput.master as SceneSpec['master'];
+  let metadata: MetadataSpec | undefined = sceneInput.metadata;
+  let master: SceneSpec['master'] = sceneInput.master;
   const channels: Record<string, ChannelSpec> = {};
 
   if (sceneInput.channels) {
@@ -1285,7 +1368,7 @@ function normalizeRootFragment(root: ExpressionValue): {
   }
 
   if (isPlainObject(root) && 'channels' in root) {
-    const fragment = root as DslSceneInput;
+    const fragment = asSceneInput(root);
     const channels: Record<string, ChannelSpec> = {};
     for (const [name, channel] of Object.entries(fragment.channels ?? {})) {
       channels[name] = normalizeChannelSpec(normalizeValue(channel));
@@ -1295,7 +1378,7 @@ function normalizeRootFragment(root: ExpressionValue): {
       master: fragment.master,
       metadata: fragment.metadata,
       samples: (fragment.samples ?? []).map((entry) =>
-        normalizeSampleSource(entry as SampleSourceSpec | string),
+        normalizeSampleSource(entry),
       ),
       transport: fragment.transport ?? {},
     };
@@ -1332,10 +1415,14 @@ function unwrapStackEntries(root: ExpressionValue): ExpressionValue[] | undefine
 export class SceneRecorder {
   private metadata: MetadataSpec = {};
   private hydra: HydraSceneSpec | undefined;
-  private readonly resettable = {
-    root: undefined as ExpressionValue | undefined,
-    samples: [] as SampleSourceSpec[],
-    transport: {} as TransportSpec,
+  private readonly resettable: {
+    root: ExpressionValue | undefined;
+    samples: SampleSourceSpec[];
+    transport: TransportSpec;
+  } = {
+    root: undefined,
+    samples: [],
+    transport: {},
   };
 
   beginModule(metadata: MetadataSpec = {}): void {
@@ -1464,9 +1551,10 @@ export function setcps(value: unknown): void {
 }
 
 export function setcpm(value: unknown): void {
-  if (typeof value === 'number') {
-    __tusselRecorder.setCps(value / 60);
+  const normalized = normalizeValue(value);
+  if (typeof normalized === 'number') {
+    __tusselRecorder.setCps(normalized / 60);
     return;
   }
-  __tusselRecorder.setCps(value);
+  __tusselRecorder.setCps(createMethodExpression(normalized, 'div', [60], 'signal'));
 }

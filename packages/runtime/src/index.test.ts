@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { resetCsoundRegistry, resetInputRegistry } from '@tussel/dsl';
 import {
@@ -33,6 +33,32 @@ describe('runtime pipeline', () => {
     expect(prepared.scene.transport.cps).toBe(0.5);
   });
 
+  it('keeps generated artifacts distinct for same-basename entries in different directories', async () => {
+    const rootDir = await createFixtureDirectory();
+    const firstEntry = await writeFixtureFile(rootDir, 'alpha/shared.script.ts', `s("bd")\n`);
+    const secondEntry = await writeFixtureFile(rootDir, 'beta/shared.script.ts', `s("hh")\n`);
+
+    const [firstPrepared, secondPrepared] = await Promise.all([prepareScene(firstEntry), prepareScene(secondEntry)]);
+
+    expect(firstPrepared.generatedPath).not.toBe(secondPrepared.generatedPath);
+    expect(firstPrepared.canonicalSceneTsPath).not.toBe(secondPrepared.canonicalSceneTsPath);
+  });
+
+  it('prepares same-basename entries in parallel without cache collisions', async () => {
+    const rootDir = await createFixtureDirectory();
+    await writeFixtureFile(rootDir, 'package.json', '{"name":"fixture-root","private":true}\n');
+    const first = await writeFixtureFile(rootDir, 'alpha/live.script.ts', `setcps(1);\ns("bd");\n`);
+    const second = await writeFixtureFile(rootDir, 'beta/live.script.ts', `setcps(1);\ns("hh");\n`);
+
+    const [preparedFirst, preparedSecond] = await Promise.all([prepareScene(first), prepareScene(second)]);
+
+    expect(preparedFirst.projectRoot).toBe(rootDir);
+    expect(preparedSecond.projectRoot).toBe(rootDir);
+    expect(preparedFirst.generatedPath).not.toBe(preparedSecond.generatedPath);
+    expect(queryPreparedScene(preparedFirst, 0, 1, { cps: 1 })[0]?.payload.s).toBe('bd');
+    expect(queryPreparedScene(preparedSecond, 0, 1, { cps: 1 })[0]?.payload.s).toBe('hh');
+  });
+
   it('keeps trailing state calls out of the live root selection', async () => {
     const prepared = await prepareSceneFromSource(
       'script-ts',
@@ -42,6 +68,37 @@ describe('runtime pipeline', () => {
 
     expect(Object.keys(prepared.scene.channels)).toEqual(['lead']);
     expect(prepared.scene.transport.cps).toBe(2);
+  });
+
+  it('rejects custom params during runtime preparation until execution support exists', async () => {
+    await expect(
+      prepareSceneFromSource(
+        'scene-json',
+        JSON.stringify({
+          channels: {
+            lead: {
+              node: {
+                args: [0.5],
+                exprType: 'pattern',
+                kind: 'method',
+                name: 'wobble',
+                target: {
+                  args: ['bd'],
+                  exprType: 'pattern',
+                  kind: 'call',
+                  name: 's',
+                },
+              },
+            },
+          },
+          samples: [],
+          transport: { cps: 1 },
+        }),
+        {
+          filename: 'custom-param.scene.json',
+        },
+      ),
+    ).rejects.toThrow(/createParam\(\) and createParams\(\) are not executable yet|Property 'wobble' does not exist/);
   });
 
   it('round-trips scene-json to scene-ts', async () => {
@@ -67,6 +124,37 @@ describe('runtime pipeline', () => {
     expect(converted).toContain('drums');
   });
 
+  it('typechecks scene-ts entries even when the project tsconfig does not enable allowImportingTsExtensions', async () => {
+    const rootDir = await createFixtureDirectory();
+    await writeFixtureFile(rootDir, 'package.json', '{"name":"fixture-root","private":true,"type":"module"}\n');
+    await writeFixtureFile(
+      rootDir,
+      'tsconfig.json',
+      JSON.stringify(
+        {
+          compilerOptions: {
+            module: 'NodeNext',
+            moduleResolution: 'NodeNext',
+            strict: true,
+            target: 'ES2022',
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    const entry = await writeFixtureFile(
+      rootDir,
+      'consumer.scene.ts',
+      `export default {\n  channels: {\n    lead: {\n      node: { kind: 'call', name: 's', args: ['bd'], exprType: 'pattern' }\n    }\n  },\n  samples: [],\n  transport: { cps: 1 }\n};\n`,
+    );
+
+    const prepared = await prepareScene(entry);
+
+    expect(Object.keys(prepared.scene.channels)).toEqual(['lead']);
+    expect(queryPreparedScene(prepared, 0, 1, { cps: 1 })[0]?.payload.s).toBe('bd');
+  });
+
   it('renders a short offline file', async () => {
     const rootDir = await createFixtureDirectory();
     const entry = await writeFixtureFile(
@@ -76,6 +164,45 @@ describe('runtime pipeline', () => {
     );
     const output = path.join(rootDir, 'render.wav');
     await renderScene(entry, output, 1);
+    const info = await stat(output);
+    expect(info.size).toBeGreaterThan(44);
+  });
+
+  it('isolates generated artifacts for same-basename entries prepared in parallel', async () => {
+    const rootDir = await createFixtureDirectory();
+    const left = await writeFixtureFile(
+      rootDir,
+      'alpha/live.script.ts',
+      `scene({ channels: { lead: { node: s("bd") } }, samples: [], transport: { cps: 1 } });\n`,
+    );
+    const right = await writeFixtureFile(
+      rootDir,
+      'beta/live.script.ts',
+      `scene({ channels: { lead: { node: s("hh") } }, samples: [], transport: { cps: 1 } });\n`,
+    );
+
+    const [preparedLeft, preparedRight] = await Promise.all([prepareScene(left), prepareScene(right)]);
+
+    expect(preparedLeft.generatedPath).not.toBe(preparedRight.generatedPath);
+    expect(preparedLeft.scene.channels.lead?.node).not.toEqual(preparedRight.scene.channels.lead?.node);
+  });
+
+  it('renders relative sample packs from the entry project root instead of process cwd', async () => {
+    const rootDir = await createFixtureDirectory();
+    const packDir = path.join(rootDir, 'nested', 'kit');
+    await mkdir(packDir, { recursive: true });
+    await writeFixtureFile(rootDir, 'nested/kit/strudel.json', JSON.stringify({ _base: '.', bd: 'bd.wav' }));
+    await copyFile(path.resolve('reference', 'assets', 'basic-kit', 'bd.wav'), path.join(packDir, 'bd.wav'));
+
+    const entry = await writeFixtureFile(
+      rootDir,
+      'nested/relative-samples.scene.ts',
+      `import { defineScene, s } from '@tussel/dsl';\n\nexport default defineScene({ samples: [{ ref: "./kit" }], channels: { lead: { node: s("bd").gain(0.05) } }, transport: { cps: 1 } });\n`,
+    );
+    const output = path.join(rootDir, 'relative-samples.wav');
+
+    await renderScene(entry, output, 1);
+
     const info = await stat(output);
     expect(info.size).toBeGreaterThan(44);
   });

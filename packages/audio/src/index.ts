@@ -1,10 +1,10 @@
-import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   clampNumber,
   type ExternalDispatchEvent,
   edoFrequency,
+  evaluateNumericValue,
   type PlaybackEvent,
   parseXenValue,
   queryScene,
@@ -12,7 +12,11 @@ import {
 } from '@tussel/core';
 import {
   coerceFiniteNumber,
+  createLogger,
+  findNearestPackageJsonDir,
   getCsoundInstrument,
+  resolveProjectRoot,
+  resolveTusselCacheDir,
   type SampleManifest,
   type SceneSpec,
   TusselAudioError,
@@ -37,6 +41,7 @@ import {
   WaveShaperNode,
 } from 'node-web-audio-api';
 import pc from 'picocolors';
+import { CircuitBreaker } from './circuit-breaker.js';
 import { loadMidiOutputFactory, MidiOutputManager } from './midi-output.js';
 import { OscOutputManager } from './osc-output.js';
 
@@ -211,6 +216,8 @@ const NOISE_BUFFER_SECONDS = 1;
 
 /** Padding after release phase (seconds). Ensures gain envelope fully decays before source stops. Empirically tuned. */
 const STOP_TIME_PADDING_SECONDS = 0.01;
+const audioLogger = createLogger('tussel/audio');
+const MAX_IMPULSE_CACHE_SIZE = 16;
 const impulseResponseCache = new WeakMap<AnyContext, Map<string, AudioBuffer>>();
 const reversedBufferCache = new WeakMap<AudioBuffer, AudioBuffer>();
 const warnedMissingSamples = new Set<string>();
@@ -219,31 +226,38 @@ const warnedUnknownCsoundInstruments = new Set<string>();
 export function resetAudioWarnings(): void {
   warnedMissingSamples.clear();
   warnedUnknownCsoundInstruments.clear();
+  audioLogger.resetSuppression();
 }
 
 export interface RealtimeAudioEngineOptions {
   cacheDir?: string;
   onExternalDispatch?: (dispatch: ExternalDispatchEvent, targetTime: number) => void | Promise<void>;
+  projectRoot?: string;
   sinkless?: boolean;
 }
 
 export class RealtimeAudioEngine {
   private readonly cacheDir: string;
+  private readonly circuitBreaker = new CircuitBreaker();
   private context: AudioContext | undefined;
+  private currentScene: SceneSpec | undefined;
   private readonly cutGroups = new Map<string, LoadedVoice[]>();
   private _midiOutput: MidiOutputManager | undefined;
   get midiOutput(): MidiOutputManager | undefined {
     return this._midiOutput;
   }
   private mixGraph: MixGraph | undefined;
+  private mixGraphCps = 0.5;
   private readonly onExternalDispatch: RealtimeAudioEngineOptions['onExternalDispatch'];
+  private readonly pendingExternalDispatchTimers = new Set<NodeJS.Timeout>();
+  private readonly projectRoot: string;
   readonly oscOutput = new OscOutputManager();
   private readonly sampleRegistry = new SampleRegistry();
   private scheduler: Scheduler | undefined;
 
   constructor(options: RealtimeAudioEngineOptions = {}) {
-    // NOTE: CWD-relative — assumes process is started from the project root
-    this.cacheDir = options.cacheDir ?? path.resolve('.tussel-cache', 'samples');
+    this.projectRoot = resolveAudioProjectRoot(options.projectRoot);
+    this.cacheDir = options.cacheDir ?? resolveTusselCacheDir('samples', this.projectRoot);
     this.onExternalDispatch = options.onExternalDispatch;
     this.sinkless = options.sinkless ?? process.env.TUSSEL_SINK === 'none';
   }
@@ -251,28 +265,30 @@ export class RealtimeAudioEngine {
   private readonly sinkless: boolean;
 
   async start(scene: SceneSpec): Promise<void> {
+    this.circuitBreaker.reset();
+    this.clearPendingExternalDispatches();
+    this.clearCutGroups();
+
     if (!this.context) {
       this.context = await createRealtimeContext(this.sinkless);
     }
 
     await this.initMidi();
 
-    await this.sampleRegistry.prepareScene(scene, this.cacheDir);
+    this.currentScene = scene;
+    this.sampleRegistry.reset();
+    await this.sampleRegistry.prepareScene(scene, this.cacheDir, this.projectRoot);
+    this.mixGraphCps = resolveSceneCps(scene, 0);
     this.mixGraph = createMixGraph(
       this.context,
       scene,
-      typeof scene.transport.cps === 'number' ? scene.transport.cps : 0.5,
+      this.mixGraphCps,
     );
 
     this.scheduler ??= new Scheduler({
       getTime: () => this.context?.currentTime ?? 0,
       onExternalDispatch: (dispatch, targetTime) => {
-        if (dispatch.kind === 'osc') {
-          this.oscOutput.dispatchEvent(dispatch);
-        } else if (dispatch.kind === 'midi-note' || dispatch.kind === 'midi-cc') {
-          this.handleMidiDispatch(dispatch, targetTime);
-        }
-        return this.onExternalDispatch?.(dispatch, targetTime);
+        this.scheduleExternalDispatch(dispatch, targetTime);
       },
       onTrigger: (event, targetTime) => this.trigger(event, targetTime),
     });
@@ -286,11 +302,16 @@ export class RealtimeAudioEngine {
       return;
     }
 
-    await this.sampleRegistry.prepareScene(scene, this.cacheDir);
+    this.clearPendingExternalDispatches();
+    this.clearCutGroups();
+    this.currentScene = scene;
+    this.sampleRegistry.reset();
+    await this.sampleRegistry.prepareScene(scene, this.cacheDir, this.projectRoot);
+    this.mixGraphCps = resolveSceneCps(scene, this.scheduler.now(), this.scheduler.cps);
     this.mixGraph = createMixGraph(
       this.context,
       scene,
-      typeof scene.transport.cps === 'number' ? scene.transport.cps : this.scheduler.cps,
+      this.mixGraphCps,
     );
     this.scheduler.setScene(scene);
   }
@@ -298,8 +319,13 @@ export class RealtimeAudioEngine {
   async stop(): Promise<void> {
     this.scheduler?.stop();
     this.scheduler = undefined;
+    this.clearPendingExternalDispatches();
+    this.clearCutGroups();
     this.oscOutput.closeAll();
     this._midiOutput?.closeAll();
+    this.circuitBreaker.reset();
+    this.currentScene = undefined;
+    this.sampleRegistry.reset();
 
     if (this.context) {
       await this.context.close();
@@ -326,40 +352,71 @@ export class RealtimeAudioEngine {
    * Handle a MIDI dispatch event. For note events, schedules the Note Off
    * after the event's duration using `setTimeout`.
    */
-  private handleMidiDispatch(
-    dispatch: import('@tussel/core').MidiNoteDispatchEvent | import('@tussel/core').MidiCcDispatchEvent,
-    targetTime: number,
-  ): void {
-    if (!this._midiOutput) {
-      return;
-    }
+  private scheduleExternalDispatch(dispatch: ExternalDispatchEvent, targetTime: number): void {
+    const now = this.context?.currentTime ?? 0;
+    const delayMs = Math.max(0, (targetTime - now) * 1000);
 
-    const noteOff = this._midiOutput.dispatchEvent(dispatch);
-
-    if (noteOff && dispatch.kind === 'midi-note') {
-      // Schedule note-off after the event's duration.
-      // The duration is (end - begin) in cycle units; convert to seconds
-      // using the scheduler's cps (cycles per second).
-      const cps = this.scheduler?.cps ?? 0.5;
-      const durationSeconds = Math.max(0.01, (dispatch.end - dispatch.begin) / cps);
-
-      // Account for the lookahead: targetTime is in AudioContext time,
-      // currentTime is "now". The note-on was sent immediately but should
-      // conceptually start at targetTime, so the note-off delay is relative
-      // to now.
-      const now = this.context?.currentTime ?? 0;
-      const delayMs = Math.max(10, (targetTime - now + durationSeconds) * 1000);
-
-      setTimeout(() => {
-        try {
-          noteOff();
-        } catch (error) {
-          console.warn(
-            `[tussel/audio] MIDI note-off error: ${error instanceof Error ? error.message : String(error)}`,
-          );
+    this.scheduleTimeout(() => {
+      try {
+        if (dispatch.kind === 'osc') {
+          this.oscOutput.dispatchEvent(dispatch);
+          return;
         }
-      }, delayMs);
+
+        if (!this._midiOutput) {
+          return;
+        }
+
+        const noteOff = this._midiOutput.dispatchEvent(dispatch);
+        if (!noteOff || dispatch.kind !== 'midi-note') {
+          return;
+        }
+
+        const cps = this.scheduler?.cps ?? 0.5;
+        const durationSeconds = Math.max(0.01, (dispatch.end - dispatch.begin) / cps);
+        this.scheduleTimeout(() => {
+          try {
+            noteOff();
+          } catch (error) {
+            audioLogger.warn(`MIDI note-off error: ${error instanceof Error ? error.message : String(error)}`, {
+              code: 'TUSSEL_MIDI_NOTE_OFF_ERROR',
+            });
+          }
+        }, durationSeconds * 1000);
+      } catch (error) {
+        audioLogger.warn(`External dispatch error: ${error instanceof Error ? error.message : String(error)}`, {
+          code: 'TUSSEL_EXTERNAL_DISPATCH_ERROR',
+        });
+      }
+    }, delayMs);
+
+    this.scheduleTimeout(() => {
+      void Promise.resolve(this.onExternalDispatch?.(dispatch, targetTime)).catch((error) => {
+        audioLogger.warn(`external dispatch callback error: ${error instanceof Error ? error.message : String(error)}`, {
+          code: 'TUSSEL_AUDIO_EXTERNAL_DISPATCH_ERROR',
+        });
+      });
+    }, delayMs);
+  }
+
+  private scheduleTimeout(callback: () => void, delayMs: number): void {
+    const timer = setTimeout(() => {
+      this.pendingExternalDispatchTimers.delete(timer);
+      callback();
+    }, Math.max(0, delayMs));
+    this.pendingExternalDispatchTimers.add(timer);
+  }
+
+  private clearPendingExternalDispatches(): void {
+    for (const timer of this.pendingExternalDispatchTimers) {
+      clearTimeout(timer);
     }
+    this.pendingExternalDispatchTimers.clear();
+  }
+
+  private clearCutGroups(): void {
+    const stopTime = this.context?.currentTime ?? 0;
+    clearCutGroups(this.cutGroups, stopTime);
   }
 
   private async trigger(event: PlaybackEvent, targetTime: number): Promise<void> {
@@ -367,7 +424,20 @@ export class RealtimeAudioEngine {
       return;
     }
 
+    if (!this.circuitBreaker.allowRequest()) {
+      audioLogger.warnOnce(
+        'TUSSEL_AUDIO_CIRCUIT_OPEN',
+        `Audio circuit breaker is OPEN — skipping trigger (${this.circuitBreaker.consecutiveFailures} consecutive failures). Will probe after cooldown.`,
+      );
+      return;
+    }
+
     try {
+      const currentCps = this.scheduler?.cps ?? this.mixGraphCps;
+      if (this.currentScene && (!this.mixGraph || currentCps !== this.mixGraphCps)) {
+        this.mixGraph = createMixGraph(this.context, this.currentScene, currentCps);
+        this.mixGraphCps = currentCps;
+      }
       const voice = await buildVoice(
         this.context,
         this.mixGraph ??
@@ -382,15 +452,21 @@ export class RealtimeAudioEngine {
         this.scheduler?.cps ?? 0.5,
       );
       if (!voice) {
+        this.circuitBreaker.onSuccess();
         return;
       }
       applyCutGroup(this.cutGroups, event, voice, targetTime);
+      this.circuitBreaker.onSuccess();
     } catch (error) {
+      this.circuitBreaker.onFailure();
       const audioError =
         error instanceof TusselAudioError
           ? error
           : new TusselAudioError(`audio trigger failed: ${(error as Error).message}`, { cause: error });
-      console.error(pc.red(audioError.message));
+      audioLogger.error(audioError.message, {
+        code: audioError.code,
+        details: { circuitState: this.circuitBreaker.state },
+      });
     }
   }
 }
@@ -399,17 +475,18 @@ export async function renderSceneToFile(
   scene: SceneSpec,
   outputPath: string,
   seconds = 8,
-  // NOTE: CWD-relative default — assumes process is started from the project root
-  cacheDir = path.resolve('.tussel-cache', 'samples'),
+  cacheDir?: string,
+  projectRoot?: string,
 ): Promise<void> {
   await mkdir(path.dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, await renderSceneToWavBuffer(scene, { cacheDir, seconds }));
+  await writeFile(outputPath, await renderSceneToWavBuffer(scene, { cacheDir, projectRoot, seconds }));
 }
 
 export async function renderSceneToWavBuffer(
   scene: SceneSpec,
   options: {
     cacheDir?: string;
+    projectRoot?: string;
     sampleRate?: number;
     seconds: number;
   },
@@ -434,22 +511,40 @@ export async function renderSceneToWavBuffer(
       { code: 'TUSSEL_AUDIO_BUFFER_OVERFLOW' },
     );
   }
-  // NOTE: CWD-relative default — assumes process is started from the project root
-  const cacheDir = options.cacheDir ?? path.resolve('.tussel-cache', 'samples');
+  const projectRoot = resolveAudioProjectRoot(options.projectRoot);
+  const cacheDir = options.cacheDir ?? resolveTusselCacheDir('samples', projectRoot);
   const context = new OfflineContext(2, Math.max(1, totalFrames), sampleRate);
   const registry = new SampleRegistry();
-  await registry.prepareScene(scene, cacheDir);
-  const cps = typeof scene.transport.cps === 'number' ? scene.transport.cps : 0.5;
-  const mixGraph = createMixGraph(context, scene, cps);
-  const events = queryScene(scene, 0, seconds * cps, { cps });
+  await registry.prepareScene(scene, cacheDir, projectRoot);
+  const staticCps = resolveStaticSceneCps(scene);
   const cutGroups = new Map<string, LoadedVoice[]>();
-  for (const event of events) {
-    const targetTime = event.begin / cps;
-    const voice = await buildVoice(context, mixGraph, registry, event, targetTime, cps);
-    if (!voice) {
-      continue;
+  if (staticCps !== undefined) {
+    const mixGraph = createMixGraph(context, scene, staticCps);
+    const events = queryScene(scene, 0, seconds * staticCps, { cps: staticCps });
+    for (const event of events) {
+      const targetTime = event.begin / staticCps;
+      const voice = await buildVoice(context, mixGraph, registry, event, targetTime, staticCps);
+      if (!voice) {
+        continue;
+      }
+      applyCutGroup(cutGroups, event, voice, targetTime);
     }
-    applyCutGroup(cutGroups, event, voice, targetTime);
+  } else {
+    let mixGraphCps = resolveSceneCps(scene, 0);
+    let mixGraph = createMixGraph(context, scene, mixGraphCps);
+    const events = collectOfflineEvents(scene, seconds);
+    for (const { event, targetTime } of events) {
+      const cps = resolveSceneCps(scene, event.begin, mixGraphCps);
+      if (cps !== mixGraphCps) {
+        mixGraph = createMixGraph(context, scene, cps);
+        mixGraphCps = cps;
+      }
+      const voice = await buildVoice(context, mixGraph, registry, event, targetTime, cps);
+      if (!voice) {
+        continue;
+      }
+      applyCutGroup(cutGroups, event, voice, targetTime);
+    }
   }
   const rendered = await context.startRendering();
   return audioBufferToWav(rendered);
@@ -457,10 +552,11 @@ export async function renderSceneToWavBuffer(
 
 export async function ensureSamplePackLocal(
   ref: string,
-  // NOTE: CWD-relative default — assumes process is started from the project root
-  cacheDir = path.resolve('.tussel-cache', 'samples'),
+  cacheDir?: string,
+  projectRoot?: string,
 ): Promise<string> {
-  const manifest = await resolveManifest(ref, cacheDir);
+  const resolvedProjectRoot = resolveAudioProjectRoot(projectRoot);
+  const manifest = await resolveManifest(ref, cacheDir ?? resolveTusselCacheDir('samples', resolvedProjectRoot), resolvedProjectRoot);
   return manifest.rootDir;
 }
 
@@ -483,10 +579,9 @@ async function createRealtimeContext(sinkless: boolean): Promise<AudioContext> {
     }
     return new RealtimeAudioContext({ latencyHint: 'playback' });
   } catch (error) {
-    console.warn(
-      pc.yellow(
-        `[tussel/audio] Audio output unavailable (${error instanceof Error ? error.message : String(error)}). Falling back to sinkless context — no audio will be heard.`,
-      ),
+    audioLogger.warn(
+      `Audio output unavailable (${error instanceof Error ? error.message : String(error)}). Falling back to sinkless context — no audio will be heard.`,
+      { code: 'TUSSEL_AUDIO_SINKLESS_FALLBACK' },
     );
     return new RealtimeAudioContext({
       latencyHint: 'playback',
@@ -536,7 +631,7 @@ async function buildVoice(
         code: 'TUSSEL_AUDIO_SAMPLE_NOT_FOUND',
         details: { soundName },
       });
-      console.warn(pc.yellow(audioError.message));
+      audioLogger.warn(audioError.message, { code: audioError.code, details: { soundName } });
     }
     return undefined;
   }
@@ -679,6 +774,16 @@ function applyCutGroup(
   cutGroups.set(key, [voice]);
 }
 
+function clearCutGroups(cutGroups: Map<string, LoadedVoice[]>, targetTime: number): void {
+  for (const voices of cutGroups.values()) {
+    for (const voice of voices) {
+      voice.gate.gain.cancelScheduledValues(targetTime);
+      voice.gate.gain.setValueAtTime(0, targetTime);
+    }
+  }
+  cutGroups.clear();
+}
+
 function playSynth(
   context: AnyContext,
   mixGraph: MixGraph,
@@ -766,7 +871,10 @@ function playCsound(
 
   if (!spec.knownInstrument && !warnedUnknownCsoundInstruments.has(spec.instrument)) {
     warnedUnknownCsoundInstruments.add(spec.instrument);
-    console.warn(pc.yellow(`unknown csound instrument: ${spec.instrument}`));
+    audioLogger.warn(`unknown csound instrument: ${spec.instrument}`, {
+      code: 'TUSSEL_AUDIO_UNKNOWN_CSOUND',
+      details: { instrument: spec.instrument },
+    });
   }
 
   const envelopeDefaults = resolveCsoundEnvelope(spec.preset);
@@ -905,14 +1013,25 @@ function connectOutputChain(
 function createMixGraph(context: AnyContext, scene: SceneSpec, cps: number): MixGraph {
   const masterInput = new GainNode(context, { gain: 1 });
   const masterGain = new GainNode(context, { gain: clampNumber(scene.master?.gain, 0, 2, 1) });
+  // Safety limiter: a hard-clipping WaveShaperNode at ±1.0 prevents output
+  // from exceeding 0 dBFS. Transparent for signals below clipping threshold.
+  const limiter = new WaveShaperNode(context, { oversample: 'none' });
+  const curveLength = 8193;
+  const curve = new Float32Array(curveLength);
+  for (let i = 0; i < curveLength; i++) {
+    const x = (2 * i) / (curveLength - 1) - 1;
+    curve[i] = Math.max(-1, Math.min(1, x));
+  }
+  limiter.curve = curve;
   masterInput.connect(masterGain);
   connectOutputChain(
     context,
     masterGain,
     (scene.master ?? {}) as Record<string, unknown>,
     cps,
-    context.destination,
+    limiter,
   );
+  limiter.connect(context.destination);
   return { masterInput, orbitInputs: new Map<string, GainNode>() };
 }
 
@@ -1400,8 +1519,11 @@ function createPhaserChain(
     type: 'sine',
   });
   for (const [index, stage] of stages.entries()) {
+    const baseFreq = 300 + depth * 120 + index * 180;
+    const maxSweep = baseFreq * 0.9;
+    const rawGain = 180 + depth * (220 + index * 45);
     const modulation = new GainNode(context, {
-      gain: 180 + depth * (220 + index * 45),
+      gain: Math.min(rawGain, maxSweep),
     });
     lfo.connect(modulation);
     modulation.connect(stage.frequency);
@@ -1488,6 +1610,12 @@ function getImpulseResponse(context: AnyContext, size: number): AudioBuffer {
   const buffer = createImpulseResponse(context, size);
   const contextCache = impulseResponseCache.get(context) ?? new Map<string, AudioBuffer>();
   contextCache.set(key, buffer);
+  if (contextCache.size > MAX_IMPULSE_CACHE_SIZE) {
+    const oldest = contextCache.keys().next().value;
+    if (oldest !== undefined) {
+      contextCache.delete(oldest);
+    }
+  }
   impulseResponseCache.set(context, contextCache);
   return buffer;
 }
@@ -1543,17 +1671,116 @@ function isLoopEnabled(value: unknown): boolean {
   return false;
 }
 
+function resolveAudioProjectRoot(projectRoot?: string): string {
+  return projectRoot
+    ? resolveProjectRoot(projectRoot)
+    : findNearestPackageJsonDir(process.cwd()) ?? resolveProjectRoot();
+}
+
+function isPathWithinRoot(rootDir: string, candidatePath: string): boolean {
+  const relative = path.relative(path.resolve(rootDir), path.resolve(candidatePath));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function resolveSceneCps(scene: SceneSpec, cycle: number, fallback = 0.5): number {
+  const cps = evaluateNumericValue(scene.transport.cps, cycle);
+  if (cps !== undefined && Number.isFinite(cps) && cps > 0) {
+    return cps;
+  }
+
+  const bpm = evaluateNumericValue(scene.transport.bpm, cycle);
+  if (bpm !== undefined && Number.isFinite(bpm) && bpm > 0) {
+    return bpm / 60;
+  }
+
+  return fallback;
+}
+
+function resolveStaticSceneCps(scene: SceneSpec): number | undefined {
+  if (typeof scene.transport.cps === 'number' && Number.isFinite(scene.transport.cps) && scene.transport.cps > 0) {
+    return scene.transport.cps;
+  }
+
+  if (typeof scene.transport.bpm === 'number' && Number.isFinite(scene.transport.bpm) && scene.transport.bpm > 0) {
+    return scene.transport.bpm / 60;
+  }
+
+  return undefined;
+}
+
+function collectOfflineEvents(
+  scene: SceneSpec,
+  seconds: number,
+): Array<{ event: PlaybackEvent; targetTime: number }> {
+  let currentTime = 0;
+  let intervalCallback: (() => void) | undefined;
+  const scheduled: Array<{ event: PlaybackEvent; targetTime: number }> = [];
+  const scheduler = new Scheduler({
+    clearIntervalFn: () => {},
+    getTime: () => currentTime,
+    interval: 0.05,
+    latency: 0,
+    onTrigger: (event, targetTime) => {
+      scheduled.push({ event, targetTime });
+    },
+    overlap: 0.1,
+    setIntervalFn: (callback) => {
+      intervalCallback = callback;
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    },
+    windowDuration: 0.05,
+  });
+
+  scheduler.setScene(scene);
+  scheduler.start();
+
+  const maxIterations = Math.max(1, Math.ceil(seconds / 0.05) + 8);
+  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+    currentTime += 0.05;
+    intervalCallback?.();
+  }
+  scheduler.stop();
+
+  const firstTargetTime = scheduled[0]?.targetTime ?? 0;
+  return scheduled
+    .map(({ event, targetTime }) => ({
+      event,
+      targetTime: Math.max(0, targetTime - firstTargetTime),
+    }))
+    .filter(({ targetTime }) => targetTime < seconds + STOP_TIME_PADDING_SECONDS);
+}
+
 class SampleRegistry {
   private readonly buffers = new Map<string, AudioBuffer>();
   private readonly manifests = new Map<string, SampleManifestCacheEntry>();
 
-  async prepareScene(scene: SceneSpec, cacheDir: string): Promise<void> {
+  async prepareScene(scene: SceneSpec, cacheDir: string, projectRoot: string): Promise<void> {
     await mkdir(cacheDir, { recursive: true });
-    for (const source of scene.samples) {
-      if (!this.manifests.has(source.ref)) {
-        this.manifests.set(source.ref, await resolveManifest(source.ref, cacheDir));
+    const activeRefs = new Set(scene.samples.map((source) => source.ref));
+    const removedRoots: string[] = [];
+    for (const [ref, manifest] of this.manifests) {
+      if (!activeRefs.has(ref)) {
+        this.manifests.delete(ref);
+        removedRoots.push(manifest.rootDir);
       }
     }
+    if (removedRoots.length > 0) {
+      for (const key of this.buffers.keys()) {
+        if (removedRoots.some((rootDir) => key.startsWith(`${rootDir}:`))) {
+          this.buffers.delete(key);
+        }
+      }
+    }
+    for (const source of scene.samples) {
+      if (!this.manifests.has(source.ref)) {
+        this.manifests.set(source.ref, await resolveManifest(source.ref, cacheDir, projectRoot));
+      }
+    }
+  }
+
+  reset(): void {
+    this.buffers.clear();
+    this.manifests.clear();
   }
 
   async getSample(
@@ -1577,6 +1804,11 @@ class SampleRegistry {
           continue;
         }
         const filePath = path.resolve(asset.basePath, selectedFile);
+        if (!isPathWithinRoot(manifest.rootDir, filePath)) {
+          throw new TusselAudioError(`Sample asset "${selectedFile}" resolves outside the manifest root.`, {
+            code: 'TUSSEL_AUDIO_SAMPLE_PATH_ESCAPE',
+          });
+        }
         const cacheKey = `${manifest.rootDir}:${key}:${resolvedIndex}`;
         if (!this.buffers.has(cacheKey)) {
           const bytes = await readFile(filePath);
@@ -1606,40 +1838,39 @@ function resolveManifestAsset(manifestEntry: SampleManifestCacheEntry, key: stri
   if (!raw) {
     return undefined;
   }
+  const basePath = path.resolve(manifestEntry.rootDir, manifestEntry.manifest._base ?? '.');
+  if (!isPathWithinRoot(manifestEntry.rootDir, basePath)) {
+    throw new TusselAudioError(`Sample manifest base path escapes manifest root for "${key}".`, {
+      code: 'TUSSEL_AUDIO_SAMPLE_PATH_ESCAPE',
+    });
+  }
   return {
-    basePath: path.resolve(manifestEntry.rootDir, manifestEntry.manifest._base ?? '.'),
+    basePath,
     files: Array.isArray(raw) ? raw : [raw],
   };
 }
 
-async function resolveManifest(ref: string, cacheDir: string): Promise<SampleManifestCacheEntry> {
+async function resolveManifest(ref: string, cacheDir: string, projectRoot: string): Promise<SampleManifestCacheEntry> {
   if (ref.startsWith('github:')) {
     return resolveGithubManifest(ref, cacheDir);
   }
 
-  const fullPath = path.resolve(ref);
-  // Prevent path traversal: relative refs must resolve under cwd.
-  // Also resolve symlinks to prevent escaping via symlinked directories.
-  // NOTE: CWD-relative — security check assumes process is started from the project root
-  const cwd = process.cwd();
-  if (!path.isAbsolute(ref) && !fullPath.startsWith(cwd)) {
+  const fullPath = path.isAbsolute(ref) ? path.resolve(ref) : path.resolve(projectRoot, ref);
+  if (!isPathWithinRoot(projectRoot, fullPath)) {
     throw new TusselAudioError(`Sample ref "${ref}" resolves outside the project directory.`, {
       code: 'TUSSEL_AUDIO_SAMPLE_PATH_ESCAPE',
     });
   }
-  const stats = await stat(fullPath);
-  if (stats.isSymbolicLink?.()) {
-    const realTarget = await realpath(fullPath);
-    if (!realTarget.startsWith(cwd)) {
-      throw new TusselAudioError(
-        `Sample ref "${ref}" symlink target resolves outside the project directory.`,
-        {
-          code: 'TUSSEL_AUDIO_SAMPLE_PATH_ESCAPE',
-        },
-      );
-    }
+
+  const stats = await lstat(fullPath);
+  const realTarget = await realpath(fullPath);
+  if (!isPathWithinRoot(projectRoot, realTarget)) {
+    throw new TusselAudioError(`Sample ref "${ref}" symlink target resolves outside the project directory.`, {
+      code: 'TUSSEL_AUDIO_SAMPLE_PATH_ESCAPE',
+    });
   }
-  const manifestPath = stats.isDirectory() ? path.join(fullPath, 'strudel.json') : fullPath;
+  const targetStats = stats.isSymbolicLink() ? await stat(realTarget) : stats;
+  const manifestPath = targetStats.isDirectory() ? path.join(realTarget, 'strudel.json') : realTarget;
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as SampleManifest;
   return { manifest, rootDir: path.dirname(manifestPath) };
 }
@@ -1843,10 +2074,12 @@ function writeAscii(view: DataView, offset: number, value: string): void {
   }
 }
 
-export function resolveCacheDir(fromUrl: string | URL): string {
-  return path.resolve(path.dirname(fileURLToPath(fromUrl)), '..', '..', '..', '.tussel-cache', 'samples');
+export function resolveCacheDir(_fromUrl?: string | URL, projectRoot?: string): string {
+  return resolveTusselCacheDir('samples', resolveAudioProjectRoot(projectRoot));
 }
 
+export { CircuitBreaker } from './circuit-breaker.js';
+export type { CircuitBreakerOptions, CircuitHealth, CircuitState } from './circuit-breaker.js';
 export type { MidiOutputFactory, MidiOutputPort, MidiPortInfo } from './midi-output.js';
 export { loadMidiOutputFactory, MidiOutputManager } from './midi-output.js';
 export type { OscArgument } from './osc-output.js';

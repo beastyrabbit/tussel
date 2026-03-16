@@ -1,4 +1,6 @@
-import { setMidiValue } from '@tussel/ir';
+import { createLogger, setMidiValue } from '@tussel/ir';
+
+const midiInputLogger = createLogger('tussel/midi-input');
 
 /**
  * MIDI input listener that feeds incoming MIDI messages into the Tussel input registry.
@@ -89,7 +91,7 @@ export class MidiInputManager {
           }
         }
         if (portIndex === -1) {
-          console.warn(`[tussel/midi-input] port "${portOrIndex}" not found`);
+          midiInputLogger.warn(`port "${portOrIndex}" not found`, { code: 'TUSSEL_MIDI_INPUT_PORT_NOT_FOUND' });
           input.closePort();
           return false;
         }
@@ -109,8 +111,9 @@ export class MidiInputManager {
 
       return true;
     } catch (error) {
-      console.warn(
-        `[tussel/midi-input] failed to open port: ${error instanceof Error ? error.message : String(error)}`,
+      midiInputLogger.warn(
+        `failed to open port: ${error instanceof Error ? error.message : String(error)}`,
+        { code: 'TUSSEL_MIDI_INPUT_OPEN_FAILED' },
       );
       return false;
     }
@@ -180,8 +183,8 @@ export class MidiInputManager {
   private warnMissing(): void {
     if (!this.warned) {
       this.warned = true;
-      console.warn(
-        '[tussel/midi-input] MIDI input unavailable. Install @julusian/midi for hardware MIDI support.',
+      midiInputLogger.warn(
+        'MIDI input unavailable. Install @julusian/midi for hardware MIDI support.',
       );
     }
   }

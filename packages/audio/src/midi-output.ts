@@ -1,5 +1,13 @@
-import type { MidiCcDispatchEvent, MidiNoteDispatchEvent } from '@tussel/core';
-import pc from 'picocolors';
+import type {
+  MidiCcDispatchEvent,
+  MidiCommandDispatchEvent,
+  MidiNoteDispatchEvent,
+  MidiPitchBendDispatchEvent,
+  MidiTouchDispatchEvent,
+} from '@tussel/core';
+import { createLogger } from '@tussel/ir';
+
+const midiLogger = createLogger('tussel/midi-output');
 
 /**
  * Minimal interface for an output port from `@julusian/midi`.
@@ -90,7 +98,7 @@ export class MidiOutputManager {
       }
     }
 
-    console.warn(pc.yellow(`[tussel] MIDI output port not found: "${name}"`));
+    midiLogger.warn(`MIDI output port not found: "${name}"`, { code: 'TUSSEL_MIDI_PORT_NOT_FOUND' });
     return undefined;
   }
 
@@ -153,16 +161,39 @@ export class MidiOutputManager {
    * the corresponding Note Off. Returns `undefined` if the target port could
    * not be resolved or if the event is a CC message (no follow-up needed).
    */
-  dispatchEvent(event: MidiCcDispatchEvent | MidiNoteDispatchEvent): (() => void) | undefined {
+  dispatchEvent(
+    event:
+      | MidiCcDispatchEvent
+      | MidiCommandDispatchEvent
+      | MidiNoteDispatchEvent
+      | MidiPitchBendDispatchEvent
+      | MidiTouchDispatchEvent,
+  ): (() => void) | undefined {
     const port = this.resolvePort(event.port);
     if (!port) {
       return undefined;
     }
 
-    if (event.kind === 'midi-cc') {
-      const status = 0xb0 | (clampChannel(event.channelNumber) & 0x0f);
-      port.sendMessage([status, clamp7(event.control), clamp7(event.value)]);
-      return undefined;
+    switch (event.kind) {
+      case 'midi-cc': {
+        const status = 0xb0 | (clampChannel(event.channelNumber) & 0x0f);
+        port.sendMessage([status, clamp7(event.control), clamp7(event.value)]);
+        return undefined;
+      }
+      case 'midi-command':
+        port.sendMessage(resolveMidiCommandMessage(event.command));
+        return undefined;
+      case 'midi-pitch-bend': {
+        const status = 0xe0 | (clampChannel(event.channelNumber) & 0x0f);
+        const value = clamp14(event.value);
+        port.sendMessage([status, value & 0x7f, (value >> 7) & 0x7f]);
+        return undefined;
+      }
+      case 'midi-touch': {
+        const status = 0xd0 | (clampChannel(event.channelNumber) & 0x0f);
+        port.sendMessage([status, clamp7(event.value)]);
+        return undefined;
+      }
     }
 
     // midi-note: send Note On now, return a thunk for Note Off.
@@ -213,6 +244,27 @@ function clamp7(value: number): number {
   return Math.max(0, Math.min(127, Math.round(value)));
 }
 
+function clamp14(value: number): number {
+  return Math.max(0, Math.min(16_383, Math.round(value)));
+}
+
+function resolveMidiCommandMessage(command: number | string): number[] {
+  if (typeof command === 'number' && Number.isFinite(command)) {
+    return [clamp7(command)];
+  }
+
+  switch (`${command}`.trim().toLowerCase()) {
+    case 'continue':
+      return [0xfb];
+    case 'start':
+      return [0xfa];
+    case 'stop':
+      return [0xfc];
+    default:
+      throw new RangeError(`Unsupported MIDI realtime command: ${command}`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Factory with graceful fallback
 // ---------------------------------------------------------------------------
@@ -236,15 +288,17 @@ export async function loadMidiOutputFactory(): Promise<MidiOutputFactory | undef
     const mod = await import('@julusian/midi');
     const OutputClass = mod.Output ?? (mod.default as { Output: new () => MidiOutputPort })?.Output;
     if (!OutputClass) {
-      console.warn(pc.yellow('[tussel] @julusian/midi loaded but Output class not found'));
+      midiLogger.warn('@julusian/midi loaded but Output class not found', {
+        code: 'TUSSEL_MIDI_NO_OUTPUT_CLASS',
+      });
       return undefined;
     }
     cachedFactory = () => new OutputClass() as MidiOutputPort;
     return cachedFactory;
   } catch {
-    console.warn(
-      pc.yellow('[tussel] MIDI output unavailable — install @julusian/midi for hardware MIDI support'),
-    );
+    midiLogger.warn('MIDI output unavailable — install @julusian/midi for hardware MIDI support', {
+      code: 'TUSSEL_MIDI_UNAVAILABLE',
+    });
     return undefined;
   }
 }

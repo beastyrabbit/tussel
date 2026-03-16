@@ -10,5 +10,15 @@ pre-commit:
         if command -v gitleaks >/dev/null 2>&1; then
           gitleaks protect --staged --config .gitleaks.toml
         else
-          echo "gitleaks not installed; skipping"
+          echo "ERROR: gitleaks is not installed. Secret scanning is required."
+          echo "Install: https://github.com/gitleaks/gitleaks#installing"
+          exit 1
+        fi
+    no-src-artifacts:
+      run: |
+        artifacts=$(find packages/*/src -type f \( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' \) ! -name 'globals.d.ts' 2>/dev/null)
+        if [ -n "$artifacts" ]; then
+          echo "ERROR: Build artifacts found in src/ directories. Run 'pnpm clean:artifacts' to remove them."
+          echo "$artifacts"
+          exit 1
         fi

@@ -91,12 +91,16 @@ Status:
 
 ## Silent-Failure And Error-Handling Work
 
-- [ ] 5.3 Add structured error reporting for audio trigger failures beyond `console.error`.
+- [x] 5.3 Add structured error reporting for audio trigger failures beyond `console.error`.
+  - Implemented: `@tussel/ir` structured logger with sink-based event collection, per-key suppression, and `CollectingSink` for programmatic access. All packages migrated from `console.log/warn/error` to structured logger.
 - [ ] 5.4 Decide whether missing samples should fail scenes, trip a budget, or remain warnings with structured reporting.
-- [ ] 5.5 Stop silently falling back to sinkless realtime audio without a surfaced diagnostic.
+- [x] 5.5 Stop silently falling back to sinkless realtime audio without a surfaced diagnostic.
+  - Implemented: `createRealtimeContext()` now logs via structured logger with code `TUSSEL_AUDIO_SINKLESS_FALLBACK`.
 - [x] 10.3 Add input validation for `queryScene()`, `renderSceneToWavBuffer()`, `Scheduler.setCps()`, and `defineScene()`.
-- [ ] 10.4 Unify error handling across core, audio, runtime, and parity packages.
-- [ ] 9.6 Add runtime error boundaries / recovery / circuit-breaker behavior.
+- [x] 10.4 Unify error handling across core, audio, runtime, and parity packages.
+  - Implemented: All packages use `createLogger()` from `@tussel/ir` with consistent source names and structured `LogEvent` format.
+- [x] 9.6 Add runtime error boundaries / recovery / circuit-breaker behavior.
+  - Implemented: `CircuitBreaker` class in `@tussel/audio` with CLOSED/OPEN/HALF_OPEN states, integrated into `RealtimeAudioEngine.trigger()`.
 
 ## Test Coverage Expansion
 
@@ -233,21 +237,29 @@ Status:
 
 - [x] 8.2 Stop filtering out `createParam()` / `createParams()` parity cases silently.
 - [x] 8.3 Make `learning-pages.test.ts` execute extracted examples instead of only counting them.
-- [ ] 8.4 Justify or revise the float-precision tolerance used in core conformance tests.
+- [x] 8.4 Justify or revise the float-precision tolerance used in core conformance tests.
+  - Justified: IEEE 754 doubles provide 3+ orders of margin over conformance tolerance. Full analysis in `docs/precision-impact.md`. High-cycle tests added to `precision.test.ts`.
 - [x] 8.5 Replace one-tick fake scheduler interval coverage with real multi-tick assertions.
-- [ ] 8.6 Add waveform-content assertions to audio tests.
+- [x] 8.6 Add waveform-content assertions to audio tests.
+  - Implemented: Waveform tests verify non-silent output, gain scaling, pan accuracy, oscillator waveform correctness, and ADSR envelope shapes in `waveform.test.ts`.
 
 ## Architecture Work
 
-- [ ] 9.1 Add fraction-based timing or publish a precision-impact decision with compensating tests.
-- [ ] 9.3 Remove or isolate `String.prototype` pollution.
-- [ ] 9.4 Replace unsafe `as unknown as ...` type escapes with proper typings.
-- [ ] 9.5 Make scheduler state mutation safe with async `onTrigger` handlers.
-- [ ] 9.7 Remove CWD-relative path assumptions from sample-pack and cache defaults.
+- [x] 9.1 Add fraction-based timing or publish a precision-impact decision with compensating tests.
+  - Decision: IEEE 754 doubles retained. Full analysis published in `docs/precision-impact.md`. Compensating tests added to `precision.test.ts` covering cycles up to 1M, chained transforms, and scheduler tick precision.
+- [x] 9.3 Remove or isolate `String.prototype` pollution.
+  - Isolated: Added `withStringExtensions()` scoped helper that guarantees cleanup. Added JSDoc warnings to `installStringPrototypeExtensions()`. Conflict detection skips existing properties with documented trade-off. Full removal would break `'bd'.fast(2)` scene script syntax.
+- [/] 9.4 Replace unsafe `as unknown as ...` type escapes with proper typings.
+  - In progress via background agent.
+- [x] 9.5 Make scheduler state mutation safe with async `onTrigger` handlers.
+  - Implemented: `Scheduler.trackAsync()` tracks in-flight async callbacks with `pendingAsync` count. Promise rejections logged via structured logger.
+- [x] 9.7 Remove CWD-relative path assumptions from sample-pack and cache defaults.
+  - Implemented: `resolveTusselCacheDir()` in `@tussel/ir` resolves via explicit baseDir, `TUSSEL_PROJECT_ROOT` env, or `process.cwd()` fallback. All call sites migrated.
 
 ## Code Quality Work
 
-- [ ] 10.1 Document or centralize magic numbers.
+- [x] 10.1 Document or centralize magic numbers.
+  - Implemented: All magic numbers in core extracted to named constants with JSDoc: `DEFAULT_WINDOW_DURATION_S`, `DEFAULT_INTERVAL_S`, `DEFAULT_OVERLAP_S`, `DEFAULT_LATENCY_S`, `INITIAL_PHASE_OFFSET_S`, `MIN_TARGET_TIME_OFFSET_S`, `DEFAULT_MIDI_VALUE`, `SEED_PRIME_CYCLE`, `SEED_PRIME_INDEX`, `MIN_CLIP_RATIO`.
 - [x] 10.2 Deduplicate `detectCps()`.
 - [x] 10.2 Deduplicate `describeSnippet()`.
 - [x] 10.2 Consolidate duplicate `clampNumber()` helpers.
@@ -257,7 +269,8 @@ Status:
 - [ ] 11.1 Add negative parity fixtures for invalid scenes, malformed notation, and resource constraints.
 - [ ] 11.2 Rebalance level distribution toward more level-5 / real-world fixtures.
 - [ ] 11.3 Pin the Strudel reference to a recorded version or commit.
-- [ ] 11.4 Add parity tolerance mode using RMS / max-delta thresholds instead of exact PCM only.
+- [x] 11.4 Add parity tolerance mode using RMS / max-delta thresholds instead of exact PCM only.
+  - Implemented: `compareAudioRms()` and `compareAudioMaxDelta()` added to `compare-audio.ts` alongside existing exact PCM comparison. Tests in `compare-audio.test.ts`.
 
 ## Dependency, Build, And Docs
 

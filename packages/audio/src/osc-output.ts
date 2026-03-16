@@ -1,5 +1,8 @@
 import { createSocket, type Socket } from 'node:dgram';
 import type { OscDispatchEvent } from '@tussel/core';
+import { createLogger } from '@tussel/ir';
+
+const oscLogger = createLogger('tussel/osc');
 
 // ---------------------------------------------------------------------------
 // OSC argument types
@@ -234,7 +237,7 @@ export class OscOutputManager {
     socket.unref();
     // Suppress errors to avoid crashing the audio engine
     socket.on('error', (err) => {
-      console.error(`[osc] UDP error for ${key}: ${err.message}`);
+      oscLogger.error(`UDP error for ${key}: ${err.message}`, { code: 'TUSSEL_OSC_UDP_ERROR' });
     });
 
     this.sockets.set(key, { socket, lastUsed: Date.now() });

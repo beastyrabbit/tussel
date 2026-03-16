@@ -85,6 +85,17 @@ describe('@tussel/cli', () => {
     expect(deps.runScene).toHaveBeenCalledWith('demo.scene.ts', true, 'offline', { entry: undefined });
   });
 
+  it('rejects unknown backend values before invoking the runtime', async () => {
+    const deps = createDeps();
+    const program = createThrowingProgram(deps);
+
+    await expect(
+      program.parseAsync(['node', 'tussel', 'run', 'demo.scene.ts', '--backend', 'bogus'], { from: 'node' }),
+    ).rejects.toThrow(CommanderError);
+
+    expect(deps.runScene).not.toHaveBeenCalled();
+  });
+
   it('rejects unknown commands', async () => {
     const deps = createDeps();
     const program = createThrowingProgram(deps);
@@ -100,6 +111,17 @@ describe('@tussel/cli', () => {
 
     await expect(
       program.parseAsync(['node', 'tussel', 'convert', 'demo.scene.ts'], { from: 'node' }),
+    ).rejects.toThrow(CommanderError);
+
+    expect(deps.convertScene).not.toHaveBeenCalled();
+  });
+
+  it('rejects unknown convert targets before invoking conversion', async () => {
+    const deps = createDeps();
+    const program = createThrowingProgram(deps);
+
+    await expect(
+      program.parseAsync(['node', 'tussel', 'convert', 'demo.scene.ts', '--to', 'bogus'], { from: 'node' }),
     ).rejects.toThrow(CommanderError);
 
     expect(deps.convertScene).not.toHaveBeenCalled();

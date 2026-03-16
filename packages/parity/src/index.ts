@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { resolveTusselCacheDir } from '@tussel/ir';
 import { renderStrudelAudio, resolveStrudelSourceCode } from './adapters/strudel.js';
 import { queryTidalEvents } from './adapters/tidal-via-strudel.js';
 import {
@@ -125,19 +126,22 @@ function minimumAudioDurationCycles(cps: number, durationCycles: number): number
 export async function doctorParity(): Promise<void> {
   const requiredPaths = [
     '.ref/strudel/package.json',
+    '.ref/strudel/pnpm-lock.yaml',
     '.ref/strudel/packages/transpiler/index.mjs',
     '.ref/strudel/packages/supradough/dough.mjs',
     '.ref/tidal',
-    '.ref/strudel/node_modules',
   ];
   for (const requiredPath of requiredPaths) {
     try {
       await stat(path.resolve(requiredPath));
     } catch {
-      throw new Error(`Missing parity prerequisite: ${requiredPath}`);
+      throw new Error(
+        `Missing parity prerequisite: ${requiredPath}. Run \`pnpm parity:setup\` after cloning and initializing submodules.`,
+      );
     }
   }
 
+  await verifyStrudelDependenciesInstalled();
   await verifyPinnedCommits();
 }
 
@@ -171,24 +175,47 @@ async function verifyPinnedCommits(): Promise<void> {
     } catch {
       continue;
     }
+    let actual: string;
     try {
       const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: refDir });
-      const actual = stdout.trim();
-      if (actual !== expectedCommit) {
-        console.warn(
-          `[parity] .ref/${name} is at ${actual.slice(0, 12)} but pinned to ${expectedCommit.slice(0, 12)}. Parity results may differ.`,
-        );
-      }
+      actual = stdout.trim();
     } catch {
-      // Not a git repo or git not available
+      throw new Error(
+        `Unable to verify pinned commit for .ref/${name}. Ensure git is available in that checkout.`,
+      );
+    }
+    if (actual !== expectedCommit) {
+      throw new Error(
+        `.ref/${name} is at ${actual.slice(0, 12)} but pinned to ${expectedCommit.slice(0, 12)}. ` +
+          `Run \`git -C .ref/${name} checkout ${expectedCommit}\` to restore the pinned reference.`,
+      );
+    }
+  }
+}
+
+async function verifyStrudelDependenciesInstalled(): Promise<void> {
+  const installMarkers = [
+    '.ref/strudel/node_modules',
+    '.ref/strudel/node_modules/.modules.yaml',
+    '.ref/strudel/node_modules/.pnpm',
+    '.ref/strudel/node_modules/@strudel',
+  ];
+
+  for (const markerPath of installMarkers) {
+    try {
+      await stat(path.resolve(markerPath));
+    } catch {
+      throw new Error(
+        `Missing parity prerequisite: ${markerPath}. Run \`pnpm parity:setup\` to install the pinned .ref/strudel dependencies.`,
+      );
     }
   }
 }
 
 export async function buildParity(): Promise<void> {
   await doctorParity();
-  await mkdir(path.resolve('.tussel-cache', 'parity'), { recursive: true });
-  await mkdir(path.resolve('.tussel-cache', 'parity', 'failures'), { recursive: true });
+  await mkdir(resolveTusselCacheDir('parity'), { recursive: true });
+  await mkdir(path.join(resolveTusselCacheDir('parity'), 'failures'), { recursive: true });
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {

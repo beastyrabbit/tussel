@@ -205,7 +205,7 @@ function resolveChannels(
   throw new TusselParseError('Tidal source did not contain a runnable root.');
 }
 
-function translateExpr(expr: string, bindings: Map<string, string>): string {
+function translateExpr(expr: string, bindings: Map<string, string>, visited: Set<string> = new Set()): string {
   const trimmed = trimOuter(expr);
   if (!trimmed) {
     throw new TusselParseError('Empty tidal expression');
@@ -215,18 +215,18 @@ function translateExpr(expr: string, bindings: Map<string, string>): string {
   if (dollarIndex !== -1) {
     const left = trimOuter(trimmed.slice(0, dollarIndex));
     const right = trimOuter(trimmed.slice(dollarIndex + 1));
-    return applyPrefix(left, translateExpr(right, bindings), bindings);
+    return applyPrefix(left, translateExpr(right, bindings, visited), bindings, visited);
   }
 
   const hashParts = splitTopLevel(trimmed, '#');
-  let current = translateAtom(hashParts[0] ?? '', bindings);
+  let current = translateAtom(hashParts[0] ?? '', bindings, visited);
   for (const part of hashParts.slice(1)) {
-    current = applyControl(current, part, bindings);
+    current = applyControl(current, part, bindings, visited);
   }
   return current;
 }
 
-function translateAtom(expr: string, bindings: Map<string, string>): string {
+function translateAtom(expr: string, bindings: Map<string, string>, visited: Set<string> = new Set()): string {
   const trimmed = trimOuter(expr);
   const tokens = tokenize(trimmed);
   if (tokens.length === 0) {
@@ -236,7 +236,12 @@ function translateAtom(expr: string, bindings: Map<string, string>): string {
   if (tokens.length === 1) {
     const [single] = tokens;
     if (single && bindings.has(single)) {
-      return translateExpr(bindings.get(single) ?? '', bindings);
+      if (visited.has(single)) {
+        throw new TusselParseError(`Circular binding: ${single}`);
+      }
+      const next = new Set(visited);
+      next.add(single);
+      return translateExpr(bindings.get(single) ?? '', bindings, next);
     }
   }
 
@@ -247,17 +252,17 @@ function translateAtom(expr: string, bindings: Map<string, string>): string {
     if (!argument) {
       throw new TusselParseError(`Missing tidal argument for ${head}`);
     }
-    return `${callee}(${translateArgument(argument, bindings)})`;
+    return `${callee}(${translateArgument(argument, bindings, visited)})`;
   }
 
   if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
-    return `(${translateExpr(trimmed.slice(1, -1), bindings)})`;
+    return `(${translateExpr(trimmed.slice(1, -1), bindings, visited)})`;
   }
 
   throw new TusselParseError(`Unsupported tidal atom: ${expr}`);
 }
 
-function applyPrefix(prefix: string, target: string, bindings: Map<string, string>): string {
+function applyPrefix(prefix: string, target: string, bindings: Map<string, string>, visited: Set<string> = new Set()): string {
   const tokens = tokenize(prefix);
   if (tokens.length === 0) {
     return target;
@@ -273,10 +278,10 @@ function applyPrefix(prefix: string, target: string, bindings: Map<string, strin
   if (!argument) {
     throw new TusselParseError(`Missing tidal argument for ${head}`);
   }
-  return `${target}.${head}(${translateArgument(argument, bindings)})`;
+  return `${target}.${head}(${translateArgument(argument, bindings, visited)})`;
 }
 
-function applyControl(target: string, control: string, bindings: Map<string, string>): string {
+function applyControl(target: string, control: string, bindings: Map<string, string>, visited: Set<string> = new Set()): string {
   const tokens = tokenize(control);
   const [head, ...rest] = tokens;
   if (!head) {
@@ -288,9 +293,9 @@ function applyControl(target: string, control: string, bindings: Map<string, str
       throw new TusselParseError(`Missing tidal control value for ${head}`);
     }
     if (head === 'sound' || head === 's') {
-      return `${target}.s(${translateArgument(argument, bindings)})`;
+      return `${target}.s(${translateArgument(argument, bindings, visited)})`;
     }
-    return `${target}.note(${translateArgument(argument, bindings)})`;
+    return `${target}.note(${translateArgument(argument, bindings, visited)})`;
   }
   if (!METHOD_NAMES.has(head)) {
     throw new TusselParseError(`Unsupported tidal control: ${control}`);
@@ -302,10 +307,10 @@ function applyControl(target: string, control: string, bindings: Map<string, str
   if (!argument) {
     throw new TusselParseError(`Missing tidal control value for ${head}`);
   }
-  return `${target}.${head}(${translateArgument(argument, bindings)})`;
+  return `${target}.${head}(${translateArgument(argument, bindings, visited)})`;
 }
 
-function translateArgument(argument: string, bindings: Map<string, string>): string {
+function translateArgument(argument: string, bindings: Map<string, string>, visited: Set<string> = new Set()): string {
   const trimmed = trimOuter(argument);
   if (!trimmed) {
     throw new TusselParseError('Missing tidal argument');
@@ -314,10 +319,15 @@ function translateArgument(argument: string, bindings: Map<string, string>): str
     return JSON.stringify(unquote(trimmed));
   }
   if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
-    return translateExpr(trimmed.slice(1, -1), bindings);
+    return translateExpr(trimmed.slice(1, -1), bindings, visited);
   }
   if (bindings.has(trimmed)) {
-    return translateExpr(bindings.get(trimmed) ?? '', bindings);
+    if (visited.has(trimmed)) {
+      throw new TusselParseError(`Circular binding: ${trimmed}`);
+    }
+    const next = new Set(visited);
+    next.add(trimmed);
+    return translateExpr(bindings.get(trimmed) ?? '', bindings, next);
   }
   if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
     return trimmed;
