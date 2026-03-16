@@ -16,8 +16,8 @@ import {
   isPlainObject,
   type MetadataSpec,
   normalizeHydraSceneSpec,
-  resolveProjectRoot,
   renderValue,
+  resolveProjectRoot,
   resolveTusselCacheDir,
   type SceneSpec,
   sceneSchema,
@@ -27,7 +27,6 @@ import {
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import chokidar, { type FSWatcher } from 'chokidar';
 import { build as esbuild, type Plugin } from 'esbuild';
-import pc from 'picocolors';
 import ts from 'typescript';
 
 export { translateTidalToStrudelProgram } from './tidal.js';
@@ -35,6 +34,7 @@ export { translateTidalToStrudelProgram } from './tidal.js';
 import { normalizeStrudelSource } from './strudel-normalize.js';
 
 const runtimeLogger = createLogger('tussel/runtime');
+
 import { translateTidalToSceneModule } from './tidal.js';
 
 export { normalizeStrudelSource } from './strudel-normalize.js';
@@ -89,7 +89,10 @@ const DEFAULT_STRUDEL_SAMPLE_NAMES = ['bd', 'hh', 'rim', 'sd'] as const;
 const PACKAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_STRUDEL_SAMPLE_PACK = path.resolve(PACKAGE_DIR, '..', '..', 'reference', 'assets', 'basic-kit');
 const WORKSPACE_ROOT = path.resolve(PACKAGE_DIR, '..', '..');
-const WORKER_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), `scene-worker${path.extname(fileURLToPath(import.meta.url))}`);
+const WORKER_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  `scene-worker${path.extname(fileURLToPath(import.meta.url))}`,
+);
 
 function createWorkspaceAliasPlugin(): Plugin {
   return {
@@ -98,7 +101,12 @@ function createWorkspaceAliasPlugin(): Plugin {
       build.onResolve({ filter: /^@tussel\/(.+)$/ }, (args) => {
         const match = /^@tussel\/(.+)$/.exec(args.path);
         const packageName = match?.[1];
-        if (!packageName || packageName.includes('..') || packageName.includes('/') || packageName.includes('\\')) {
+        if (
+          !packageName ||
+          packageName.includes('..') ||
+          packageName.includes('/') ||
+          packageName.includes('\\')
+        ) {
           return null;
         }
 
@@ -139,7 +147,10 @@ export async function prepareScene(
       if (!validateSceneJson(raw)) {
         throw new TusselValidationError(ajv.errorsText(validateSceneJson.errors));
       }
-      generatedPath = path.join(cacheDir, `${cacheArtifactStem(absoluteEntry, stableJson(raw))}.generated.scene.ts`);
+      generatedPath = path.join(
+        cacheDir,
+        `${cacheArtifactStem(absoluteEntry, stableJson(raw))}.generated.scene.ts`,
+      );
       await writeFile(generatedPath, renderSceneModule(raw as SceneSpec));
       break;
     }
@@ -156,7 +167,10 @@ export async function prepareScene(
       const rawSource = await readFile(absoluteEntry, 'utf8');
       const metadata = parseMetadata(rawSource);
       const source = normalizeStrudelSource(rawSource);
-      generatedPath = path.join(cacheDir, `${cacheArtifactStem(absoluteEntry, rawSource)}.generated.scene.ts`);
+      generatedPath = path.join(
+        cacheDir,
+        `${cacheArtifactStem(absoluteEntry, rawSource)}.generated.scene.ts`,
+      );
       await writeFile(
         generatedPath,
         withTsNoCheck(
@@ -175,7 +189,10 @@ export async function prepareScene(
       const rawSource = await readFile(absoluteEntry, 'utf8');
       const metadata = parseMetadata(rawSource);
       const source = normalizeStrudelSource(rawSource);
-      generatedPath = path.join(cacheDir, `${cacheArtifactStem(absoluteEntry, rawSource)}.generated.scene.ts`);
+      generatedPath = path.join(
+        cacheDir,
+        `${cacheArtifactStem(absoluteEntry, rawSource)}.generated.scene.ts`,
+      );
       await writeFile(
         generatedPath,
         withTsNoCheck(
@@ -203,7 +220,11 @@ export async function prepareScene(
     throw new TusselValidationError(formatDiagnostics(diagnostics));
   }
 
-  const scene = normalizeImportedScene(await executeSceneModule(generatedPath, projectRoot), importSource, options);
+  const scene = normalizeImportedScene(
+    await executeSceneModule(generatedPath, projectRoot),
+    importSource,
+    options,
+  );
   const canonicalSceneTsPath = path.join(importedCacheDir, `${cacheStem(absoluteEntry)}.imported.scene.ts`);
   await writeFile(canonicalSceneTsPath, renderSceneModule(scene));
   const hydraArtifactPath = await writeHydraArtifactForScene(
@@ -212,7 +233,16 @@ export async function prepareScene(
   );
   const dependencies = await collectDependencies(absoluteEntry, projectRoot);
   assertSupportedScene(scene);
-  return { canonicalSceneTsPath, dependencies, generatedPath, hydraArtifactPath, importSource, kind, projectRoot, scene };
+  return {
+    canonicalSceneTsPath,
+    dependencies,
+    generatedPath,
+    hydraArtifactPath,
+    importSource,
+    kind,
+    projectRoot,
+    scene,
+  };
 }
 
 export async function prepareSceneFromSource(
@@ -227,7 +257,8 @@ export async function prepareSceneFromSource(
     ? `${path.basename(options.filename, extension)}-${hash.slice(0, 8)}${extension}`
     : fallbackName;
   const projectRoot =
-    options.projectRoot ?? (options.filename ? resolveProjectBaseForFilename(options.filename) : resolveProjectRoot());
+    options.projectRoot ??
+    (options.filename ? resolveProjectBaseForFilename(options.filename) : resolveProjectRoot());
   const sourceFile = path.join(resolveTusselCacheDir('sources', projectRoot), sourceName);
   await mkdir(path.dirname(sourceFile), { recursive: true });
   await writeFile(sourceFile, code);
@@ -1125,7 +1156,9 @@ function typecheckFile(filePath: string, projectRoot: string): readonly ts.Diagn
   const configPath = resolveTypecheckConfig(projectRoot);
   const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
   const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath));
-  const supportFiles = [path.join(WORKSPACE_ROOT, 'global.d.ts')].filter((candidate) => existsSync(candidate));
+  const supportFiles = [path.join(WORKSPACE_ROOT, 'global.d.ts')].filter((candidate) =>
+    existsSync(candidate),
+  );
   const program = ts.createProgram({
     // Runtime-generated wrappers re-export `.ts` sources from the cache, so
     // published consumers must not depend on their project tsconfig opting in.
@@ -1209,14 +1242,17 @@ async function executeSceneModule(modulePath: string, projectRoot: string): Prom
         resolveOnce(message.scene);
         return;
       }
-      rejectOnce(new TusselValidationError([message.message, message.stack, stderr.trim()].filter(Boolean).join('\n')));
+      rejectOnce(
+        new TusselValidationError([message.message, message.stack, stderr.trim()].filter(Boolean).join('\n')),
+      );
     });
     worker.on('error', (error) => rejectOnce(error instanceof Error ? error : new Error(String(error))));
     worker.on('exit', (code) => {
       if (code !== 0) {
         rejectOnce(
           new TusselValidationError(
-            stderr.trim() || `Scene worker exited with code ${code ?? 'unknown'} while loading ${modulePath}.`,
+            stderr.trim() ||
+              `Scene worker exited with code ${code ?? 'unknown'} while loading ${modulePath}.`,
           ),
         );
       }
@@ -1304,7 +1340,11 @@ async function collectWatchDependencies(entryPath: string, projectRoot: string):
     const entrySource = await readFile(path.resolve(entryPath), 'utf8');
     const entryFile = ts.createSourceFile(path.resolve(entryPath), entrySource, ts.ScriptTarget.Latest, true);
     for (const specifier of collectModuleSpecifiers(entryFile)) {
-      for (const candidate of resolveDependencyCandidates(specifier, path.resolve(entryPath), parsed.options)) {
+      for (const candidate of resolveDependencyCandidates(
+        specifier,
+        path.resolve(entryPath),
+        parsed.options,
+      )) {
         if (!dependencies.includes(candidate)) {
           dependencies.push(candidate);
         }
@@ -1319,7 +1359,9 @@ async function collectWatchDependencies(entryPath: string, projectRoot: string):
 function collectModuleSpecifiers(sourceFile: ts.SourceFile): string[] {
   const specifiers = new Set<string>();
 
-  const addSpecifier = (literal: ts.StringLiteralLike | ts.NoSubstitutionTemplateLiteral | undefined): void => {
+  const addSpecifier = (
+    literal: ts.StringLiteralLike | ts.NoSubstitutionTemplateLiteral | undefined,
+  ): void => {
     const text = literal?.text?.trim();
     if (text) {
       specifiers.add(text);

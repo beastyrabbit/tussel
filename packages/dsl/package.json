@@ -12,7 +12,10 @@
     },
     "./globals": "./src/globals.d.ts"
   },
-  "files": ["dist", "src/globals.d.ts"],
+  "files": [
+    "dist",
+    "src/globals.d.ts"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",

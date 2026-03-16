@@ -704,7 +704,7 @@ describe('scheduler tick precision simulation', () => {
     const numTicks = 10_000;
     const cycleAtCpsChange = 0;
 
-    const finalEnd = cycleAtCpsChange + (numTicks * duration) * cps;
+    const finalEnd = cycleAtCpsChange + numTicks * duration * cps;
     const expectedEnd = numTicks * duration * cps; // 10000 * 0.05 * 0.5 = 250.0
 
     // Since the Scheduler uses multiplicative positioning from an anchor
@@ -720,8 +720,8 @@ describe('scheduler tick precision simulation', () => {
     const numTicks = 100_000;
     const cycleAtCpsChange = 0;
 
-    const finalEnd = cycleAtCpsChange + (numTicks * duration) * cps;
-    const expectedEnd = 100_000 * 0.05 / 3; // 5000/3 ~ 1666.6666...
+    const finalEnd = cycleAtCpsChange + numTicks * duration * cps;
+    const expectedEnd = (100_000 * 0.05) / 3; // 5000/3 ~ 1666.6666...
 
     // The multiplication chain numTicks * duration * cps involves three floats.
     // numTicks * duration = 5000.0 (exact). 5000 / 3 introduces float error.
@@ -739,9 +739,9 @@ describe('scheduler tick precision simulation', () => {
     const cps2 = 1.0;
 
     // Phase 1
-    const endPhase1 = 0 + (ticks1 * duration) * cps1; // 50 * 0.5 = 25
+    const endPhase1 = 0 + ticks1 * duration * cps1; // 50 * 0.5 = 25
     // Phase 2: anchor at endPhase1
-    const endPhase2 = endPhase1 + (ticks2 * duration) * cps2; // 25 + 50 * 1.0 = 75
+    const endPhase2 = endPhase1 + ticks2 * duration * cps2; // 25 + 50 * 1.0 = 75
 
     expect(endPhase1).toBe(25);
     expect(endPhase2).toBe(75);
@@ -850,8 +850,8 @@ describe('worst-case precision characterization', () => {
       const cps = 1 / 3;
       const duration = 0.05;
       const numTicks = 1_000_000;
-      const computed = (numTicks * duration) * cps;
-      const expected = 1_000_000 * 0.05 / 3;
+      const computed = numTicks * duration * cps;
+      const expected = (1_000_000 * 0.05) / 3;
       const err = Math.abs(computed - expected);
       samples.push({
         scenario: 'Scheduler 1M ticks at cps=1/3',

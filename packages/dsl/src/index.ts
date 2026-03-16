@@ -1308,7 +1308,7 @@ export function defineScene(input: DslSceneInput | SceneSpec): SceneSpec {
 function asSceneInput(value: ExpressionValue): SceneInput {
   if (!isPlainObject(value)) {
     throw new TusselValidationError(
-      'normalizeSceneInput() expected a plain object, received ' + typeof value,
+      `normalizeSceneInput() expected a plain object, received ${typeof value}`,
     );
   }
   return value as SceneInput;
@@ -1318,9 +1318,7 @@ function normalizeSceneInput(input: DslSceneInput | SceneSpec): SceneSpec {
   const normalized = normalizeValue(input);
   const sceneInput = asSceneInput(normalized);
   const transport: TransportSpec = { ...(sceneInput.transport ?? {}) };
-  const samples = (sceneInput.samples ?? []).map((entry) =>
-    normalizeSampleSource(entry),
-  );
+  const samples = (sceneInput.samples ?? []).map((entry) => normalizeSampleSource(entry));
   let metadata: MetadataSpec | undefined = sceneInput.metadata;
   let master: SceneSpec['master'] = sceneInput.master;
   const channels: Record<string, ChannelSpec> = {};
@@ -1377,9 +1375,7 @@ function normalizeRootFragment(root: ExpressionValue): {
       channels,
       master: fragment.master,
       metadata: fragment.metadata,
-      samples: (fragment.samples ?? []).map((entry) =>
-        normalizeSampleSource(entry),
-      ),
+      samples: (fragment.samples ?? []).map((entry) => normalizeSampleSource(entry)),
       transport: fragment.transport ?? {},
     };
   }

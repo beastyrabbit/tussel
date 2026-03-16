@@ -16,17 +16,7 @@ import {
   TusselCoreError,
 } from '@tussel/ir';
 import { inferMiniSteps, queryMini, queryMondo } from '@tussel/mini';
-import type {
-  ExternalDispatchEvent,
-  MidiCcDispatchEvent,
-  MidiCommandDispatchEvent,
-  MidiNoteDispatchEvent,
-  MidiPitchBendDispatchEvent,
-  MidiTouchDispatchEvent,
-  OscDispatchEvent,
-  PlaybackEvent,
-  QueryContext,
-} from './types.js';
+import type { ExternalDispatchEvent, PlaybackEvent, QueryContext } from './types.js';
 import {
   clampNumber,
   hashEvent,
@@ -203,11 +193,10 @@ export function resetWarnings(): void {
 function warnChannelError(channelName: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   const stack = error instanceof Error ? error.stack : undefined;
-  coreLogger.warnOnce(
-    `channel:${channelName}`,
-    `channel "${channelName}" evaluation failed: ${message}`,
-    { channel: channelName, ...(stack ? { stack } : {}) },
-  );
+  coreLogger.warnOnce(`channel:${channelName}`, `channel "${channelName}" evaluation failed: ${message}`, {
+    channel: channelName,
+    ...(stack ? { stack } : {}),
+  });
   // Opt-in strict mode: re-throw so bugs surface immediately instead of silent silence.
   // Enable via TUSSEL_STRICT_CHANNELS=1 during development to catch hidden bugs.
   if (process.env.TUSSEL_STRICT_CHANNELS === '1') {
@@ -322,7 +311,8 @@ export function collectExternalDispatches(
     dispatches.push({
       begin: event.begin,
       channel: event.channel,
-      command: typeof midiCommand === 'number' ? Math.round(midiCommand) : `${midiCommand}`.trim().toLowerCase(),
+      command:
+        typeof midiCommand === 'number' ? Math.round(midiCommand) : `${midiCommand}`.trim().toLowerCase(),
       end: event.end,
       kind: 'midi-command',
       payload: { ...event.payload },
@@ -455,7 +445,10 @@ function resolveMidiCcValue(payload: Record<string, unknown>): number {
 }
 
 function resolveMidiVelocity(payload: Record<string, unknown>): number {
-  return normalizeMidiScalar(coerceFiniteNumber(payload.velocity) ?? coerceFiniteNumber(payload.gain)) ?? DEFAULT_MIDI_VALUE;
+  return (
+    normalizeMidiScalar(coerceFiniteNumber(payload.velocity) ?? coerceFiniteNumber(payload.gain)) ??
+    DEFAULT_MIDI_VALUE
+  );
 }
 
 function normalizeMidiScalar(value: number | undefined): number | undefined {
@@ -558,12 +551,22 @@ function queryPattern(
     }
   }
 
-  const targetEvents = queryPattern(value.target, begin, end, context);
+  // Lazy target evaluation: many transforms (fast, slow, early, late, compress,
+  // etc.) recurse into value.target themselves. Eagerly querying targetEvents
+  // here would double the work at every nesting level, causing O(2^n) blowup
+  // for deeply nested patterns.
+  let _targetEvents: PlaybackEvent[] | undefined;
+  const targetEvents = (): PlaybackEvent[] => {
+    if (_targetEvents === undefined) {
+      _targetEvents = queryPattern(value.target, begin, end, context);
+    }
+    return _targetEvents;
+  };
 
   switch (value.name) {
     case 'add':
       return applyNumericOperation(
-        targetEvents,
+        targetEvents(),
         value.args[0],
         begin,
         context,
@@ -616,7 +619,7 @@ function queryPattern(
         'restart',
       );
     case 'div':
-      return applyNumericOperation(targetEvents, value.args[0], begin, context, (left, right) =>
+      return applyNumericOperation(targetEvents(), value.args[0], begin, context, (left, right) =>
         right === 0 ? 0 : left / right,
       );
     case 'compress':
@@ -716,7 +719,7 @@ function queryPattern(
       );
     case 'mul':
       return applyNumericOperation(
-        targetEvents,
+        targetEvents(),
         value.args[0],
         begin,
         context,
@@ -724,26 +727,26 @@ function queryPattern(
       );
     case 'ply':
       // Fallback 1 = each event occupies its original slot (no subdivision)
-      return applyPly(targetEvents, evaluateNumericValue(value.args[0], begin) ?? 1);
+      return applyPly(targetEvents(), evaluateNumericValue(value.args[0], begin) ?? 1);
     case 'degrade':
-      return applyDegrade(targetEvents, 0.5);
+      return applyDegrade(targetEvents(), 0.5);
     case 'degradeBy':
       // Fallback 0.5 = 50% drop probability, matching the default `degrade` behavior
-      return applyDegrade(targetEvents, evaluateNumericValue(value.args[0], begin) ?? 0.5);
+      return applyDegrade(targetEvents(), evaluateNumericValue(value.args[0], begin) ?? 0.5);
     case 'drop':
       return applyDrop(value.target, value.args[0], begin, end, context);
     case 'every':
-      return applyEvery(targetEvents, value.args[1], value.args[0], begin, end, context);
+      return applyEvery(targetEvents(), value.args[1], value.args[0], begin, end, context);
     case 'expand':
       return applyExpand(value.target, value.args[0], begin, end, context);
     case 'extend':
       return applyExtend(value.target, value.args[0], begin, end, context);
     case 'when':
-      return applyWhen(targetEvents, value.args[1], value.args[0], begin, end, context);
+      return applyWhen(targetEvents(), value.args[1], value.args[0], begin, end, context);
     case 'sometimesBy':
-      return applySometimesBy(targetEvents, value.args[1], value.args[0], begin, end, context);
+      return applySometimesBy(targetEvents(), value.args[1], value.args[0], begin, end, context);
     case 'within':
-      return applyWithin(targetEvents, value.args[2], value.args[0], value.args[1], begin, end, context);
+      return applyWithin(targetEvents(), value.args[2], value.args[0], value.args[1], begin, end, context);
     case 'zoom':
       return transformZoom(
         value.target,
@@ -754,9 +757,9 @@ function queryPattern(
         context,
       );
     case 'rev':
-      return transformRev(targetEvents, begin, end);
+      return transformRev(targetEvents(), begin, end);
     case 'palindrome':
-      return transformPalindrome(value.target, targetEvents, begin, end, context);
+      return transformPalindrome(value.target, targetEvents(), begin, end, context);
     case 'iter':
       return transformIter(
         value.target,
@@ -870,26 +873,26 @@ function queryPattern(
         context,
       );
     case 'fmap':
-      return applyFmap(targetEvents, value.args[0], begin, context);
+      return applyFmap(targetEvents(), value.args[0], begin, context);
     case 'ceil':
-      return mapNumericPayload(targetEvents, Math.ceil);
+      return mapNumericPayload(targetEvents(), Math.ceil);
     case 'floor':
-      return mapNumericPayload(targetEvents, Math.floor);
+      return mapNumericPayload(targetEvents(), Math.floor);
     case 'mask':
     case 'struct':
-      return applyMask(targetEvents, value.args[0], begin, end, context);
+      return applyMask(targetEvents(), value.args[0], begin, end, context);
     case 'offset':
-      return applyOffset(targetEvents, evaluateNumericValue(value.args[0], begin) ?? 0);
+      return applyOffset(targetEvents(), evaluateNumericValue(value.args[0], begin) ?? 0);
     case 'pace':
       return applyPace(value.target, value.args[0], begin, end, context);
     case 'round':
-      return mapNumericPayload(targetEvents, Math.round);
+      return mapNumericPayload(targetEvents(), Math.round);
     case 'rootNotes':
-      return applyRootNotes(targetEvents, value.args[0]);
+      return applyRootNotes(targetEvents(), value.args[0]);
     case 'scale':
-      return applyScale(targetEvents, value.args[0], begin, context);
+      return applyScale(targetEvents(), value.args[0], begin, context);
     case 'scaleTranspose':
-      return applyScaleTranspose(targetEvents, value.args[0], begin, context);
+      return applyScaleTranspose(targetEvents(), value.args[0], begin, context);
     case 'segment':
       return applySegment(value.target, value.args[0], begin, end, context);
     case 'scramble':
@@ -901,7 +904,9 @@ function queryPattern(
         context,
         (count, cycleSeed) =>
           Array.from({ length: count }, (_, index) => {
-            const random = seededRandom(cycleSeed * SEED_PRIME_CYCLE + index * SEED_PRIME_INDEX + hashString(context.channel));
+            const random = seededRandom(
+              cycleSeed * SEED_PRIME_CYCLE + index * SEED_PRIME_INDEX + hashString(context.channel),
+            );
             return Math.min(count - 1, Math.floor(random * count));
           }),
       );
@@ -918,7 +923,7 @@ function queryPattern(
       return applyShrink(value.target, value.args[0], begin, end, context);
     case 'sub':
       return applyNumericOperation(
-        targetEvents,
+        targetEvents(),
         value.args[0],
         begin,
         context,
@@ -929,14 +934,14 @@ function queryPattern(
     case 'tour':
       return applyTour(value.target, value.args, begin, end, context);
     case 'set':
-      return applySet(targetEvents, value.args[0], begin, context);
+      return applySet(targetEvents(), value.args[0], begin, context);
     case 'transpose':
-      return applyTranspose(targetEvents, value.args[0], begin, context);
+      return applyTranspose(targetEvents(), value.args[0], begin, context);
     case 'voicing':
-      return applyVoicing(targetEvents);
+      return applyVoicing(targetEvents());
     default:
       if (PROPERTY_METHODS.has(value.name)) {
-        return annotateEvents(targetEvents, value.name, value.args, context);
+        return annotateEvents(targetEvents(), value.name, value.args, context);
       }
       throwUnsupportedPattern('method', value.name);
   }
@@ -2099,7 +2104,7 @@ function transformFast(
   context: InternalQueryContext,
 ): PlaybackEvent[] {
   if (!Number.isFinite(factor) || factor <= 0) {
-    return queryPattern(target, begin, end, context);
+    return [];
   }
   const scaled = queryPattern(target, begin * factor, end * factor, context);
   return scaled.map((event) => ({
@@ -3184,7 +3189,7 @@ function resolvePropertyValue(value: ExpressionValue | undefined, cycle: number,
       // Only warn for strings that look like mini notation attempts (contain
       // spaces, brackets, or operators). Simple identifiers like sound names
       // ('bd', 'hh', 'c4') are expected to fail parsing and need no warning.
-      if (/[\s\[\]<>{}*|,]/.test(value)) {
+      if (/[\s[\]<>{}*|,]/.test(value)) {
         coreLogger.warnOnce(
           `TUSSEL_MINI_PARSE_FALLBACK:${value}`,
           `mini notation parse failed for "${value}", treating as literal string: ${error instanceof Error ? error.message : String(error)}`,

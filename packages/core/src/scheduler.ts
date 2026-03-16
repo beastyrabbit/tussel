@@ -7,10 +7,9 @@
  */
 
 import { createLogger, type SceneSpec, TusselCoreError } from '@tussel/ir';
-import type { ExternalDispatchEvent, PlaybackEvent, SchedulerOptions } from './types.js';
-
 // Import from index at call-time only (no circular dep at module init)
 import { collectExternalDispatches, evaluateNumericValue, queryScene } from './index.js';
+import type { SchedulerOptions } from './types.js';
 
 const schedulerLogger = createLogger('tussel/core');
 
@@ -87,7 +86,6 @@ const MAX_WINDOWS_PER_TICK = 20;
 export class Scheduler {
   private clearIntervalFn: NonNullable<SchedulerOptions['clearIntervalFn']>;
   private cycleAtCpsChange = 0;
-  private dispatchErrorCount = 0;
   private intervalHandle: ReturnType<typeof setInterval> | undefined;
   private lastBegin = 0;
   private lastEnd = 0;
@@ -160,7 +158,6 @@ export class Scheduler {
     this.lastEnd = 0;
     this.lastTick = 0;
     this.numTicksSinceCpsChange = 0;
-    this.dispatchErrorCount = 0;
     this.pendingAsyncCount = 0;
   }
 
@@ -170,7 +167,6 @@ export class Scheduler {
   }
 
   private logDispatchError(source: string, error: unknown): void {
-    this.dispatchErrorCount += 1;
     const message = error instanceof Error ? error.message : String(error);
     schedulerLogger.errorOnce(`dispatch:${source}`, `${source} error: ${message}`);
   }

@@ -282,17 +282,17 @@ describe('compareAudioWithMode', () => {
     const a = createWav([1000, 2000, -1000, -2000]);
     const b = createWav([1010, 2010, -990, -1990]);
     // Both thresholds generous enough
-    expect(
-      compareAudioWithMode(a, b, { maxAbsoluteDelta: 50, mode: 'tolerance', rmsDelta: 50 }).ok,
-    ).toBe(true);
+    expect(compareAudioWithMode(a, b, { maxAbsoluteDelta: 50, mode: 'tolerance', rmsDelta: 50 }).ok).toBe(
+      true,
+    );
     // RMS ok, but maxAbsoluteDelta too strict
-    expect(
-      compareAudioWithMode(a, b, { maxAbsoluteDelta: 1, mode: 'tolerance', rmsDelta: 50 }).ok,
-    ).toBe(false);
+    expect(compareAudioWithMode(a, b, { maxAbsoluteDelta: 1, mode: 'tolerance', rmsDelta: 50 }).ok).toBe(
+      false,
+    );
     // maxAbsoluteDelta ok, but RMS too strict
-    expect(
-      compareAudioWithMode(a, b, { maxAbsoluteDelta: 50, mode: 'tolerance', rmsDelta: 1 }).ok,
-    ).toBe(false);
+    expect(compareAudioWithMode(a, b, { maxAbsoluteDelta: 50, mode: 'tolerance', rmsDelta: 1 }).ok).toBe(
+      false,
+    );
   });
 
   it('tolerance mode uses defaults when thresholds not specified', () => {

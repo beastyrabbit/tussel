@@ -1331,7 +1331,7 @@ describe('mini edge cases', () => {
     });
 
     it('F.01 — deep nesting (12 levels) with two leaves', () => {
-      const pattern = '['.repeat(12) + 'a b' + ']'.repeat(12);
+      const pattern = `${'['.repeat(12)}a b${']'.repeat(12)}`;
       const events = showFirstCycle(pattern);
       expect(events).toEqual(['a: 0 - 0.5', 'b: 0.5 - 1']);
     });

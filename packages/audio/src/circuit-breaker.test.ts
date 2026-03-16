@@ -277,7 +277,7 @@ describe('CircuitBreaker', () => {
   });
 
   it('cooldown of 0 transitions to HALF_OPEN immediately', () => {
-    let now = 1000;
+    const now = 1000;
     const cb = new CircuitBreaker({ maxFailures: 1, cooldownMs: 0, now: () => now });
     cb.onFailure();
     // cooldownMs is 0 so it should transition to HALF_OPEN immediately

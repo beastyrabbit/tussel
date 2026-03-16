@@ -91,7 +91,9 @@ export class MidiInputManager {
           }
         }
         if (portIndex === -1) {
-          midiInputLogger.warn(`port "${portOrIndex}" not found`, { code: 'TUSSEL_MIDI_INPUT_PORT_NOT_FOUND' });
+          midiInputLogger.warn(`port "${portOrIndex}" not found`, {
+            code: 'TUSSEL_MIDI_INPUT_PORT_NOT_FOUND',
+          });
           input.closePort();
           return false;
         }
@@ -111,10 +113,9 @@ export class MidiInputManager {
 
       return true;
     } catch (error) {
-      midiInputLogger.warn(
-        `failed to open port: ${error instanceof Error ? error.message : String(error)}`,
-        { code: 'TUSSEL_MIDI_INPUT_OPEN_FAILED' },
-      );
+      midiInputLogger.warn(`failed to open port: ${error instanceof Error ? error.message : String(error)}`, {
+        code: 'TUSSEL_MIDI_INPUT_OPEN_FAILED',
+      });
       return false;
     }
   }
@@ -183,9 +184,7 @@ export class MidiInputManager {
   private warnMissing(): void {
     if (!this.warned) {
       this.warned = true;
-      midiInputLogger.warn(
-        'MIDI input unavailable. Install @julusian/midi for hardware MIDI support.',
-      );
+      midiInputLogger.warn('MIDI input unavailable. Install @julusian/midi for hardware MIDI support.');
     }
   }
 }

@@ -205,7 +205,11 @@ function resolveChannels(
   throw new TusselParseError('Tidal source did not contain a runnable root.');
 }
 
-function translateExpr(expr: string, bindings: Map<string, string>, visited: Set<string> = new Set()): string {
+function translateExpr(
+  expr: string,
+  bindings: Map<string, string>,
+  visited: Set<string> = new Set(),
+): string {
   const trimmed = trimOuter(expr);
   if (!trimmed) {
     throw new TusselParseError('Empty tidal expression');
@@ -226,7 +230,11 @@ function translateExpr(expr: string, bindings: Map<string, string>, visited: Set
   return current;
 }
 
-function translateAtom(expr: string, bindings: Map<string, string>, visited: Set<string> = new Set()): string {
+function translateAtom(
+  expr: string,
+  bindings: Map<string, string>,
+  visited: Set<string> = new Set(),
+): string {
   const trimmed = trimOuter(expr);
   const tokens = tokenize(trimmed);
   if (tokens.length === 0) {
@@ -262,7 +270,12 @@ function translateAtom(expr: string, bindings: Map<string, string>, visited: Set
   throw new TusselParseError(`Unsupported tidal atom: ${expr}`);
 }
 
-function applyPrefix(prefix: string, target: string, bindings: Map<string, string>, visited: Set<string> = new Set()): string {
+function applyPrefix(
+  prefix: string,
+  target: string,
+  bindings: Map<string, string>,
+  visited: Set<string> = new Set(),
+): string {
   const tokens = tokenize(prefix);
   if (tokens.length === 0) {
     return target;
@@ -281,7 +294,12 @@ function applyPrefix(prefix: string, target: string, bindings: Map<string, strin
   return `${target}.${head}(${translateArgument(argument, bindings, visited)})`;
 }
 
-function applyControl(target: string, control: string, bindings: Map<string, string>, visited: Set<string> = new Set()): string {
+function applyControl(
+  target: string,
+  control: string,
+  bindings: Map<string, string>,
+  visited: Set<string> = new Set(),
+): string {
   const tokens = tokenize(control);
   const [head, ...rest] = tokens;
   if (!head) {
@@ -310,7 +328,11 @@ function applyControl(target: string, control: string, bindings: Map<string, str
   return `${target}.${head}(${translateArgument(argument, bindings, visited)})`;
 }
 
-function translateArgument(argument: string, bindings: Map<string, string>, visited: Set<string> = new Set()): string {
+function translateArgument(
+  argument: string,
+  bindings: Map<string, string>,
+  visited: Set<string> = new Set(),
+): string {
   const trimmed = trimOuter(argument);
   if (!trimmed) {
     throw new TusselParseError('Missing tidal argument');

@@ -112,7 +112,12 @@ export function createProgram(deps: CliDeps = defaultDeps): Command {
     .command('import')
     .argument('<entry>', 'External entry file (*.strudel.js, *.strudel.mjs, *.strudel.ts, *.tidal)')
     .option('--entry <binding-or-root>', 'Select the root binding for external whole-script imports')
-    .option('--to <kind>', 'Target format: hydra-js | scene-ts | script-ts | scene-json', parseTarget, 'scene-ts')
+    .option(
+      '--to <kind>',
+      'Target format: hydra-js | scene-ts | script-ts | scene-json',
+      parseTarget,
+      'scene-ts',
+    )
     .option('--out <file>', 'Write output to a file instead of stdout')
     .action(async (entry: string, options: { entry?: string; out?: string; to: NativeSourceKind }) => {
       await deps.importExternalSource(entry, { entry: options.entry });

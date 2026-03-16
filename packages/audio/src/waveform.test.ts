@@ -559,30 +559,32 @@ describe('time modifier audio verification (E.01-E.12)', () => {
 // ---------------------------------------------------------------------------
 
 describe('non-silent output for all instrument types', () => {
-  it.each(['sine', 'saw', 'square', 'triangle'] as const)(
-    '%s oscillator produces non-silent audio (RMS > threshold)',
-    async (waveform) => {
-      const scene = synthScene(waveform, 'a4', {
-        attack: 0.001,
-        decay: 0.001,
-        sustain: 1,
-        release: 0.001,
-        gain: 0.8,
-      });
-      const wav = await renderSceneToWavBuffer(scene, { seconds: 0.5 });
-      const samples = monoWindow(wav, 0.01, 0.49);
+  it.each([
+    'sine',
+    'saw',
+    'square',
+    'triangle',
+  ] as const)('%s oscillator produces non-silent audio (RMS > threshold)', async (waveform) => {
+    const scene = synthScene(waveform, 'a4', {
+      attack: 0.001,
+      decay: 0.001,
+      sustain: 1,
+      release: 0.001,
+      gain: 0.8,
+    });
+    const wav = await renderSceneToWavBuffer(scene, { seconds: 0.5 });
+    const samples = monoWindow(wav, 0.01, 0.49);
 
-      // RMS must be well above silence (normalized samples, threshold ~0.01)
-      const sampleRms = rms(samples);
-      expect(sampleRms).toBeGreaterThan(0.01);
+    // RMS must be well above silence (normalized samples, threshold ~0.01)
+    const sampleRms = rms(samples);
+    expect(sampleRms).toBeGreaterThan(0.01);
 
-      // Peak amplitude must be reasonable — not clipping excessively
-      // (peak < 1.0 for normalized, since gain=0.8 plus engine defaults)
-      const peak = maxAbsSample(samples);
-      expect(peak).toBeGreaterThan(0.02);
-      expect(peak).toBeLessThanOrEqual(1.0);
-    },
-  );
+    // Peak amplitude must be reasonable — not clipping excessively
+    // (peak < 1.0 for normalized, since gain=0.8 plus engine defaults)
+    const peak = maxAbsSample(samples);
+    expect(peak).toBeGreaterThan(0.02);
+    expect(peak).toBeLessThanOrEqual(1.0);
+  });
 
   it('noise produces non-silent audio with broadband energy', async () => {
     const scene = defineScene({
@@ -721,6 +723,7 @@ describe('ADSR envelope phases (detailed)', () => {
     const sustainRms = rmsOfMonoWindow(wav, 0.3, 0.5);
 
     // Amplitude should decrease: peak > mid-decay > sustain (or near-sustain)
+    expect(nearPeakRms).toBeGreaterThan(midDecayRms);
     expect(nearPeakRms).toBeGreaterThan(sustainRms * 1.1);
     // Sustain should still be non-zero
     expect(sustainRms).toBeGreaterThan(0);
@@ -733,13 +736,7 @@ describe('ADSR envelope phases (detailed)', () => {
     const scene = defineScene({
       channels: {
         lead: {
-          node: note('a4 ~')
-            .s('sine')
-            .attack(0.01)
-            .decay(0.01)
-            .sustain(1)
-            .release(0.05)
-            .gain(0.8),
+          node: note('a4 ~').s('sine').attack(0.01).decay(0.01).sustain(1).release(0.05).gain(0.8),
         },
       },
       samples: [],

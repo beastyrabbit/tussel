@@ -59,7 +59,11 @@ describe('audio engine defaults', () => {
   it('rejects local sample refs that escape the project root', async () => {
     const rootDir = await createFixtureDirectory('tussel-audio-root-');
     const outsideDir = await createFixtureDirectory('tussel-audio-outside-');
-    const escapedManifest = await writeFixtureFile(outsideDir, 'strudel.json', JSON.stringify({ bd: 'bd.wav' }));
+    const escapedManifest = await writeFixtureFile(
+      outsideDir,
+      'strudel.json',
+      JSON.stringify({ bd: 'bd.wav' }),
+    );
 
     await expect(
       ensureSamplePackLocal(path.relative(rootDir, escapedManifest), undefined, rootDir),

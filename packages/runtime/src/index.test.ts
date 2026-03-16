@@ -38,7 +38,10 @@ describe('runtime pipeline', () => {
     const firstEntry = await writeFixtureFile(rootDir, 'alpha/shared.script.ts', `s("bd")\n`);
     const secondEntry = await writeFixtureFile(rootDir, 'beta/shared.script.ts', `s("hh")\n`);
 
-    const [firstPrepared, secondPrepared] = await Promise.all([prepareScene(firstEntry), prepareScene(secondEntry)]);
+    const [firstPrepared, secondPrepared] = await Promise.all([
+      prepareScene(firstEntry),
+      prepareScene(secondEntry),
+    ]);
 
     expect(firstPrepared.generatedPath).not.toBe(secondPrepared.generatedPath);
     expect(firstPrepared.canonicalSceneTsPath).not.toBe(secondPrepared.canonicalSceneTsPath);
@@ -98,7 +101,9 @@ describe('runtime pipeline', () => {
           filename: 'custom-param.scene.json',
         },
       ),
-    ).rejects.toThrow(/createParam\(\) and createParams\(\) are not executable yet|Property 'wobble' does not exist/);
+    ).rejects.toThrow(
+      /createParam\(\) and createParams\(\) are not executable yet|Property 'wobble' does not exist/,
+    );
   });
 
   it('round-trips scene-json to scene-ts', async () => {
@@ -126,7 +131,11 @@ describe('runtime pipeline', () => {
 
   it('typechecks scene-ts entries even when the project tsconfig does not enable allowImportingTsExtensions', async () => {
     const rootDir = await createFixtureDirectory();
-    await writeFixtureFile(rootDir, 'package.json', '{"name":"fixture-root","private":true,"type":"module"}\n');
+    await writeFixtureFile(
+      rootDir,
+      'package.json',
+      '{"name":"fixture-root","private":true,"type":"module"}\n',
+    );
     await writeFixtureFile(
       rootDir,
       'tsconfig.json',

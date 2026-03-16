@@ -830,9 +830,9 @@ endin`;
       it('parses a single instrument', () => {
         const result = parseCsoundInstruments('instr MySynth\n  aout oscil 0.5, 440\nendin');
         expect(result).toHaveLength(1);
-        expect(result[0]!.name).toBe('MySynth');
-        expect(result[0]!.body).toBe('aout oscil 0.5, 440');
-        expect(result[0]!.source).toBe('inline');
+        expect(result[0]?.name).toBe('MySynth');
+        expect(result[0]?.body).toBe('aout oscil 0.5, 440');
+        expect(result[0]?.source).toBe('inline');
       });
 
       it('parses multiple instruments', () => {
@@ -849,26 +849,26 @@ endin`;
 
       it('uses custom source label', () => {
         const result = parseCsoundInstruments('instr Test\nendin', 'custom-file.orc');
-        expect(result[0]!.source).toBe('custom-file.orc');
+        expect(result[0]?.source).toBe('custom-file.orc');
       });
 
       it('handles instruments with numeric names', () => {
         const result = parseCsoundInstruments('instr 1\n  aout = 0\nendin');
         expect(result).toHaveLength(1);
-        expect(result[0]!.name).toBe('1');
+        expect(result[0]?.name).toBe('1');
       });
 
       it('handles instruments with leading whitespace', () => {
         const result = parseCsoundInstruments('  instr Padded\n    body\n  endin');
         expect(result).toHaveLength(1);
-        expect(result[0]!.name).toBe('Padded');
+        expect(result[0]?.name).toBe('Padded');
       });
 
       it('parses instrument with empty body', () => {
         const result = parseCsoundInstruments('instr Empty\nendin');
         expect(result).toHaveLength(1);
-        expect(result[0]!.name).toBe('Empty');
-        expect(result[0]!.body).toBe('');
+        expect(result[0]?.name).toBe('Empty');
+        expect(result[0]?.body).toBe('');
       });
     });
 
@@ -883,7 +883,7 @@ endin`;
         registerCsoundCode('instr Dup\n  body1\nendin');
         registerCsoundCode('instr Dup\n  body2\nendin');
         const spec = getCsoundInstrument('Dup');
-        expect(spec!.body).toBe('body2');
+        expect(spec?.body).toBe('body2');
       });
 
       it('returns empty array for code with no instruments', () => {
@@ -892,7 +892,7 @@ endin`;
 
       it('uses custom source label', () => {
         registerCsoundCode('instr FromFile\nendin', 'my-file.orc');
-        expect(getCsoundInstrument('FromFile')!.source).toBe('my-file.orc');
+        expect(getCsoundInstrument('FromFile')?.source).toBe('my-file.orc');
       });
     });
 
@@ -1127,14 +1127,14 @@ endin`;
         const result = normalizeHydraSceneSpec({
           programs: [{ code: '' }, { code: '   ' }, { code: 'valid()' }],
         });
-        expect(result!.programs).toEqual([{ code: 'valid()' }]);
+        expect(result?.programs).toEqual([{ code: 'valid()' }]);
       });
 
       it('filters out program entries that are not objects with code string', () => {
         const result = normalizeHydraSceneSpec({
           programs: [null, 42, 'not-obj', { noCode: true }, { code: 123 }, { code: 'ok()' }],
         });
-        expect(result!.programs).toEqual([{ code: 'ok()' }]);
+        expect(result?.programs).toEqual([{ code: 'ok()' }]);
       });
 
       it('returns undefined when all programs are filtered out and options is empty', () => {

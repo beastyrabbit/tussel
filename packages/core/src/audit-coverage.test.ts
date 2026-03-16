@@ -23,14 +23,12 @@
  */
 import { PROPERTY_METHODS, queryScene } from '@tussel/core';
 import {
-  add,
   cat,
   defineScene,
   note,
   type PatternBuilder,
   perlin,
   rand,
-  rev,
   s,
   saw,
   seq,
@@ -105,10 +103,9 @@ describe('audit 6.4 — stack composition', () => {
 // ===========================================================================
 
 describe('audit 6.4 — fast transforms', () => {
-  it('fast(0) falls back to identity (factor 0 is coerced to 1)', () => {
-    // fast(0) is treated as fast(1) due to fallback logic in the engine
+  it('fast(0) produces silence (zero repetitions per cycle)', () => {
     const events = query(note('0 1').fast(0));
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(0);
   });
 
   it('fast(0.5) halves the event count (equivalent to slow(2))', () => {
@@ -550,22 +547,14 @@ describe('audit 6.4 — nested pattern composition', () => {
   it('mask inside nested stack applies to correct layer', () => {
     const events = query(stack(note('0 1 2 3').mask('1 0 1 0'), note('a b')));
     // Masked layer: 2 events (0, 2); unmasked layer: 2 events (a, b)
-    const numericNotes = events.filter(
-      (e) => typeof e.payload.note === 'number',
-    );
-    const stringNotes = events.filter(
-      (e) => typeof e.payload.note === 'string',
-    );
+    const numericNotes = events.filter((e) => typeof e.payload.note === 'number');
+    const stringNotes = events.filter((e) => typeof e.payload.note === 'string');
     expect(numericNotes).toHaveLength(2);
     expect(stringNotes).toHaveLength(2);
   });
 
   it('cat inside stack sequences across cycles', () => {
-    const events = query(
-      stack(cat(note('a'), note('b')), note('x')),
-      0,
-      2,
-    );
+    const events = query(stack(cat(note('a'), note('b')), note('x')), 0, 2);
     // cat layer: 1 event per cycle (a, then b) = 2 events over 2 cycles
     // note('x') layer: 1 event per cycle = 2 events
     // Total: 4
@@ -1171,9 +1160,7 @@ describe('audit 6.4 — evaluateNumericValue comprehensive', () => {
   });
 
   it('returns undefined for non-expression objects', () => {
-    expect(
-      evaluateNumericValue({ foo: 'bar' } as unknown as ExpressionValue, 0),
-    ).toBeUndefined();
+    expect(evaluateNumericValue({ foo: 'bar' } as unknown as ExpressionValue, 0)).toBeUndefined();
   });
 
   it('evaluates signal expressions (sine at 0)', () => {
