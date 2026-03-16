@@ -1,5 +1,6 @@
 node_modules
 .tussel-cache
+.ref
 coverage
 dist
 *.log
