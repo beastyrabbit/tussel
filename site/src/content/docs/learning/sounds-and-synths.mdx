@@ -1,0 +1,60 @@
+---
+title: Sounds & Synths
+description: Built-in synthesizers and how to use them
+---
+
+Tussel includes built-in synthesizers that work without any sample files. Select them with `.s()` (sound).
+
+## Available Synths
+
+| Name | Character |
+|------|-----------|
+| `sine` | Pure, clean tone — good for pads and gentle melodies |
+| `triangle` | Slightly brighter than sine, with soft harmonics |
+| `saw` | Bright and buzzy — great for basses and leads |
+| `square` | Hollow, clarinet-like — good for chiptune and leads |
+| `noise` | White noise — useful for hi-hats and textures |
+
+## Using Synths
+
+Select a synth with the `.s()` method:
+
+```ts
+note("0 2 4 7").s("sine")
+note("0 2 4 7").s("saw")
+note("0 2 4 7").s("triangle")
+```
+
+## Envelope Controls
+
+Shape how each note fades in and out:
+
+```ts
+note("0 2 4 7").s("sine")
+  .attack(0.02)    // 20ms fade in
+  .release(0.2)    // 200ms fade out
+```
+
+- `.attack(seconds)` — time to reach full volume
+- `.release(seconds)` — time to fade to silence after the note ends
+
+## Combining with Patterns
+
+Synths work with all pattern features:
+
+```ts
+// Arpeggio with alternating synths per cycle
+note("0 2 4 7").s("<sine triangle saw>")
+
+// Fast saw bass with filter
+note("0 0 3 5").s("saw").fast(2).lpf(600)
+
+// Noise texture with high-pass filter
+s("noise ~ noise [~ noise]").hpf(5000)
+```
+
+## Samples vs Synths
+
+- Synths are generated mathematically — always available, no files needed
+- Samples play back audio files — see [Samples](/tussel/learning/samples/)
+- Use `s("bd hh sd")` for samples (by name) or `note("0 2 4").s("sine")` for synths (note + sound)

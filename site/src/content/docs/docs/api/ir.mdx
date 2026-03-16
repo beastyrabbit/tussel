@@ -1,0 +1,83 @@
+---
+title: "API — IR"
+description: "Expression node types, SceneSpec, error taxonomy, structured logging"
+---
+
+`@tussel/ir` defines the intermediate representation — the shared data structures that all other packages consume.
+
+## Scene Specification
+
+```ts
+interface SceneSpec {
+  channels: Record<string, ChannelSpec>;
+  samples: SampleSourceSpec[];
+  transport: TransportSpec;
+  metadata?: MetadataSpec;
+  master?: MasterSpec;
+}
+
+interface ChannelSpec {
+  node: ExpressionNode;
+  gain?: number | ExpressionValue;
+  mute?: boolean;
+  orbit?: string;
+}
+
+interface TransportSpec {
+  cps?: number;
+  bpm?: number;
+}
+```
+
+## Expression Nodes
+
+The core data model for pattern expressions:
+
+```ts
+interface CallExpressionNode {
+  kind: 'call';
+  name: string;
+  exprType: ExprType;
+  args: ExpressionValue[];
+}
+
+interface MethodExpressionNode {
+  kind: 'method';
+  name: string;
+  exprType: ExprType;
+  target: ExpressionNode;
+  args: ExpressionValue[];
+}
+
+type ExprType = 'pattern' | 'signal' | 'scene' | 'value';
+type ExpressionNode = CallExpressionNode | MethodExpressionNode;
+type ExpressionValue = ExpressionNode | PrimitiveValue | ExpressionValue[] | ExpressionRecord;
+```
+
+## Error Taxonomy
+
+| Error Class | Use Case |
+|------------|----------|
+| `TusselValidationError` | Invalid scene structure, schema violations |
+| `TusselCoreError` | Pattern evaluation failures |
+| `TusselInputError` | Bad user input (file not found, bad format) |
+| `TusselHydraError` | Hydra-related issues |
+
+## Structured Logging
+
+```ts
+function createLogger(namespace: string): Logger
+```
+
+Creates a namespaced logger. All packages use this instead of raw `console.log`.
+
+## Utility Functions
+
+| Function | Description |
+|----------|-------------|
+| `createCallExpression(name, args, type)` | Construct a call node |
+| `createMethodExpression(name, target, args, type)` | Construct a method node |
+| `isExpressionNode(value)` | Type guard |
+| `isExpressionValue(value)` | Type guard |
+| `cloneExpressionValue(value)` | Deep clone |
+| `normalizeSampleSource(source)` | Normalize sample source spec |

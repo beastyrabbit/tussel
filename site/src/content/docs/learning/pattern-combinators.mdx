@@ -1,0 +1,81 @@
+---
+title: Pattern Combinators
+description: Combining patterns with stack, jux, off, and superimpose
+---
+
+Pattern combinators merge multiple patterns or create layered variations of a single pattern.
+
+## stack
+
+Plays multiple patterns simultaneously:
+
+```ts
+stack(
+  s("bd hh sd hh"),             // drums
+  note("0 2 4 7").s("sine"),    // melody
+  s("noise ~ noise ~").hpf(5000).gain(0.03)  // texture
+)
+```
+
+`stack` is the fundamental way to build multi-layered compositions. Each pattern runs independently in parallel.
+
+## Channels (named stacking)
+
+For more control, use named channels via `scene()`:
+
+```ts
+scene({
+  channels: {
+    drums: { node: s("bd hh sd hh"), gain: 0.8 },
+    melody: { node: note("0 2 4 7").s("sine"), gain: 0.3 },
+    texture: { node: s("noise").hpf(5000), gain: 0.03 },
+  },
+  master: {},
+});
+```
+
+Named channels can be individually muted, have separate gain, and are addressable by the runtime.
+
+## jux
+
+"Juxtapose" — plays the original pattern in one stereo channel and a transformed version in the other:
+
+```ts
+s("bd sd hh cp").jux(x => x.fast(2))
+// left: bd sd hh cp (normal)
+// right: bd sd hh cp bd sd hh cp (double speed)
+```
+
+## off
+
+Creates a time-shifted, transformed copy layered on top of the original:
+
+```ts
+s("bd sd hh cp").off(0.125, x => x.gain(0.3))
+// original plays normally
+// a quiet copy plays 1/8 cycle later
+```
+
+## superimpose
+
+Like `off` but without the time shift — layers a transformed copy at the same time:
+
+```ts
+note("0 2 4 7").s("sine")
+  .superimpose(x => x.fast(2).gain(0.3))
+// original: 0 2 4 7
+// layered: 0 2 4 7 0 2 4 7 (at 30% volume)
+```
+
+## mask
+
+Selectively silences events using a binary pattern:
+
+```ts
+s("bd hh sd hh").mask("1 1 0 1")
+// plays: bd hh _ hh (third event is silenced)
+```
+
+## Building Up
+
+These combinators are the building blocks of full compositions. See [Example 09](/tussel/examples/09-accumulation/) and [Example 10](/tussel/examples/10-full-composition/) for real-world usage.

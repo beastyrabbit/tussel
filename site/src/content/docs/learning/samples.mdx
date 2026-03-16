@@ -1,0 +1,75 @@
+---
+title: Samples
+description: Loading and playing audio samples
+---
+
+Samples let you play back recorded audio files — drum hits, instrument one-shots, textures, and more.
+
+## Local Sample Packs
+
+Register a local directory with `samples()`:
+
+```ts
+samples("./examples/assets/basic-kit");
+```
+
+The directory should contain a `strudel.json` manifest mapping names to files:
+
+```json
+{
+  "bd": ["bd.wav"],
+  "sd": ["sd.wav", "sd2.wav"],
+  "hh": ["hh.wav"]
+}
+```
+
+## Playing Samples
+
+Use `s()` (sound) with sample names:
+
+```ts
+s("bd hh sd hh")           // kick, hat, snare, hat
+s("bd sd:1 bd sd:2")       // sd:1 and sd:2 select variations
+```
+
+The `:n` suffix selects which variation to use when a name maps to multiple files.
+
+## Banks
+
+Sample packs can include bank-prefixed keys:
+
+```ts
+s("bd sd").bank("crate")   // uses crate_bd, crate_sd from the manifest
+```
+
+## Sample Manipulation
+
+Transform how samples play back:
+
+```ts
+s("bd").speed(0.5)         // half pitch — sounds deeper
+s("bd").speed(2)           // double pitch — sounds higher
+s("bd").cut(1)             // cut group: new hit silences the previous
+s("bd").gain(0.5)          // half volume
+s("bd").pan(-1)            // hard left
+s("bd").pan(1)             // hard right
+```
+
+## Patterns with Samples
+
+Samples work with all pattern features:
+
+```ts
+// Euclidean kick pattern with rimshots
+stack(
+  s("bd(3,8)"),
+  s("rim(5,8)").gain(0.4)
+)
+
+// Alternating sample speed per cycle
+s("bd bd bd bd").speed("<1 0.5 2 1.5>")
+```
+
+## Local-First Philosophy
+
+Tussel is local-first: samples live on your machine. The learning examples use a small kit included in the repository so everything works offline.

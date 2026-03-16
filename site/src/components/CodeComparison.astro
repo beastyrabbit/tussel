@@ -1,0 +1,20 @@
+---
+/**
+ * Renders a 3-column code comparison. Each slot is named:
+ *   tussel, strudel, tidal
+ */
+---
+<div class="code-comparison">
+  <div class="code-panel">
+    <h4>Tussel</h4>
+    <slot name="tussel" />
+  </div>
+  <div class="code-panel">
+    <h4>Strudel</h4>
+    <slot name="strudel" />
+  </div>
+  <div class="code-panel">
+    <h4>Tidal</h4>
+    <slot name="tidal" />
+  </div>
+</div>

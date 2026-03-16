@@ -1,0 +1,48 @@
+---
+title: Conversion Guide
+description: Converting between script-ts, scene-ts, and scene-json
+---
+
+Tussel can convert between `script-ts`, `scene-ts`, and `scene-json`. The conversion path is built around one shared structural scene graph.
+
+## Commands
+
+```bash
+# script-ts → scene-ts
+tussel convert my-scene.script.ts --to scene-ts
+
+# scene-ts → scene-json
+tussel convert my-scene.scene.ts --to scene-json
+
+# scene-ts → script-ts
+tussel convert my-scene.scene.ts --to script-ts
+```
+
+Add `--out <file>` to write the result to disk instead of stdout.
+
+## What Is Preserved
+
+- Channel names and channel structure
+- Pattern and signal expressions
+- `samples`, `transport`, `metadata`, and `master`
+- Stable JSON ordering when targeting `scene-json`
+
+## What Changes
+
+- Formatting is regenerated
+- `script-ts` comments are only preserved through metadata comments, not arbitrary prose
+- Local variable names from authored TS are not reconstructed
+
+## Round-Trip Expectations
+
+Round trips are most reliable when the scene stays inside the live-graph subset:
+
+- Structural values only
+- Named DSL calls and method chains
+- No callbacks or opaque runtime objects
+
+If you stay in that subset, the runtime model remains conversion-friendly even when the pretty-printing is still conservative.
+
+## Limitations
+
+`scene-ts → script-ts` works, but currently emits a compact structural script centered on `scene({...})`. It does not yet recreate a hand-written Strudel-like script with intermediate `const` bindings or stylistic formatting.

@@ -1,0 +1,2 @@
+setcps 0.5
+d1 $ palindrome $ fast 2 $ note "c3 e3 g3 b3" # sound "saw" # lpf 800 # release 0.15

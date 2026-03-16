@@ -1,0 +1,75 @@
+---
+title: "API — Mini"
+description: "Mini notation parser and query functions"
+---
+
+`@tussel/mini` parses and evaluates the compact pattern notation shared by Tidal, Strudel, and Tussel.
+
+## Key Exports
+
+### parseMini
+
+```ts
+function parseMini(source: string): MiniNode
+```
+
+Parses a mini notation string into an AST. Supports literals, rests, groups, slowcat, Euclidean rhythms, repeat, and stretch.
+
+### queryMini
+
+```ts
+function queryMini(
+  source: string,
+  beginCycle: number,
+  endCycle: number
+): MiniEvent[]
+```
+
+Evaluates a mini notation string over a time range, returning timed events.
+
+```ts
+interface MiniEvent {
+  value: string;
+  begin: number;
+  end: number;
+}
+```
+
+### inferMiniSteps
+
+```ts
+function inferMiniSteps(source: string): number
+```
+
+Returns the number of discrete steps in a mini notation pattern. Useful for Euclidean rhythm calculations.
+
+### showFirstCycle
+
+```ts
+function showFirstCycle(source: string): string[]
+```
+
+Returns the event values for the first cycle — useful for debugging and display.
+
+### Mondo Notation
+
+Extended notation format (experimental):
+
+| Export | Description |
+|--------|-------------|
+| `parseMondo(source)` | Parse Mondo notation |
+| `queryMondo(source, begin, end)` | Query Mondo notation |
+| `isMondoNotation(source)` | Detect Mondo notation |
+| `showMondoFirstCycle(source)` | Display first cycle |
+
+## Supported Mini Notation
+
+| Syntax | Example | Meaning |
+|--------|---------|---------|
+| Space-separated | `"bd sd hh"` | Sequence |
+| Rest | `"bd ~ sd"` | Silence |
+| Group | `"bd [hh hh] sd"` | Subdivision |
+| Slowcat | `"<0 3 5 7>"` | Alternation per cycle |
+| Euclidean | `"bd(3,8)"` | Distributed rhythm |
+| Repeat | `"bd*4"` | Repetition |
+| Stretch | `"bd/2"` | Time stretch |

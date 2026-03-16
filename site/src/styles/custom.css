@@ -1,0 +1,71 @@
+/* Experimental banner — persistent amber strip */
+.experimental-banner {
+  background: #b45309;
+  color: #fff;
+  text-align: center;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.experimental-banner a {
+  color: #fde68a;
+  text-decoration: underline;
+}
+
+/* Audio player grid */
+.audio-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.audio-comparison .audio-card {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: var(--sl-color-gray-7);
+}
+
+.audio-card h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--sl-color-gray-2);
+}
+
+.audio-card audio {
+  width: 100%;
+}
+
+/* Code comparison — 3-column grid */
+.code-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.code-comparison .code-panel {
+  min-width: 0;
+}
+
+.code-comparison .code-panel h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--sl-color-gray-2);
+}
+
+/* Make code blocks not overflow */
+.code-comparison pre {
+  overflow-x: auto;
+  font-size: 0.8rem;
+}

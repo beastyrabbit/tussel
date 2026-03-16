@@ -1,0 +1,4 @@
+setcps 0.5
+d1 $ sound "bd(3,8)" # gain 0.9
+d2 $ sound "hh(5,8)" # gain 0.4
+d3 $ sound "cp(2,5)" # gain 0.6 # pan (-0.5)

@@ -1,0 +1,4 @@
+setcps 0.5
+d1 $ fast 2 $ sound "bd bd" # cut 1
+d2 $ sound "hh hh hh hh" # gain 0.4
+d3 $ slow 2 $ sound "sd" # speed 0.5

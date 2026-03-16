@@ -1,0 +1,90 @@
+---
+title: Signals
+description: Continuous modulation with sine, triangle, saw, and other signals
+---
+
+Signals are continuous values that change over time. Use them to modulate parameters like filter cutoff, gain, or pan — adding motion and life to static patterns.
+
+## Available Signals
+
+| Signal | Shape |
+|--------|-------|
+| `sine` | Smooth wave, 0→1→0→-1→0 per cycle |
+| `triangle` / `tri` | Linear ramp up and down |
+| `saw` | Linear ramp up, sharp drop |
+| `square` | Alternates between -1 and 1 |
+| `rand` | Random value each cycle |
+| `perlin` | Smooth random (Perlin noise) |
+
+## Using Signals
+
+Signals are global variables available in script-ts:
+
+```ts
+// Slowly sweep a filter
+note("0 2 4 7").s("saw")
+  .lpf(sine.range(300, 1400).slow(4))
+
+// Pan back and forth
+note("0 2 4 7").s("triangle")
+  .pan(sine.range(-0.6, 0.6).slow(4))
+
+// Modulate gain
+s("hh hh hh hh")
+  .gain(sine.range(0.1, 0.5))
+```
+
+## range
+
+Maps a signal from its default range to a custom range:
+
+```ts
+sine.range(300, 1400)    // maps -1..1 to 300..1400
+sine.range(0, 1)         // maps -1..1 to 0..1
+```
+
+## Time-Scaling Signals
+
+Signals repeat once per cycle by default. Use `.slow()` or `.fast()` to change their rate:
+
+```ts
+sine.slow(4)             // one complete wave every 4 cycles
+sine.fast(2)             // two complete waves per cycle
+```
+
+## Practical Examples
+
+```ts
+// Auto-wah bass
+note("0 0 3 5").s("saw")
+  .lpf(sine.range(200, 2000).slow(2))
+  .release(0.2)
+
+// Tremolo
+note("0 2 4 7").s("sine")
+  .gain(sine.range(0.05, 0.15).fast(4))
+
+// Stereo movement
+s("bd hh sd hh")
+  .pan(tri.range(-0.8, 0.8).slow(8))
+```
+
+## Signals in Scene Format
+
+In `scene-ts`, signals are used the same way through DSL builders:
+
+```ts
+import { defineScene, n, sine } from '@tussel/dsl';
+
+export default defineScene({
+  transport: { cps: 0.75 },
+  samples: [],
+  master: {},
+  channels: {
+    bass: {
+      node: n('0 2 4 7').s('saw')
+        .lpf(sine.range(300, 1400).slow(4)),
+    },
+  },
+});
+```

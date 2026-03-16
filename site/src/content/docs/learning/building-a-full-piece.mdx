@@ -1,0 +1,101 @@
+---
+title: Building a Full Piece
+description: Putting it all together into a multi-channel composition
+---
+
+This guide walks through building a complete piece from scratch, combining everything from the learning hub.
+
+## Start with the Transport
+
+Set your tempo:
+
+```ts
+setcps(0.75);   // 0.75 cycles per second
+```
+
+## Layer 1: Drums
+
+Start with a rhythmic foundation:
+
+```ts
+const drums = s("bd ~ rim sd").mask("1 1 0 1");
+```
+
+- `"bd ~ rim sd"` — kick, rest, rimshot, snare
+- `.mask("1 1 0 1")` — silences the third beat for syncopation
+
+## Layer 2: Hi-Hats
+
+Add motion with steady hi-hats:
+
+```ts
+const hats = s("hh hh hh hh").gain(0.5).late(0.01);
+```
+
+- `.late(0.01)` — nudges timing slightly behind the beat for a relaxed feel
+
+## Layer 3: Bass
+
+A filtered saw wave for low-end warmth:
+
+```ts
+const bass = note("0 0 3 5").s("saw")
+  .slow(2).lpf(700).release(0.3);
+```
+
+- `.slow(2)` — the phrase spans two cycles
+- `.lpf(700)` — low-pass filter keeps it warm
+
+## Layer 4: Melody
+
+A gentle triangle wave counter-melody:
+
+```ts
+const melody = note("7 5 3 0").s("triangle")
+  .gain(0.15).early(0.125);
+```
+
+- `.early(0.125)` — leads the beat by 1/8 cycle
+- `.gain(0.15)` — soft, sits behind the drums
+
+## Assemble
+
+### Quick Stack (script-ts)
+
+```ts
+setcps(0.75);
+stack(drums, hats, bass, melody)
+```
+
+### Named Channels (scene-ts style)
+
+```ts
+setcps(0.75);
+
+scene({
+  channels: {
+    drums: { node: drums, gain: 0.8 },
+    hats: { node: hats },
+    bass: { node: bass, gain: 0.6 },
+    melody: { node: melody },
+  },
+  master: {},
+});
+```
+
+Named channels give you:
+- Individual gain controls
+- Ability to mute/unmute channels
+- Clear structure for the runtime to address
+
+## Live Editing Tips
+
+When running with `--watch`:
+1. Start with drums only, get the groove right
+2. Add layers one at a time — unmute channels or add to the stack
+3. Adjust `.gain()`, `.lpf()`, `.release()` to balance the mix
+4. Try `.every()` or `.palindrome()` on individual layers for variation
+
+## The Full Piece
+
+See [Example 10 — Full Composition](/tussel/examples/10-full-composition/) for the complete version of this pattern with side-by-side Tussel, Strudel, and Tidal notation.

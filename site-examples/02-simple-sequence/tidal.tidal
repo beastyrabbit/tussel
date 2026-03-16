@@ -1,0 +1,2 @@
+setcps 0.5
+d1 $ note "0 2 4 7" # sound "sine" # release 0.2

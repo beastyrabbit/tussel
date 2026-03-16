@@ -1,0 +1,79 @@
+---
+title: "API — Runtime"
+description: "Scene compilation, daemon, format conversion, adapters"
+---
+
+`@tussel/runtime` handles the pipeline from source files to running scenes: parsing, compilation, format conversion, and the live daemon.
+
+## Key Exports
+
+### prepareScene
+
+```ts
+async function prepareScene(
+  filePath: string,
+  options?: PrepareSceneOptions
+): Promise<PreparedScene>
+```
+
+Loads and compiles a scene file (any format) into a `PreparedScene` ready for querying or rendering.
+
+### runScene
+
+```ts
+async function runScene(
+  filePath: string,
+  options?: RunSceneOptions
+): Promise<void>
+```
+
+Runs a scene with the real-time daemon. Supports `--watch` for hot reload.
+
+### renderScene
+
+```ts
+async function renderScene(
+  filePath: string,
+  outputPath: string,
+  options: { seconds: number }
+): Promise<void>
+```
+
+Renders a scene file to WAV.
+
+### convertScene
+
+```ts
+async function convertScene(
+  filePath: string,
+  targetFormat: 'scene-ts' | 'scene-json' | 'script-ts'
+): Promise<string>
+```
+
+Converts a scene file to another format, returning the result as a string.
+
+### checkScene
+
+```ts
+async function checkScene(
+  filePath: string
+): Promise<void>
+```
+
+Validates a scene file without running it. Throws on errors.
+
+### Tidal & Strudel Adapters
+
+| Export | Description |
+|--------|-------------|
+| `translateTidalToStrudelProgram(source)` | Converts Tidal notation to Strudel-compatible JS |
+| `normalizeStrudelSource(source)` | Normalizes Strudel source for compilation |
+| `importExternalSource(source, kind)` | Imports Strudel/Tidal sources into the Tussel pipeline |
+
+### Source Kinds
+
+```ts
+type NativeSourceKind = 'scene-ts' | 'scene-json' | 'script-ts' | 'hydra-js';
+type ExternalSourceKind = 'strudel-js' | 'strudel-mjs' | 'strudel-ts' | 'tidal';
+type SourceKind = NativeSourceKind | ExternalSourceKind;
+```

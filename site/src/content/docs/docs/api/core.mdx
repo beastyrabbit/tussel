@@ -1,0 +1,63 @@
+---
+title: "API — Core"
+description: "Pattern query engine, scheduling, and method dispatch"
+---
+
+`@tussel/core` is the pattern evaluation engine. It takes `SceneSpec` structures and produces timed musical events.
+
+## Key Exports
+
+### queryScene
+
+```ts
+function queryScene(
+  scene: SceneSpec,
+  beginCycle: number,
+  endCycle: number,
+  options?: QueryOptions
+): PlaybackEvent[]
+```
+
+The main entry point: queries a scene for all events in a time range. Returns an array of `PlaybackEvent` objects with timing, pitch, sound source, and effect parameters.
+
+### Scheduler
+
+```ts
+class Scheduler {
+  constructor(options: SchedulerOptions)
+  start(): void
+  stop(): void
+  updateScene(scene: SceneSpec): void
+}
+```
+
+Real-time scheduling loop that repeatedly calls `queryScene` in lookahead windows and dispatches events to the audio engine.
+
+### PROPERTY_METHODS
+
+```ts
+const PROPERTY_METHODS: Set<string>
+```
+
+Set of method names that are simple property annotations (gain, pan, speed, etc.) and bypass the main switch dispatch.
+
+### evaluateNumericValue
+
+```ts
+function evaluateNumericValue(
+  value: ExpressionValue | undefined,
+  cycle: number
+): number | undefined
+```
+
+Resolves an expression value to a number at a given cycle position. Handles signals, patterns, and static values.
+
+### collectExternalDispatches
+
+```ts
+function collectExternalDispatches(
+  events: PlaybackEvent[]
+): ExternalDispatch[]
+```
+
+Extracts MIDI, OSC, and other external output events from a query result.
