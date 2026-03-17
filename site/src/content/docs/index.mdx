@@ -1,0 +1,78 @@
+---
+title: Tussel
+description: Local-first TypeScript livecoding runtime inspired by Tidal and Strudel
+template: splash
+hero:
+  title: Tussel
+  tagline: Local-first TypeScript livecoding runtime inspired by Tidal and Strudel
+  actions:
+    - text: Get Started
+      link: /tussel/learning/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: View Examples
+      link: /tussel/examples/01-single-sound/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/beastyrabbit/tussel
+      icon: external
+      variant: minimal
+      attrs:
+        rel: me
+---
+
+import CodeComparison from '../../components/CodeComparison.astro';
+
+## What is Tussel?
+
+Tussel is a **terminal-first livecoding daemon** for pattern-based music. It takes the musical ideas from [Tidal Cycles](https://tidalcycles.org/) and [Strudel](https://strudel.cc/), wraps them in typed TypeScript, and runs entirely on your local machine — no browser required.
+
+Write patterns. Hear them instantly. Edit live.
+
+## Quick Taste
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+setcps(0.75);
+stack(
+  s("bd ~ rim sd"),
+  note("0 2 4 7").s("sine")
+    .release(0.2)
+)
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+setcps(0.75)
+stack(
+  s("bd ~ rim sd"),
+  note("0 2 4 7").s("sine")
+    .release(0.2)
+)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+setcps 0.75
+d1 $ sound "bd ~ rim sd"
+d2 $ note "0 2 4 7"
+  # sound "sine"
+  # release 0.3
+```
+  </Fragment>
+</CodeComparison>
+
+## Why Tussel?
+
+- **TypeScript-native** — full type safety, editor autocomplete, familiar tooling
+- **Terminal daemon** — no browser, no GUI overhead; runs in your terminal with live reload
+- **Three formats** — `script-ts` (livecoding), `scene-ts` (typed modules), `scene-json` (tooling)
+- **Strudel/Tidal compatible** — growing parity with existing livecoding ecosystems
+- **Local-first** — your samples, your machine, offline by default
+
+## Project Status
+
+Tussel is **experimental and under active development**. The core pattern engine, DSL, and audio rendering work well for the supported subset of features. Full Strudel/Tidal parity is an ongoing effort.
+
+See the [feature comparison](/tussel/compare/feature-matrix/) for current coverage.

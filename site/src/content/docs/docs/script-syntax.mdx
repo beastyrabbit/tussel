@@ -1,0 +1,69 @@
+---
+title: Script Syntax
+description: The livecoding-friendly script format
+---
+
+`*.script.ts` is the closest authoring mode to Strudel-style livecoding, while staying valid TypeScript.
+
+## Contract
+
+- The file must end with a bare top-level expression
+- That final expression becomes the live root
+- Top-level `const` and `let` bindings are allowed
+- Normal `import` statements are allowed
+- Metadata comments (`// "Title"` and `// @by name`) are collected into `scene.metadata`
+
+The most predictable root is `scene({...})`, but a bare pattern expression like `stack(...)` also works.
+
+## Available Globals
+
+**Patterns:** `stack`, `s`, `sound`, `n`, `note`, `chord`, `fast`, `slow`, `ply`, `silence`, `value`
+
+**Signals:** `sine`, `triangle`, `tri`, `square`, `saw`, `rand`, `perlin`
+
+**Helpers:** `mini`, `m`, `scene`, `samples`, `setcps`, `setbpm`, `defineScene`
+
+## Example
+
+```ts
+// "Live Reload"
+// @guide 05-live-reload
+setcps(0.7);
+
+const pulse = n('0 2 4 7').s('sine').attack(0.02).release(0.2);
+
+scene({
+  channels: {
+    pulse: {
+      node: pulse.late(0.01),
+      gain: 0.1,
+      orbit: 'pulse',
+    },
+  },
+  master: {},
+});
+```
+
+## String Helpers
+
+String literals are patched with structural timing/math helpers:
+
+```ts
+'<1 0 1 1>/4'.fast(2)
+'<0 1>'.early(0.25)
+'<1 0 1 0>'.slow(2)
+```
+
+These produce structural pattern values, useful for masks and parameter modulation.
+
+## Best Practices
+
+- Prefer `scene({...})` when you want stable named channels
+- Keep reusable fragments in `const` bindings rather than duplicating long chains
+- Use `samples(...)` and `setcps(...)` at top level
+
+## Limitations
+
+- The last top-level statement must be an expression
+- The runtime only accepts structural values in the live graph — no functions or callbacks
+- Some advanced Strudel/Tidal methods exist on the builders but are not yet fully implemented musically

@@ -1,0 +1,60 @@
+---
+title: "03 — Layered Stack"
+description: Combining multiple patterns with stack
+---
+
+import CodeComparison from '../../../components/CodeComparison.astro';
+import AudioPlayer from '../../../components/AudioPlayer.astro';
+
+`stack` plays multiple patterns simultaneously — like tracks in a DAW running in parallel.
+
+## Code
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+setcps(0.5);
+stack(
+  s("bd hh sd hh"),
+  note("0 2 4 7").s("triangle")
+    .gain(0.3).release(0.2)
+)
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+setcps(0.5)
+stack(
+  s("bd hh sd hh"),
+  note("0 2 4 7").s("triangle")
+    .gain(0.3).release(0.2)
+)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+setcps 0.5
+d1 $ sound "bd hh sd hh"
+d2 $ note "0 2 4 7"
+  # sound "triangle"
+  # gain 0.3
+  # release 0.2
+```
+  </Fragment>
+</CodeComparison>
+
+## Listen
+
+<div class="audio-comparison">
+  <AudioPlayer label="Tussel" src="audio/03-layered-stack/tussel" />
+  <AudioPlayer label="Strudel" src="audio/03-layered-stack/strudel" />
+  <AudioPlayer label="Tidal" src="audio/03-layered-stack/tidal" />
+</div>
+
+## What's Happening
+
+- `stack(...)` combines two patterns so they play at the same time
+- The first pattern uses `s()` (sound) with sample names: kick, hi-hat, snare, hi-hat
+- The second pattern uses `note()` with a triangle wave synth
+- `.gain(0.3)` reduces the synth volume so the drums stay prominent
+- In Tidal, stacking is done by assigning patterns to separate channels (`d1`, `d2`)

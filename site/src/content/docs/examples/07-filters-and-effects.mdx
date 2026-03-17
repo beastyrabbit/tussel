@@ -1,0 +1,74 @@
+---
+title: "07 — Filters & Effects"
+description: Adding delay, room reverb, and filter sweeps
+---
+
+import CodeComparison from '../../../components/CodeComparison.astro';
+import AudioPlayer from '../../../components/AudioPlayer.astro';
+
+Effects transform sounds after synthesis. Low-pass filters remove high frequencies, delay creates echoes, and room reverb adds space.
+
+## Code
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+setcps(0.5);
+stack(
+  s("bd sd:1 bd sd:2")
+    .room(0.3).delay(0.25),
+  note("0 3 5 7").s("saw")
+    .lpf(600).release(0.2)
+    .gain(0.3),
+  s("hh hh hh hh")
+    .gain(0.25).pan(0.5)
+    .delay(0.15)
+)
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+setcps(0.5)
+stack(
+  s("bd sd:1 bd sd:2")
+    .room(0.3).delay(0.25),
+  note("0 3 5 7").s("saw")
+    .lpf(600).release(0.2)
+    .gain(0.3),
+  s("hh hh hh hh")
+    .gain(0.25).pan(0.5)
+    .delay(0.15)
+)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+setcps 0.5
+d1 $ sound "bd sd:1 bd sd:2"
+  # room 0.3 # delay 0.25
+d2 $ note "0 3 5 7"
+  # sound "saw" # lpf 600
+  # release 0.2 # gain 0.3
+d3 $ sound "hh hh hh hh"
+  # gain 0.25 # pan 0.5
+  # delay 0.15
+```
+  </Fragment>
+</CodeComparison>
+
+## Listen
+
+<div class="audio-comparison">
+  <AudioPlayer label="Tussel" src="audio/07-filters-and-effects/tussel" />
+  <AudioPlayer label="Strudel" src="audio/07-filters-and-effects/strudel" />
+  <AudioPlayer label="Tidal" src="audio/07-filters-and-effects/tidal" />
+</div>
+
+## What's Happening
+
+- `.room(0.3)` adds 30% reverb, giving the drums a sense of space
+- `.delay(0.25)` adds a quarter-cycle delay echo
+- `.lpf(600)` is a low-pass filter at 600Hz — the saw wave sounds muffled and warm
+- `sd:1` and `sd:2` select different snare variations from the sample bank
+- `.pan(0.5)` moves hi-hats to the right stereo channel
+- Effects chain from left to right: the order you write them is the order they apply

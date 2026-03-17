@@ -1,0 +1,105 @@
+---
+title: Notation Mapping
+description: How to translate patterns between Tussel, Strudel, and Tidal
+---
+
+This page maps common patterns from one system to the others, helping you translate between notations.
+
+## From Tidal to Tussel/Strudel
+
+| Tidal | Tussel / Strudel |
+|-------|-----------------|
+| `d1 $ sound "bd sd"` | `s("bd sd")` |
+| `# gain 0.5` | `.gain(0.5)` |
+| `# lpf 800` | `.lpf(800)` |
+| `# pan 0.5` | `.pan(0.5)` |
+| `# speed 2` | `.speed(2)` |
+| `# room 0.3` | `.room(0.3)` |
+| `# delay 0.25` | `.delay(0.25)` |
+| `fast 2 $` | `.fast(2)` |
+| `slow 2 $` | `.slow(2)` |
+| `palindrome $` | `.palindrome()` |
+| `every 3 (fast 2) $` | `.every(3, x => x.fast(2))` |
+| `jux (fast 2) $` | `.jux(x => x.fast(2))` |
+| `off 0.125 (# gain 0.3) $` | `.off(0.125, x => x.gain(0.3))` |
+| `mask "1 1 0 1" $` | `.mask("1 1 0 1")` |
+| `note "0 2 4 7"` | `note("0 2 4 7")` |
+| `setcps 0.75` | `setcps(0.75)` |
+
+## Key Translation Rules
+
+### Property Application
+Tidal uses `#` to apply properties. Tussel/Strudel use method chaining:
+
+```haskell
+-- Tidal
+d1 $ sound "bd sd" # gain 0.5 # pan 0.3 # lpf 800
+```
+
+```ts
+// Tussel / Strudel
+s("bd sd").gain(0.5).pan(0.3).lpf(800)
+```
+
+### Transform Application
+Tidal applies transforms with `$` (right-to-left). Tussel/Strudel chain left-to-right:
+
+```haskell
+-- Tidal (read right-to-left: palindrome of fast 2 of the pattern)
+d1 $ palindrome $ fast 2 $ sound "bd sd hh cp"
+```
+
+```ts
+// Tussel (read left-to-right)
+s("bd sd hh cp").fast(2).palindrome()
+```
+
+### Multi-Channel
+Tidal uses numbered channels. Tussel uses `stack` or named channels:
+
+```haskell
+-- Tidal
+d1 $ sound "bd sd"
+d2 $ note "0 2 4 7" # sound "sine"
+```
+
+```ts
+// Tussel — stack
+stack(s("bd sd"), note("0 2 4 7").s("sine"))
+
+// Tussel — named channels
+scene({
+  channels: {
+    drums: { node: s("bd sd") },
+    melody: { node: note("0 2 4 7").s("sine") },
+  },
+  master: {},
+});
+```
+
+### Function Arguments
+Tidal uses partial application. Tussel/Strudel use arrow functions:
+
+```haskell
+-- Tidal
+d1 $ every 3 (fast 2) $ sound "bd sd hh cp"
+```
+
+```ts
+// Tussel / Strudel
+s("bd sd hh cp").every(3, x => x.fast(2))
+```
+
+## Mini Notation (Shared)
+
+Mini notation is identical across all three systems:
+
+| Notation | Meaning |
+|----------|---------|
+| `"bd sd hh"` | Sequence — evenly spaced |
+| `"bd ~ sd"` | Rest (`~` = silence) |
+| `"bd [hh hh] sd"` | Sub-group — two hh's share one slot |
+| `"<0 3 5 7>"` | Slowcat — alternates per cycle |
+| `"bd(3,8)"` | Euclidean — 3 hits in 8 steps |
+| `"bd*4"` | Repeat — 4 kicks |
+| `"bd/2"` | Stretch — one kick over 2 cycles |

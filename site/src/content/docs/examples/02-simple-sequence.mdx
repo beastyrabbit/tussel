@@ -1,0 +1,49 @@
+---
+title: "02 — Simple Sequence"
+description: Sequencing multiple notes in a pattern
+---
+
+import CodeComparison from '../../../components/CodeComparison.astro';
+import AudioPlayer from '../../../components/AudioPlayer.astro';
+
+A sequence of four notes creates a simple melodic loop. Notes are evenly spaced across one cycle.
+
+## Code
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+setcps(0.5);
+note("0 2 4 7").s("sine").release(0.2)
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+setcps(0.5)
+note("0 2 4 7").s("sine").release(0.2)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+setcps 0.5
+d1 $ note "0 2 4 7"
+  # sound "sine"
+  # release 0.2
+```
+  </Fragment>
+</CodeComparison>
+
+## Listen
+
+<div class="audio-comparison">
+  <AudioPlayer label="Tussel" src="audio/02-simple-sequence/tussel" />
+  <AudioPlayer label="Strudel" src="audio/02-simple-sequence/strudel" />
+  <AudioPlayer label="Tidal" src="audio/02-simple-sequence/tidal" />
+</div>
+
+## What's Happening
+
+- `"0 2 4 7"` is **mini notation** — four values separated by spaces are evenly distributed across one cycle
+- Each number is a MIDI note offset: C, D, E, G (a major pentatonic fragment)
+- The pattern repeats every cycle, creating a continuous melodic loop
+- `.release(0.2)` gives each note a short fade-out so they don't clip

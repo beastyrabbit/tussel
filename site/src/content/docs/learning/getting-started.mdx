@@ -1,0 +1,83 @@
+---
+title: Getting Started
+description: Install Tussel and play your first sound
+---
+
+## Prerequisites
+
+- **Node.js** 20 or later
+- **pnpm** (recommended) or npm
+
+## Install
+
+```bash
+git clone https://github.com/beastyrabbit/tussel.git
+cd tussel
+pnpm install
+```
+
+## Your First Sound
+
+Create a file called `my-first.script.ts`:
+
+```ts
+setcps(0.75);
+
+scene({
+  channels: {
+    main: {
+      node: n('0 2 4 7').s('sine').attack(0.02).release(0.2),
+      gain: 0.1,
+    },
+  },
+  master: {},
+});
+```
+
+## Run It
+
+```bash
+# Check for errors
+pnpm exec tussel check ./my-first.script.ts
+
+# Play live with hot reload
+pnpm exec tussel run ./my-first.script.ts --watch
+
+# Render to a WAV file
+pnpm exec tussel render ./my-first.script.ts --out ./my-first.wav --seconds 8
+```
+
+While `run --watch` is active:
+- Save a valid change → Tussel reloads the scene live
+- Save an invalid change → Tussel prints diagnostics, last good scene keeps playing
+- Stop with `Ctrl-C`
+
+## Three File Formats
+
+Tussel supports three equivalent ways to write scenes:
+
+| Format | Extension | Best For |
+|--------|-----------|----------|
+| **script-ts** | `.script.ts` | Livecoding — loose, expressive, Strudel-like |
+| **scene-ts** | `.scene.ts` | Typed modules — explicit, `defineScene()` |
+| **scene-json** | `.scene.json` | Tooling — pure structural data |
+
+All three formats describe the same underlying `SceneSpec`. You can convert between them:
+
+```bash
+pnpm exec tussel convert my-scene.script.ts --to scene-ts
+pnpm exec tussel convert my-scene.scene.ts --to scene-json
+```
+
+## What Happens Internally
+
+1. `script-ts` is transformed into generated `scene-ts`
+2. `scene-json` is also transformed into generated `scene-ts`
+3. The generated TS module is typechecked and executed
+4. The resulting structural `SceneSpec` is sent to the scheduler and audio engine
+
+## Next Steps
+
+- [Mini Notation](/tussel/learning/mini-notation/) — learn the pattern language
+- [Sounds & Synths](/tussel/learning/sounds-and-synths/) — explore available sound sources
+- [Examples](/tussel/examples/01-single-sound/) — side-by-side audio comparisons

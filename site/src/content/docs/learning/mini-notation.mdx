@@ -1,0 +1,87 @@
+---
+title: Mini Notation
+description: The compact pattern language shared by Tidal, Strudel, and Tussel
+---
+
+Mini notation is a compact textual language for describing rhythmic and melodic patterns. It's shared across Tidal Cycles, Strudel, and Tussel.
+
+## Basics
+
+Values separated by spaces are evenly distributed across one cycle:
+
+```ts
+note("0 2 4 7")    // 4 notes, each takes 1/4 of the cycle
+s("bd hh sd hh")   // 4 drum hits per cycle
+```
+
+## Rests
+
+Use `~` for silence:
+
+```ts
+s("bd ~ sd ~")     // kick, rest, snare, rest
+```
+
+## Sub-groups
+
+Square brackets `[]` subdivide a step:
+
+```ts
+s("bd [hh hh] sd hh")  // the two hh's share the second quarter
+```
+
+## Slowcat (Alternation)
+
+Angle brackets `<>` alternate values across cycles:
+
+```ts
+note("<0 3 5 7>")   // plays 0 on cycle 1, 3 on cycle 2, 5 on cycle 3...
+```
+
+## Euclidean Rhythms
+
+`(k,n)` distributes `k` hits across `n` steps:
+
+```ts
+s("bd(3,8)")   // 3 kicks in 8 steps: x..x..x.
+s("hh(5,8)")   // 5 hats in 8 steps: x.xx.xx.
+```
+
+## Repeat
+
+`*n` repeats a step:
+
+```ts
+s("bd*4 sd")   // four kicks then one snare
+```
+
+## Stretch
+
+`/n` stretches a pattern across multiple cycles:
+
+```ts
+note("0 2 4 7/2")  // the "7" takes 2 cycles to complete
+```
+
+## Tagged Helpers
+
+Tussel provides tagged template literals for mini notation:
+
+```ts
+const lead = mini`0 [2 4] <7 9>`;
+const pulse = m`noise ~ [noise noise] ~`;
+```
+
+`mini` and `m` are aliases — they produce the same string-shaped mini source.
+
+## Current Support
+
+The Tussel mini parser supports:
+- Literals and rests (`~`)
+- Groups and sub-groups (`[]`)
+- Slowcat alternation (`<>`)
+- Euclidean rhythms `(k,n)`
+- Repeat (`*n`)
+- Stretch (`/n`)
+
+This covers the most commonly used subset of Tidal/Strudel mini notation.

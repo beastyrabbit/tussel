@@ -1,0 +1,53 @@
+---
+title: Philosophy
+description: How Tussel compares to Tidal Cycles and Strudel
+---
+
+Tussel, [Tidal Cycles](https://tidalcycles.org/), and [Strudel](https://strudel.cc/) share a core idea: **patterns are first-class values that generate musical events over time**. The differences are in language, runtime, and design philosophy.
+
+## Shared DNA
+
+All three systems:
+- Use **mini notation** (`"bd sd [hh hh]"`) for compact pattern entry
+- Support **Euclidean rhythms** (`(k,n)`)
+- Provide **time transforms** (`fast`, `slow`, `palindrome`)
+- Offer **pattern combinators** (`stack`, `jux`, `off`, `superimpose`)
+- Enable **live coding** with hot reload
+
+## Where They Diverge
+
+### Tidal Cycles
+- **Language:** Haskell
+- **Runtime:** SuperCollider (SuperDirt)
+- **Strengths:** Deepest pattern algebra, largest community, most mature
+- **Trade-off:** Requires Haskell + SuperCollider installation, steeper learning curve
+
+### Strudel
+- **Language:** JavaScript
+- **Runtime:** Web Audio API (browser)
+- **Strengths:** Zero install (runs in browser), excellent documentation, active development
+- **Trade-off:** Browser-only, no offline/headless mode
+
+### Tussel
+- **Language:** TypeScript
+- **Runtime:** Node.js + Web Audio (offline rendering)
+- **Strengths:** Type safety, terminal-first, offline rendering, three equivalent formats
+- **Trade-off:** Experimental, smaller feature set, no GUI
+
+## Design Choices
+
+### TypeScript-First
+Tussel chose TypeScript for type safety and editor support. Pattern builders have full autocomplete. Invalid patterns are caught at compile time, not runtime.
+
+### Terminal Daemon
+No browser required. Tussel runs as a terminal process with file-watching hot reload. This fits workflows where the editor is the primary interface.
+
+### Three Formats
+`script-ts` for livecoding, `scene-ts` for typed modules, `scene-json` for tooling. All three represent the same structural `SceneSpec` and can be converted between each other.
+
+### Local-First
+Samples live on your machine. No network requests during playback. The `render` command produces WAV files without any audio hardware.
+
+## Current Status
+
+Tussel is **experimental**. It covers the most commonly used patterns and transforms from Tidal/Strudel, but not the full breadth. See the [Feature Matrix](/tussel/compare/feature-matrix/) for specifics.

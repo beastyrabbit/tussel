@@ -1,0 +1,73 @@
+---
+title: "API — DSL"
+description: "Pattern and signal builders, scene helpers, transform factories"
+---
+
+`@tussel/dsl` is the main authoring API. It provides builder classes for constructing patterns and signals, plus helper functions for common operations.
+
+## Pattern Constructors
+
+| Function | Description |
+|----------|-------------|
+| `s(source)` | Create a pattern from sample/sound names |
+| `n(source)` / `note(source)` | Create a pattern from note values |
+| `sound(source)` | Alias for `s()` |
+| `chord(source)` | Create a chord pattern |
+| `stack(...patterns)` | Play multiple patterns simultaneously |
+| `cat(...patterns)` / `seq(...patterns)` | Concatenate patterns sequentially |
+| `silence` | An empty pattern |
+
+## PatternBuilder
+
+Returned by `s()`, `n()`, `note()`, `stack()`, etc. Supports method chaining.
+
+**Sound & Properties:**
+`.s()`, `.gain()`, `.pan()`, `.speed()`, `.cut()`, `.attack()`, `.release()`, `.bank()`
+
+**Effects:**
+`.lpf()`, `.hpf()`, `.delay()`, `.room()`
+
+**Time Transforms:**
+`.fast()`, `.slow()`, `.palindrome()`, `.early()`, `.late()`, `.ply()`, `.rev()`
+
+**Combinators:**
+`.stack()`, `.jux()`, `.off()`, `.superimpose()`, `.mask()`, `.every()`, `.sometimes()`
+
+**Scales:**
+`.scale()`, `.transpose()`
+
+## Signal Constructors
+
+| Constant | Description |
+|----------|-------------|
+| `sine` | Smooth sine wave signal |
+| `triangle` / `tri` | Triangle wave signal |
+| `saw` | Sawtooth wave signal |
+| `square` | Square wave signal |
+| `rand` | Random signal |
+| `perlin` | Smooth random (Perlin noise) |
+
+## SignalBuilder
+
+Returned by signal constants. Supports:
+`.range(min, max)`, `.fast()`, `.slow()`
+
+## Scene Helpers
+
+| Function | Description |
+|----------|-------------|
+| `defineScene(spec)` | Create a typed `SceneSpec` for `scene-ts` files |
+| `scene(spec)` | Create a scene in `script-ts` mode |
+| `samples(path)` | Register a sample pack |
+| `setcps(cps)` | Set cycles per second |
+| `setbpm(bpm)` | Set beats per minute |
+
+## Transform Factories
+
+Standalone versions of pattern transforms, usable as higher-order functions:
+
+`fast`, `slow`, `ply`, `add`, `sub`, `mul`, `div`, `compress`, `contract`, `drop`
+
+## String Prototype Extensions
+
+`installStringPrototypeExtensions()` / `uninstallStringPrototypeExtensions()` — enables `"bd sd".fast(2)` syntax. Ref-counted, installed automatically in script mode.

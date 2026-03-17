@@ -1,0 +1,57 @@
+---
+title: Scene TS Reference
+description: The typed module format for Tussel scenes
+---
+
+`*.scene.ts` is the explicit typed module format. Use it when you want a durable, version-controlled scene definition.
+
+## Contract
+
+- The file exports `defineScene(...)` as its default export
+- Use imports from `@tussel/dsl` for pattern and signal builders
+- The exported object must resolve to a structural `SceneSpec`
+
+## Minimal Shape
+
+```ts
+import { defineScene, n } from '@tussel/dsl';
+
+export default defineScene({
+  samples: [],
+  transport: { cps: 0.75 },
+  master: {},
+  channels: {
+    main: {
+      node: n('0 2 4 7'),
+    },
+  },
+});
+```
+
+## Top-Level Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `channels` | Yes | Map of channel names to channel specs |
+| `transport` | Yes | Usually `{ cps: ... }` or `{ bpm: ... }` |
+| `samples` | Yes | Array of `{ ref: string }` sample sources |
+| `metadata` | No | Arbitrary structural metadata |
+| `master` | No | Structural master settings |
+
+## Channel Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `node` | Yes | Pattern expression for the channel |
+| `gain` | No | Number or structural expression |
+| `mute` | No | Boolean |
+| `orbit` | No | String tag carried with the channel |
+
+## Notes on `master`
+
+`master` is part of the structural scene model and conversion path. Currently it is mainly carried as data; the audio backend does not yet expose a deep master-effects pipeline.
+
+## Limitations
+
+- `defineScene` rejects non-structural values (functions, promises, classes, custom instances)
+- This format is stable for the current runtime but does not imply full Strudel/Tidal semantic parity for every builder method

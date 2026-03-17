@@ -1,0 +1,73 @@
+---
+title: Time Modifiers
+description: Fast, slow, palindrome, and other time transforms
+---
+
+Time modifiers change when pattern events occur without changing what they are. They're one of the most powerful tools in pattern-based livecoding.
+
+## fast
+
+Speeds up a pattern by a factor:
+
+```ts
+s("bd sd hh cp").fast(2)    // 8 events per cycle instead of 4
+s("bd sd hh cp").fast(0.5)  // 2 events per cycle (same as slow(2))
+```
+
+## slow
+
+Stretches a pattern across more cycles:
+
+```ts
+note("0 2 4 7").s("sine").slow(2)    // pattern takes 2 cycles to complete
+note("0 2 4 7").s("sine").slow(4)    // pattern takes 4 cycles
+```
+
+## palindrome
+
+Reverses the pattern every other cycle:
+
+```ts
+note("0 2 4 7").s("sine").palindrome()
+// cycle 1: 0 2 4 7
+// cycle 2: 7 4 2 0
+// cycle 3: 0 2 4 7
+// ...
+```
+
+## late / early
+
+Nudge pattern timing forward or backward:
+
+```ts
+s("hh hh hh hh").late(0.01)     // slightly behind the beat (laid back)
+s("hh hh hh hh").early(0.125)   // 1/8 cycle ahead (pushing)
+```
+
+These are essential for creating groove and human feel in mechanical patterns.
+
+## Combining Time Modifiers
+
+Time transforms compose freely:
+
+```ts
+note("c3 e3 g3 b3").s("saw")
+  .fast(2)            // double speed
+  .palindrome()       // reverse every other cycle
+  .slow(2)            // but stretch the whole thing to 2 cycles
+```
+
+The order matters: transforms apply left-to-right. `fast(2).slow(2)` cancels out. `palindrome().fast(2)` palindromes first, then speeds up.
+
+## Conditional Time Transforms
+
+Apply time changes only sometimes:
+
+```ts
+s("bd sd hh cp").every(3, x => x.fast(2))
+// cycles 1-2: normal
+// cycle 3: double speed
+// repeat
+```
+
+See [Examples 08](/tussel/examples/08-conditional-modifiers/) for more on conditional modifiers.

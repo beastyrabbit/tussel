@@ -1,0 +1,117 @@
+---
+title: Feature Matrix
+description: What Tussel supports compared to Strudel and Tidal
+---
+
+Current feature support across the three systems. Tussel is experimental — this matrix reflects the current state, not planned features.
+
+## Pattern Fundamentals
+
+| Feature | Tussel | Strudel | Tidal |
+|---------|--------|---------|-------|
+| Mini notation | Yes | Yes | Yes |
+| Rests (`~`) | Yes | Yes | Yes |
+| Sub-groups (`[]`) | Yes | Yes | Yes |
+| Slowcat (`<>`) | Yes | Yes | Yes |
+| Euclidean `(k,n)` | Yes | Yes | Yes |
+| Repeat (`*n`) | Yes | Yes | Yes |
+| Stretch (`/n`) | Yes | Yes | Yes |
+| Polymetric `{a,b}` | No | Yes | Yes |
+
+## Sound Sources
+
+| Feature | Tussel | Strudel | Tidal |
+|---------|--------|---------|-------|
+| Sine oscillator | Yes | Yes | Yes |
+| Triangle oscillator | Yes | Yes | Yes |
+| Saw oscillator | Yes | Yes | Yes |
+| Square oscillator | Yes | Yes | Yes |
+| Noise | Yes | Yes | Yes |
+| Sample playback | Yes | Yes | Yes |
+| Sample banks | Yes | Yes | Yes |
+| MIDI output | Partial | Yes | Yes |
+| OSC output | Partial | Yes | Yes |
+| SuperDirt | No | No | Yes |
+
+## Time Transforms
+
+| Feature | Tussel | Strudel | Tidal |
+|---------|--------|---------|-------|
+| `fast` / `slow` | Yes | Yes | Yes |
+| `palindrome` | Yes | Yes | Yes |
+| `early` / `late` | Yes | Yes | Yes |
+| `ply` | Yes | Yes | Yes |
+| `rev` | Partial | Yes | Yes |
+| `chunk` | No | Yes | Yes |
+| `hurry` | No | Yes | Yes |
+| `spaceOut` | No | Yes | Yes |
+
+## Effects & Properties
+
+| Feature | Tussel | Strudel | Tidal |
+|---------|--------|---------|-------|
+| `gain` | Yes | Yes | Yes |
+| `pan` | Yes | Yes | Yes |
+| `speed` | Yes | Yes | Yes |
+| `cut` | Yes | Yes | Yes |
+| `lpf` / `hpf` | Yes | Yes | Yes |
+| `delay` | Yes | Yes | Yes |
+| `room` (reverb) | Yes | Yes | Yes |
+| `attack` / `release` | Yes | Yes | Yes |
+| `vowel` | No | Yes | Yes |
+| `shape` (distortion) | No | Yes | Yes |
+| `coarse` | No | Yes | Yes |
+
+## Pattern Combinators
+
+| Feature | Tussel | Strudel | Tidal |
+|---------|--------|---------|-------|
+| `stack` | Yes | Yes | Yes |
+| `jux` | Yes | Yes | Yes |
+| `off` | Yes | Yes | Yes |
+| `superimpose` | Yes | Yes | Yes |
+| `mask` | Yes | Yes | Yes |
+| `every` | Yes | Yes | Yes |
+| `sometimes` | Partial | Yes | Yes |
+| `cat` / `slowcat` | Partial | Yes | Yes |
+| `fastcat` | Partial | Yes | Yes |
+| `overlay` | No | Yes | Yes |
+
+## Signals
+
+| Feature | Tussel | Strudel | Tidal |
+|---------|--------|---------|-------|
+| `sine` | Yes | Yes | Yes |
+| `triangle` / `tri` | Yes | Yes | Yes |
+| `saw` | Yes | Yes | Yes |
+| `square` | Yes | Yes | Yes |
+| `rand` | Yes | Yes | Yes |
+| `perlin` | Yes | Yes | Yes |
+| `range` | Yes | Yes | Yes |
+| `segment` | No | Yes | Yes |
+
+## Scales & Notes
+
+| Feature | Tussel | Strudel | Tidal |
+|---------|--------|---------|-------|
+| Note numbers | Yes | Yes | Yes |
+| Note names | Yes | Yes | Yes |
+| `scale` | Partial | Yes | Yes |
+| `transpose` | Partial | Yes | Yes |
+| `chord` | Partial | Yes | Yes |
+
+## Runtime & Tooling
+
+| Feature | Tussel | Strudel | Tidal |
+|---------|--------|---------|-------|
+| Live reload | Yes | Yes | Yes |
+| Offline rendering | Yes | No | Via SuperCollider |
+| Type checking | Yes | No | Haskell types |
+| Format conversion | Yes | No | No |
+| Browser-based | No | Yes | No |
+| Terminal daemon | Yes | No | No |
+| REPL | No | Yes | Yes |
+
+## Summary
+
+Tussel covers the core subset well: basic patterns, common transforms, standard effects, and fundamental combinators. The gaps are primarily in advanced pattern algebra (polymetric, chunk, hurry) and some effects (vowel, shape). The Tidal parser in Tussel covers ~60 of 100+ Tidal methods.

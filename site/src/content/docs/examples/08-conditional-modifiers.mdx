@@ -1,0 +1,65 @@
+---
+title: "08 — Conditional Modifiers"
+description: Applying transforms conditionally with every and sometimes
+---
+
+import CodeComparison from '../../../components/CodeComparison.astro';
+import AudioPlayer from '../../../components/AudioPlayer.astro';
+
+Conditional modifiers apply transforms only on certain cycles or with some probability, adding variation to repeating patterns.
+
+## Code
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+setcps(0.5);
+stack(
+  s("bd sd hh cp")
+    .every(3, x => x.fast(2)),
+  note("0 2 4 7").s("sine")
+    .release(0.2).gain(0.3)
+    .every(4, x => x.slow(2))
+)
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+setcps(0.5)
+stack(
+  s("bd sd hh cp")
+    .every(3, x => x.fast(2)),
+  note("0 2 4 7").s("sine")
+    .release(0.2).gain(0.3)
+    .every(4, x => x.slow(2))
+)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+setcps 0.5
+d1 $ every 3 (fast 2)
+  $ sound "bd sd hh cp"
+d2 $ every 4 (slow 2)
+  $ note "0 2 4 7"
+  # sound "sine"
+  # release 0.2 # gain 0.3
+```
+  </Fragment>
+</CodeComparison>
+
+## Listen
+
+<div class="audio-comparison">
+  <AudioPlayer label="Tussel" src="audio/08-conditional-modifiers/tussel" />
+  <AudioPlayer label="Strudel" src="audio/08-conditional-modifiers/strudel" />
+  <AudioPlayer label="Tidal" src="audio/08-conditional-modifiers/tidal" />
+</div>
+
+## What's Happening
+
+- `.every(3, x => x.fast(2))` doubles the drum speed every 3rd cycle — cycles 1–2 are normal, cycle 3 is double-time, then repeat
+- `.every(4, x => x.slow(2))` halves the melody speed every 4th cycle
+- The two `every` periods (3 and 4) create a 12-cycle super-pattern before everything aligns again
+- In Tidal, `every` takes a function argument directly: `every 3 (fast 2)` — no arrow function needed
+- These modifiers are the key to making repetitive patterns feel alive and evolving

@@ -1,0 +1,75 @@
+---
+title: Effects
+description: Filters, delay, reverb, and other audio effects
+---
+
+Effects transform sounds after synthesis or sample playback. They chain left-to-right on the pattern builder.
+
+## Low-Pass Filter
+
+Removes frequencies above the cutoff — makes sounds warmer and more muffled:
+
+```ts
+note("0 2 4 7").s("saw").lpf(800)      // cut above 800Hz
+note("0 2 4 7").s("saw").lpf(200)      // very muffled
+```
+
+## High-Pass Filter
+
+Removes frequencies below the cutoff — thins out the sound:
+
+```ts
+s("noise").hpf(5000)                    // only the high sizzle remains
+```
+
+## Delay
+
+Adds rhythmic echoes:
+
+```ts
+s("bd sd").delay(0.25)                  // quarter-cycle echo
+s("bd sd").delay(0.5)                   // half-cycle echo
+```
+
+## Room Reverb
+
+Adds a sense of space:
+
+```ts
+s("bd sd hh cp").room(0.3)             // 30% reverb
+s("bd sd hh cp").room(0.8)             // very reverberant
+```
+
+## Gain & Pan
+
+Control volume and stereo position:
+
+```ts
+s("hh hh hh hh").gain(0.4)            // 40% volume
+s("hh hh hh hh").pan(0.5)             // slightly right
+s("hh hh hh hh").pan(-1)              // hard left
+```
+
+## Combining Effects
+
+Effects chain naturally:
+
+```ts
+note("0 3 5 7").s("saw")
+  .lpf(600)           // warm filter
+  .room(0.3)          // add space
+  .delay(0.25)        // rhythmic echo
+  .gain(0.3)          // reduce volume
+  .release(0.2)       // short fade-out
+```
+
+## Signal-Driven Effects
+
+Use signals to modulate effect parameters over time:
+
+```ts
+note("0 2 4 7").s("saw")
+  .lpf(sine.range(300, 1400).slow(4))  // filter sweeps slowly
+```
+
+See [Signals](/tussel/learning/signals/) for more on modulation.

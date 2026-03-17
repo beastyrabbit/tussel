@@ -1,0 +1,2 @@
+setcps 0.5
+d1 $ jux (fast 2) $ off 0.125 (# gain 0.3) $ sound "bd sd hh cp"

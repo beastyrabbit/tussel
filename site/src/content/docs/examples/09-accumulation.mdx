@@ -1,0 +1,54 @@
+---
+title: "09 — Accumulation"
+description: Building layers with jux and stereo widening
+---
+
+import CodeComparison from '../../../components/CodeComparison.astro';
+import AudioPlayer from '../../../components/AudioPlayer.astro';
+
+`jux` creates layered variations of a single pattern by splitting transforms across stereo channels.
+
+## Code
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+setcps(0.5);
+s("bd sd hh cp")
+  .jux(x => x.fast(2))
+  .room(0.2)
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+setcps(0.5)
+s("bd sd hh cp")
+  .jux(x => x.fast(2))
+  .room(0.2)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+setcps 0.5
+d1 $ jux (fast 2)
+  $ sound "bd sd hh cp"
+  # room 0.2
+```
+  </Fragment>
+</CodeComparison>
+
+## Listen
+
+<div class="audio-comparison">
+  <AudioPlayer label="Tussel" src="audio/09-accumulation/tussel" />
+  <AudioPlayer label="Strudel" src="audio/09-accumulation/strudel" />
+  <AudioPlayer label="Tidal" src="audio/09-accumulation/tidal" />
+</div>
+
+## What's Happening
+
+- `.jux(x => x.fast(2))` plays the pattern in the left channel normally, and a double-speed version in the right channel
+- `.room(0.2)` adds subtle reverb to blend the two channels together
+- The original 4-event pattern becomes a rich stereo texture
+- `jux` ("juxtapose") splits transforms across stereo: one side gets the transform, the other stays untouched
+- Related transforms: `off` layers a time-shifted copy, `superimpose` layers a transformed copy at the same time

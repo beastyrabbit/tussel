@@ -1,0 +1,63 @@
+---
+title: "05 — Time Transforms"
+description: Fast, palindrome, and filter modulation
+---
+
+import CodeComparison from '../../../components/CodeComparison.astro';
+import AudioPlayer from '../../../components/AudioPlayer.astro';
+
+Time transforms reshape when events happen. `palindrome` reverses the pattern every other cycle, creating a natural back-and-forth motion.
+
+## Code
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+setcps(0.5);
+note("c3 e3 g3 b3")
+  .s("saw")
+  .fast(2)
+  .palindrome()
+  .lpf(800)
+  .release(0.15)
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+setcps(0.5)
+note("c3 e3 g3 b3")
+  .s("saw")
+  .fast(2)
+  .palindrome()
+  .lpf(800)
+  .release(0.15)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+setcps 0.5
+d1 $ palindrome $ fast 2
+  $ note "c3 e3 g3 b3"
+  # sound "saw"
+  # lpf 800
+  # release 0.15
+```
+  </Fragment>
+</CodeComparison>
+
+## Listen
+
+<div class="audio-comparison">
+  <AudioPlayer label="Tussel" src="audio/05-time-transforms/tussel" />
+  <AudioPlayer label="Strudel" src="audio/05-time-transforms/strudel" />
+  <AudioPlayer label="Tidal" src="audio/05-time-transforms/tidal" />
+</div>
+
+## What's Happening
+
+- `note("c3 e3 g3 b3")` uses note names instead of numbers — C3, E3, G3, B3 (a Cmaj7 arpeggio)
+- `.s("saw")` selects a sawtooth wave — brighter and buzzier than sine
+- `.fast(2)` doubles the pattern speed: 8 notes per cycle
+- `.palindrome()` reverses the pattern every other cycle (up-down-up-down)
+- `.lpf(800)` applies a low-pass filter at 800Hz, taming the sawtooth brightness
+- The combination creates a smooth arpeggio that ascends and descends continuously

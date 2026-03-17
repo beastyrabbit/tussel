@@ -4,6 +4,8 @@ node_modules
 coverage
 dist
 *.log
+*.wav
+.astro
 
 # Build artifacts that should never exist in src/ directories
 # (tsconfig.build.json targets outDir: ./dist, but stale builds may leave these)

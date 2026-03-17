@@ -1,0 +1,64 @@
+---
+title: "API — Audio"
+description: "Audio rendering, sample management, MIDI/OSC output"
+---
+
+`@tussel/audio` handles sound generation: synthesis, sample playback, effects, and file rendering.
+
+## Key Exports
+
+### renderSceneToFile
+
+```ts
+async function renderSceneToFile(
+  scene: SceneSpec,
+  outputPath: string,
+  options: { seconds: number; sampleRate?: number }
+): Promise<void>
+```
+
+Renders a scene to a WAV file. This is the primary offline rendering entry point, used by the `tussel render` CLI command.
+
+### renderSceneToWavBuffer
+
+```ts
+async function renderSceneToWavBuffer(
+  scene: SceneSpec,
+  options: { seconds: number; sampleRate?: number }
+): Promise<Buffer>
+```
+
+Renders a scene to an in-memory WAV buffer. Useful for testing and programmatic audio generation.
+
+### RealtimeAudioEngine
+
+```ts
+class RealtimeAudioEngine {
+  constructor(options: RealtimeAudioEngineOptions)
+  start(): void
+  stop(): void
+  playEvent(event: PlaybackEvent): void
+}
+```
+
+Real-time audio output using Web Audio API. Receives events from the scheduler and produces sound.
+
+### ensureSamplePackLocal
+
+```ts
+async function ensureSamplePackLocal(
+  source: SampleSourceSpec,
+  cacheDir: string
+): Promise<string>
+```
+
+Downloads or locates a sample pack, returning the local filesystem path.
+
+### MIDI & OSC Output
+
+| Export | Description |
+|--------|-------------|
+| `MidiOutputManager` | Manages MIDI port connections and message sending |
+| `OscOutputManager` | Manages OSC connections and message sending |
+| `loadMidiOutputFactory()` | Loads the native MIDI binding |
+| `CircuitBreaker` | Fault tolerance for external connections |

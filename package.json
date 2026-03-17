@@ -59,7 +59,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@julusian/midi",
-      "esbuild"
+      "esbuild",
+      "sharp"
     ]
   }
 }

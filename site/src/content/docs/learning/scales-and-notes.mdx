@@ -1,0 +1,78 @@
+---
+title: Scales & Notes
+description: Note numbers, note names, and scale transforms
+---
+
+Tussel supports multiple ways to specify pitch: MIDI note numbers, note names, and scale-based transforms.
+
+## Note Numbers
+
+The simplest approach — integers map to MIDI notes:
+
+```ts
+note("0 2 4 7")      // C, D, E, G (relative to base octave)
+note("60 62 64 67")  // absolute MIDI notes
+```
+
+## Note Names
+
+Use standard note names with optional octave:
+
+```ts
+note("c3 e3 g3 b3")  // Cmaj7 arpeggio
+note("a4")            // A440
+```
+
+## The `n` Helper
+
+`n()` is an alias for `note()`:
+
+```ts
+n("0 2 4 7").s("sine")
+n("c3 e3 g3 b3").s("saw")
+```
+
+## Scale and Transpose
+
+Transform note patterns with scale and transposition:
+
+```ts
+note("0 1 2 3 4 5 6 7")
+  .scale("major")          // maps steps to major scale
+  .transpose(2)            // shift up by 2 steps
+```
+
+## Chords
+
+Use `chord()` for chord patterns:
+
+```ts
+chord("C E G")             // C major chord
+```
+
+## Slowcat for Chord Progressions
+
+Use `<>` to alternate notes or chords across cycles:
+
+```ts
+note("<0 3 5 7>").s("sine").slow(2)
+// cycle 1-2: note 0
+// cycle 3-4: note 3
+// cycle 5-6: note 5
+// cycle 7-8: note 7
+```
+
+## Practical Example
+
+```ts
+setcps(0.75);
+
+stack(
+  // Bass line — slow saw with filter
+  note("0 0 3 5").s("saw").slow(2).lpf(700).release(0.3),
+  // Melody — triangle, descending
+  note("7 5 3 0").s("triangle").gain(0.15),
+  // Pad — alternating notes
+  note("<0 3 5 7>").s("sine").slow(4).release(0.5).gain(0.1)
+)
+```

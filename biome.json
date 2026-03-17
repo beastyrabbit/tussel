@@ -1,7 +1,18 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
   "files": {
-    "includes": ["**", "!**/.ref", "!**/.tussel-cache", "!**/coverage", "!**/dist", "!**/node_modules"]
+    "includes": [
+      "**",
+      "!**/.ref",
+      "!**/.tussel-cache",
+      "!**/coverage",
+      "!**/dist",
+      "!**/node_modules",
+      "!site/src/**/*.astro",
+      "!site/.astro",
+      "!site-examples/**/*.strudel.js",
+      "!site-examples/**/*.tidal"
+    ]
   },
   "formatter": {
     "enabled": true,

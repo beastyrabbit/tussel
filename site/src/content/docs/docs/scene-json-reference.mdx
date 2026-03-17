@@ -1,0 +1,83 @@
+---
+title: Scene JSON Reference
+description: The structural JSON format for tooling and persistence
+---
+
+`*.scene.json` is the tool-oriented structural format. It's the most direct representation of the runtime scene graph, but the least pleasant to hand-author.
+
+## Contract
+
+- The file must satisfy the runtime JSON schema
+- It is validated before execution
+- It is converted into generated `scene-ts` before running
+
+## Required Top-Level Keys
+
+| Key | Description |
+|-----|-------------|
+| `channels` | Map of channel names to channel specs |
+| `samples` | Array of sample sources |
+| `transport` | Tempo configuration |
+
+Optional: `metadata`, `master`
+
+## Channel Shape
+
+```json
+{
+  "channels": {
+    "main": {
+      "node": {
+        "kind": "call",
+        "name": "n",
+        "exprType": "pattern",
+        "args": ["0 2 4 7"]
+      },
+      "gain": 0.1,
+      "mute": false,
+      "orbit": "main"
+    }
+  },
+  "samples": [],
+  "transport": { "cps": 0.75 }
+}
+```
+
+## Expression Node Forms
+
+**Call expression:**
+```json
+{
+  "kind": "call",
+  "name": "n",
+  "exprType": "pattern",
+  "args": ["0 2 4 7"]
+}
+```
+
+**Method expression:**
+```json
+{
+  "kind": "method",
+  "name": "fast",
+  "exprType": "pattern",
+  "target": {
+    "kind": "call",
+    "name": "n",
+    "exprType": "pattern",
+    "args": ["0 2 4 7"]
+  },
+  "args": [2]
+}
+```
+
+## Practical Guidance
+
+- Prefer generating JSON with `tussel convert ... --to scene-json`
+- Use `scene-ts` when humans need to maintain the file directly
+- Keep JSON scenes inside the structural subset for clean round trips
+
+## Limitations
+
+- The schema accepts structural values beyond the preferred channel-object form, but the stable shape is full channel specs with `node`
+- JSON captures structure, not author intent — variable names, comments, and formatting are not preserved

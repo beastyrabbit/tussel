@@ -1,0 +1,75 @@
+---
+title: CLI Reference
+description: Command-line interface for Tussel
+---
+
+The `tussel` CLI is the primary interface for checking, running, rendering, and converting scenes.
+
+## Installation
+
+```bash
+git clone https://github.com/beastyrabbit/tussel.git
+cd tussel
+pnpm install
+```
+
+## Commands
+
+### check
+
+Validate a scene file without playing it:
+
+```bash
+tussel check my-scene.script.ts
+```
+
+### run
+
+Play a scene with the local daemon, optionally with hot reload:
+
+```bash
+tussel run my-scene.script.ts --watch
+```
+
+- `--watch` — reload scene on file save
+- While running, save a valid change and Tussel reloads in place
+- Save an invalid change → diagnostics printed, last good scene keeps running
+- Stop with `Ctrl-C`
+
+### render
+
+Render a scene to a WAV file:
+
+```bash
+tussel render my-scene.scene.ts --out ./output.wav --seconds 8
+```
+
+- `--out <path>` — output file path
+- `--seconds <n>` — duration to render
+
+### convert
+
+Convert between scene formats:
+
+```bash
+tussel convert my-scene.script.ts --to scene-ts
+tussel convert my-scene.scene.ts --to scene-json
+tussel convert my-scene.scene.ts --to script-ts
+```
+
+- `--to <format>` — target format: `scene-ts`, `scene-json`, `script-ts`
+- `--out <file>` — write to file instead of stdout
+
+## Supported File Types
+
+| Extension | Format |
+|-----------|--------|
+| `.script.ts` | Script TS (livecoding) |
+| `.scene.ts` | Scene TS (typed module) |
+| `.scene.json` | Scene JSON (structural) |
+
+## Running from Repository
+
+```bash
+pnpm exec tussel <command> [args]
+```

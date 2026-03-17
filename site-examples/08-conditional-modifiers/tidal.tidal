@@ -1,0 +1,3 @@
+setcps 0.5
+d1 $ every 3 (fast 2) $ sound "bd sd hh cp"
+d2 $ every 4 (slow 2) $ note "0 2 4 7" # sound "sine" # release 0.2 # gain 0.3

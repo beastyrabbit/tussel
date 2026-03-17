@@ -1,0 +1,58 @@
+---
+title: "04 — Sample Manipulation"
+description: Speeding up patterns and manipulating sample playback
+---
+
+import CodeComparison from '../../../components/CodeComparison.astro';
+import AudioPlayer from '../../../components/AudioPlayer.astro';
+
+Patterns can be sped up, and samples can be cut short or pitched. These transforms change how sounds are triggered and played back.
+
+## Code
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+setcps(0.5);
+stack(
+  s("bd bd").fast(2).cut(1),
+  s("hh hh hh hh").gain(0.4),
+  s("sd").slow(2).speed(0.5)
+)
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+setcps(0.5)
+stack(
+  s("bd bd").fast(2).cut(1),
+  s("hh hh hh hh").gain(0.4),
+  s("sd").slow(2).speed(0.5)
+)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+setcps 0.5
+d1 $ fast 2 $ sound "bd bd" # cut 1
+d2 $ sound "hh hh hh hh" # gain 0.4
+d3 $ slow 2 $ sound "sd" # speed 0.5
+```
+  </Fragment>
+</CodeComparison>
+
+## Listen
+
+<div class="audio-comparison">
+  <AudioPlayer label="Tussel" src="audio/04-sample-manipulation/tussel" />
+  <AudioPlayer label="Strudel" src="audio/04-sample-manipulation/strudel" />
+  <AudioPlayer label="Tidal" src="audio/04-sample-manipulation/tidal" />
+</div>
+
+## What's Happening
+
+- `.fast(2)` doubles the speed of the kick pattern (8 kicks per cycle instead of 2)
+- `.cut(1)` assigns cut group 1 — each new kick silences the previous one, preventing overlap
+- `.slow(2)` halves the snare pattern speed (one snare every 2 cycles)
+- `.speed(0.5)` plays the snare sample at half pitch, making it sound deeper
+- These transforms compose: you can chain `.fast().slow().speed()` freely

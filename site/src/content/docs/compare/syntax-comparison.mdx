@@ -1,0 +1,179 @@
+---
+title: Syntax Comparison
+description: Side-by-side syntax for common operations in Tussel, Strudel, and Tidal
+---
+
+import CodeComparison from '../../../components/CodeComparison.astro';
+
+## Basic Pattern
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+note("0 2 4 7").s("sine")
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+note("0 2 4 7").s("sine")
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+d1 $ note "0 2 4 7" # sound "sine"
+```
+  </Fragment>
+</CodeComparison>
+
+## Set Tempo
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+setcps(0.75);
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+setcps(0.75)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+setcps 0.75
+```
+  </Fragment>
+</CodeComparison>
+
+## Stacking Patterns
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+stack(
+  s("bd hh sd hh"),
+  note("0 2 4 7").s("sine")
+)
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+stack(
+  s("bd hh sd hh"),
+  note("0 2 4 7").s("sine")
+)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+d1 $ sound "bd hh sd hh"
+d2 $ note "0 2 4 7" # sound "sine"
+```
+  </Fragment>
+</CodeComparison>
+
+## Time Transforms
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+s("bd sd").fast(2)
+s("bd sd").slow(2)
+s("bd sd").palindrome()
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+s("bd sd").fast(2)
+s("bd sd").slow(2)
+s("bd sd").palindrome()
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+d1 $ fast 2 $ sound "bd sd"
+d1 $ slow 2 $ sound "bd sd"
+d1 $ palindrome $ sound "bd sd"
+```
+  </Fragment>
+</CodeComparison>
+
+## Effects
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+s("bd sd").room(0.3).delay(0.25)
+note("0 2 4 7").s("saw").lpf(800)
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+s("bd sd").room(0.3).delay(0.25)
+note("0 2 4 7").s("saw").lpf(800)
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+d1 $ sound "bd sd" # room 0.3
+  # delay 0.25
+d1 $ note "0 2 4 7" # sound "saw"
+  # lpf 800
+```
+  </Fragment>
+</CodeComparison>
+
+## Conditional Modifiers
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+s("bd sd hh cp")
+  .every(3, x => x.fast(2))
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+s("bd sd hh cp")
+  .every(3, x => x.fast(2))
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+d1 $ every 3 (fast 2)
+  $ sound "bd sd hh cp"
+```
+  </Fragment>
+</CodeComparison>
+
+## Euclidean Rhythms
+
+<CodeComparison>
+  <Fragment slot="tussel">
+```ts
+s("bd(3,8)")
+```
+  </Fragment>
+  <Fragment slot="strudel">
+```js
+s("bd(3,8)")
+```
+  </Fragment>
+  <Fragment slot="tidal">
+```haskell
+d1 $ sound "bd(3,8)"
+```
+  </Fragment>
+</CodeComparison>
+
+## Key Differences
+
+| Concept | Tussel/Strudel | Tidal |
+|---------|---------------|-------|
+| Method chaining | `.fast(2).slow(2)` | `fast 2 $ slow 2 $` |
+| Properties | `.gain(0.5).pan(0.3)` | `# gain 0.5 # pan 0.3` |
+| Lambda functions | `x => x.fast(2)` | `(fast 2)` (partial application) |
+| Multi-channel | `stack(...)` or `scene({channels})` | `d1 $`, `d2 $`, etc. |
+| Tempo | `setcps(0.75)` | `setcps 0.75` |
+
+Tussel and Strudel share nearly identical syntax for most operations. The main difference from Tidal is the switch from Haskell's function application style to JavaScript/TypeScript method chaining.
