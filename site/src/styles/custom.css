@@ -1,4 +1,4 @@
-/* Experimental banner — persistent amber strip */
+/* Experimental banner — sticky amber strip */
 .experimental-banner {
   background: #b45309;
   color: #fff;
@@ -32,7 +32,9 @@
   background: var(--sl-color-gray-7);
 }
 
-.audio-card h4 {
+/* Shared heading style for audio cards and code panels */
+.audio-card h4,
+.code-panel h4 {
   margin: 0 0 0.5rem;
   font-size: 0.875rem;
   text-transform: uppercase;
@@ -44,7 +46,7 @@
   width: 100%;
 }
 
-/* Code comparison — 3-column grid */
+/* Code comparison — responsive grid (3 columns on wide viewports) */
 .code-comparison {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -56,15 +58,7 @@
   min-width: 0;
 }
 
-.code-comparison .code-panel h4 {
-  margin: 0 0 0.5rem;
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--sl-color-gray-2);
-}
-
-/* Make code blocks not overflow */
+/* Prevent horizontal overflow in grid cells on narrow viewports */
 .code-comparison pre {
   overflow-x: auto;
   font-size: 0.8rem;

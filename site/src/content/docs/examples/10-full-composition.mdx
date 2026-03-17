@@ -18,12 +18,12 @@ stack(
   s("bd ~ rim sd")
     .mask("1 1 0 1"),
   s("hh hh hh hh")
-    .gain(0.5).late(0.01),
+    .gain(0.5),
   note("0 0 3 5").s("saw")
     .slow(2).lpf(700)
     .release(0.3),
   note("7 5 3 0").s("triangle")
-    .gain(0.15).early(0.125)
+    .gain(0.15)
 )
 ```
   </Fragment>
@@ -34,12 +34,12 @@ stack(
   s("bd ~ rim sd")
     .mask("1 1 0 1"),
   s("hh hh hh hh")
-    .gain(0.5).late(0.01),
+    .gain(0.5),
   n("0 0 3 5").s("saw")
     .slow(2).lpf(700)
     .release(0.3),
   n("7 5 3 0").s("triangle")
-    .gain(0.15).early(0.125)
+    .gain(0.15)
 )
 ```
   </Fragment>
@@ -48,15 +48,13 @@ stack(
 setcps 0.75
 d1 $ mask "1 1 0 1"
   $ sound "bd ~ rim sd"
-d2 $ late 0.01
-  $ sound "hh hh hh hh"
+d2 $ sound "hh hh hh hh"
   # gain 0.5
 d3 $ slow 2
   $ note "0 0 3 5"
   # sound "saw"
   # lpf 700 # release 0.3
-d4 $ early 0.125
-  $ note "7 5 3 0"
+d4 $ note "7 5 3 0"
   # sound "triangle"
   # gain 0.15
 ```
@@ -76,13 +74,12 @@ d4 $ early 0.125
 This piece has four channels working together:
 
 1. **Drums** — `"bd ~ rim sd"` with `.mask("1 1 0 1")` silencing the third beat for a syncopated feel
-2. **Hi-hats** — steady quarter notes at 50% volume, nudged 0.01 cycles late for a human feel
+2. **Hi-hats** — steady quarter notes at 50% volume
 3. **Bass** — saw wave playing `0 0 3 5` at half speed (one phrase per 2 cycles), filtered at 700Hz
-4. **Melody** — triangle wave descending `7 5 3 0`, shifted 1/8 cycle early to lead the beat
+4. **Melody** — triangle wave descending `7 5 3 0` at low volume
 
 Key techniques:
 - `.mask()` selectively silences events using a binary pattern
-- `.late()` / `.early()` nudge timing for groove and feel
 - `.slow(2)` stretches the bass across two cycles
 - `.lpf(700)` keeps the saw wave warm and non-harsh
 

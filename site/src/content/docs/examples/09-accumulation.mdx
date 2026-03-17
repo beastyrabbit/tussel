@@ -1,12 +1,12 @@
 ---
 title: "09 — Accumulation"
-description: Building layers with jux, off, and superimpose
+description: Building layers with jux and stereo widening
 ---
 
 import CodeComparison from '../../../components/CodeComparison.astro';
 import AudioPlayer from '../../../components/AudioPlayer.astro';
 
-`jux`, `off`, and `superimpose` create layered variations of a single pattern — stereo widening, delayed echoes, and parallel transforms.
+`jux` creates layered variations of a single pattern by splitting transforms across stereo channels.
 
 ## Code
 
@@ -15,24 +15,24 @@ import AudioPlayer from '../../../components/AudioPlayer.astro';
 ```ts
 setcps(0.5);
 s("bd sd hh cp")
-  .off(0.125, x => x.gain(0.3))
   .jux(x => x.fast(2))
+  .room(0.2)
 ```
   </Fragment>
   <Fragment slot="strudel">
 ```js
 setcps(0.5)
 s("bd sd hh cp")
-  .off(0.125, x => x.gain(0.3))
   .jux(x => x.fast(2))
+  .room(0.2)
 ```
   </Fragment>
   <Fragment slot="tidal">
 ```haskell
 setcps 0.5
 d1 $ jux (fast 2)
-  $ off 0.125 (# gain 0.3)
   $ sound "bd sd hh cp"
+  # room 0.2
 ```
   </Fragment>
 </CodeComparison>
@@ -47,8 +47,8 @@ d1 $ jux (fast 2)
 
 ## What's Happening
 
-- `.off(0.125, x => x.gain(0.3))` creates a copy of the pattern shifted 1/8 cycle later, at 30% volume — a rhythmic echo
 - `.jux(x => x.fast(2))` plays the pattern in the left channel normally, and a double-speed version in the right channel
-- The original 4-event pattern becomes a rich stereo texture with offset echoes
-- `off` is like `superimpose` but with a time shift — it layers a modified copy on top of the original
+- `.room(0.2)` adds subtle reverb to blend the two channels together
+- The original 4-event pattern becomes a rich stereo texture
 - `jux` ("juxtapose") splits transforms across stereo: one side gets the transform, the other stays untouched
+- Related transforms: `off` layers a time-shifted copy, `superimpose` layers a transformed copy at the same time

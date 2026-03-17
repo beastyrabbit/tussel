@@ -10,11 +10,11 @@ set -euo pipefail
 #
 # Output: site/public/audio/<name>/{tussel,strudel,tidal}.{ogg,mp3}
 #
-# Note: Currently only tussel.wav is rendered. Strudel and Tidal sources
-# are provided as reference notation — their audio must be rendered
-# separately using their respective tools and placed as:
+# Note: render-examples.sh only produces tussel.wav. Strudel and Tidal
+# audio should be rendered with their respective tools and placed as:
 #   site-examples/<name>/strudel.wav
 #   site-examples/<name>/tidal.wav
+# Currently, Tussel audio is used as a placeholder for all three variants.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 EXAMPLES_DIR="$REPO_ROOT/site-examples"
@@ -24,6 +24,13 @@ if ! command -v ffmpeg &>/dev/null; then
   echo "ERROR: ffmpeg is required but not installed."
   exit 1
 fi
+
+if [ ! -d "$EXAMPLES_DIR" ] || [ -z "$(ls -A "$EXAMPLES_DIR" 2>/dev/null)" ]; then
+  echo "ERROR: No example directories found in $EXAMPLES_DIR"
+  exit 1
+fi
+
+processed=0
 
 for dir in "$EXAMPLES_DIR"/*/; do
   name="$(basename "$dir")"
@@ -40,17 +47,22 @@ for dir in "$EXAMPLES_DIR"/*/; do
     echo "COMPRESS $name/$variant..."
 
     # OGG Vorbis — quality 5 (~160 kbps), good balance of size and quality
-    ffmpeg -y -i "$wav" -c:a libvorbis -q:a 5 "$out/${variant}.ogg" 2>/dev/null
+    ffmpeg -y -loglevel error -i "$wav" -c:a libvorbis -q:a 5 "$out/${variant}.ogg"
 
-    # MP3 — VBR quality 4 (~165 kbps), Safari fallback
-    ffmpeg -y -i "$wav" -c:a libmp3lame -q:a 4 "$out/${variant}.mp3" 2>/dev/null
+    # MP3 — VBR quality 4 (~165 kbps), fallback for browsers without OGG support
+    ffmpeg -y -loglevel error -i "$wav" -c:a libmp3lame -q:a 4 "$out/${variant}.mp3"
 
     echo "  → $out/${variant}.ogg"
     echo "  → $out/${variant}.mp3"
+    ((processed++))
   done
 done
 
 echo ""
-echo "Done. Compressed audio files are in site/public/audio/"
+if [ "$processed" -eq 0 ]; then
+  echo "WARNING: No WAV files were found. Did you run ./scripts/render-examples.sh first?"
+  exit 1
+fi
+echo "Done. Compressed $processed variant(s). Files are in site/public/audio/"
 echo "Total size:"
-du -sh "$OUTPUT_DIR" 2>/dev/null || echo "(empty — no WAVs were found)"
+du -sh "$OUTPUT_DIR" 2>/dev/null || echo "(empty)"

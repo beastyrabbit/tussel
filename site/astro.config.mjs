@@ -22,45 +22,7 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Examples',
-          items: [
-            { label: '01 — Single Sound', slug: 'examples/01-single-sound' },
-            {
-              label: '02 — Simple Sequence',
-              slug: 'examples/02-simple-sequence',
-            },
-            {
-              label: '03 — Layered Stack',
-              slug: 'examples/03-layered-stack',
-            },
-            {
-              label: '04 — Sample Manipulation',
-              slug: 'examples/04-sample-manipulation',
-            },
-            {
-              label: '05 — Time Transforms',
-              slug: 'examples/05-time-transforms',
-            },
-            {
-              label: '06 — Euclidean Rhythms',
-              slug: 'examples/06-euclidean-rhythms',
-            },
-            {
-              label: '07 — Filters & Effects',
-              slug: 'examples/07-filters-and-effects',
-            },
-            {
-              label: '08 — Conditional Modifiers',
-              slug: 'examples/08-conditional-modifiers',
-            },
-            {
-              label: '09 — Accumulation',
-              slug: 'examples/09-accumulation',
-            },
-            {
-              label: '10 — Full Composition',
-              slug: 'examples/10-full-composition',
-            },
-          ],
+          autogenerate: { directory: 'examples' },
         },
         {
           label: 'Learning',
