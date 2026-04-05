@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: arc-kub-homelab
+    runs-on: arc-tussel
     permissions:
       contents: read
     steps:
