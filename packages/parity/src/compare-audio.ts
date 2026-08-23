@@ -1,3 +1,4 @@
+import { parseCanonicalWav } from '@tussel/testkit';
 import type { AudioCompareMode, AudioComparisonResult, AudioToleranceThresholds } from './schema.js';
 
 interface ParsedWav {
@@ -68,19 +69,16 @@ export function compareAudio(expected: Buffer, actual: Buffer): AudioComparisonR
 }
 
 function parseWav(buffer: Buffer): ParsedWav {
+  const parsed = parseCanonicalWav(buffer);
+  const { channels, sampleRate } = parsed;
   const header = buffer.subarray(0, 44);
-  if (header.toString('ascii', 0, 4) !== 'RIFF' || header.toString('ascii', 8, 12) !== 'WAVE') {
-    throw new Error('Expected canonical RIFF/WAVE data');
-  }
-  const channels = header.readUInt16LE(22);
-  const sampleRate = header.readUInt32LE(24);
   const bitDepth = header.readUInt16LE(34);
   if (channels !== 2 || sampleRate !== 48_000 || bitDepth !== 16) {
     throw new Error(`Expected stereo 48k PCM16 wav, received ${channels}ch ${sampleRate}Hz ${bitDepth}-bit`);
   }
   return {
     channels,
-    data: buffer.subarray(44),
+    data: parsed.data,
     sampleRate,
   };
 }

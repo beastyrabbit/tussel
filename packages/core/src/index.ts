@@ -8,6 +8,7 @@ import {
   getInputValue,
   isExpressionNode,
   isPlainObject,
+  PROPERTY_METHOD_NAMES,
   resolveGamepadInputKey,
   resolveInputKey,
   resolveMidiInputKey,
@@ -62,9 +63,11 @@ export {
   centsToRatio,
   createEdoScale,
   edoFrequency,
+  namedPitchToFrequency,
   parseXenValue,
   ratioToCents,
   resolveEdoFrequency,
+  tunedStepFrequency,
 } from './xen.js';
 
 interface InternalQueryContext extends QueryContext {
@@ -79,68 +82,9 @@ interface InternalQueryContext extends QueryContext {
  * directly into the event payload (via `annotateEvents`). Methods NOT in this set
  * go through the switch statement for special handling (e.g. `fast`, `rev`, `scale`).
  *
- * IMPORTANT: Must be kept in sync with the PatternBuilder property methods defined
- * in packages/dsl/src/index.ts. Adding a new simple property in the DSL requires a
- * corresponding entry here, and vice versa.
+ * Derived from the shared PATTERN_METHOD_REGISTRY in @tussel/ir (kind === 'property').
  */
-export const PROPERTY_METHODS = new Set([
-  'anchor',
-  'attack',
-  'bank',
-  'begin',
-  'clip',
-  'cut',
-  'cutoff',
-  'csound',
-  'csoundm',
-  'decay',
-  'delay',
-  'dict',
-  'edo',
-  'end',
-  'fm',
-  'gain',
-  'hpf',
-  'hcutoff',
-  'lpf',
-  'loop',
-  'lpq',
-  'mode',
-  'midichan',
-  'midicc',
-  'midiport',
-  'midivalue',
-  'note',
-  'offset',
-  'osc',
-  'oschost',
-  'oscport',
-  'orbit',
-  'pan',
-  'phaser',
-  'release',
-  'room',
-  's',
-  'segment',
-  'set',
-  'shape',
-  'size',
-  'sound',
-  'speed',
-  'struct',
-  'sustain',
-  'velocity',
-  'vowel',
-  'color',
-  'ccn',
-  'ccv',
-  'midicmd',
-  'midibend',
-  'miditouch',
-  '_scope',
-  'punchcard',
-  '_punchcard',
-]);
+export const PROPERTY_METHODS: ReadonlySet<string> = PROPERTY_METHOD_NAMES;
 
 const coreLogger = createLogger('tussel/core');
 
@@ -532,6 +476,7 @@ function queryPattern(
       case 'sound':
       case 'n':
       case 'note':
+      case 'i':
       case 'chord':
       case 'value':
         return callPattern(value.name, value.args[0], begin, end, context);
@@ -737,6 +682,25 @@ function queryPattern(
       return applyDrop(value.target, value.args[0], begin, end, context);
     case 'every':
       return applyEvery(targetEvents(), value.args[1], value.args[0], begin, end, context);
+    case 'whenmod':
+      return applyWhenMod(targetEvents(), value.args[2], value.args[0], value.args[1], begin, end, context);
+    case 'legato':
+      return applyLegato(targetEvents(), evaluateNumericValue(value.args[0], begin) ?? 1, begin, end);
+    case 'stut':
+      return applyStut(targetEvents(), value.args[0], value.args[1], value.args[2], begin, end);
+    case 'spin':
+      return applySpin(value.target, value.args[0], begin, end, context);
+    case 'striate':
+    case 'chop':
+      return applyStriate(targetEvents(), value.args[0], begin);
+    case 'fastspread':
+      return applySpread(value.target, value.args, begin, end, context, false);
+    case 'slowspread':
+      return applySpread(value.target, value.args, begin, end, context, true);
+    case 'fit':
+      return applyFit(targetEvents(), value.args[0], value.args[1], begin);
+    case 'bite':
+      return applyBite(value.target, value.args[0], value.args[1], begin, end, context);
     case 'expand':
       return applyExpand(value.target, value.args[0], begin, end, context);
     case 'extend':
@@ -948,7 +912,7 @@ function queryPattern(
 }
 
 function callPattern(
-  property: 'chord' | 'n' | 'note' | 's' | 'sound' | 'value',
+  property: 'chord' | 'i' | 'n' | 'note' | 's' | 'sound' | 'value',
   source: ExpressionValue | undefined,
   begin: number,
   end: number,
@@ -989,7 +953,7 @@ function callPattern(
 
 function remapEventPayload(
   event: PlaybackEvent,
-  property: 'chord' | 'n' | 'note' | 's' | 'sound' | 'value',
+  property: 'chord' | 'i' | 'n' | 'note' | 's' | 'sound' | 'value',
 ): PlaybackEvent | undefined {
   if (property === 'value') {
     return event;
@@ -3018,6 +2982,248 @@ function applyEvery(
   );
 }
 
+/**
+ * whenmod(n, t, fn): like `every`, but the transform applies during the last
+ * `t` cycles of every group of `n` cycles (Tidal semantics).
+ */
+function applyWhenMod(
+  currentEvents: PlaybackEvent[],
+  transformedPattern: ExpressionValue | undefined,
+  everyN: ExpressionValue | undefined,
+  activeN: ExpressionValue | undefined,
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  const cycles = Math.max(1, Math.floor(evaluateNumericValue(everyN, begin) ?? 1));
+  const active = clampNumber(Math.floor(evaluateNumericValue(activeN, begin) ?? 1), 1, cycles, 1);
+  return replaceEventsByWindow(
+    currentEvents,
+    transformedPattern,
+    begin,
+    end,
+    context,
+    (value) => positiveMod(Math.floor(value), cycles) >= cycles - active,
+  );
+}
+
+/** legato(k): scale event durations (and their end points) by k. */
+function applyLegato(
+  currentEvents: PlaybackEvent[],
+  factor: number,
+  begin: number,
+  end: number,
+): PlaybackEvent[] {
+  if (!Number.isFinite(factor) || factor <= 0) {
+    return [];
+  }
+  return currentEvents
+    .map((event) => {
+      const duration = event.duration * factor;
+      return { ...event, duration, end: event.begin + duration };
+    })
+    .filter((event) => event.end > begin && event.begin < end);
+}
+
+/**
+ * stut(count, time, feedback): echo each event `count` times at `time`-cycle
+ * intervals, scaling gain by `feedback` per echo.
+ */
+function applyStut(
+  currentEvents: PlaybackEvent[],
+  countValue: ExpressionValue | undefined,
+  timeValue: ExpressionValue | undefined,
+  feedbackValue: ExpressionValue | undefined,
+  begin: number,
+  end: number,
+): PlaybackEvent[] {
+  const count = Math.max(1, Math.floor(evaluateNumericValue(countValue, begin) ?? 1));
+  const stepTime = evaluateNumericValue(timeValue, begin) ?? 0.125;
+  const feedback = clampNumber(evaluateNumericValue(feedbackValue, begin) ?? 0.5, 0, 1, 0.5);
+  const result: PlaybackEvent[] = [...currentEvents];
+  for (const event of currentEvents) {
+    for (let index = 1; index <= count; index += 1) {
+      const shifted = {
+        ...event,
+        begin: event.begin + stepTime * index,
+        end: event.end + stepTime * index,
+        payload: {
+          ...event.payload,
+          gain:
+            typeof event.payload.gain === 'number'
+              ? event.payload.gain * feedback ** index
+              : feedback ** index,
+        },
+      };
+      if (shifted.end > begin && shifted.begin < end) {
+        result.push(shifted);
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * spin(n): layer the target n times; layer k is panned across the stereo
+ * field and rhythmically rotated by k/n cycles.
+ */
+function applySpin(
+  target: ExpressionValue,
+  layersValue: ExpressionValue | undefined,
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  const layers = Math.max(1, Math.floor(evaluateNumericValue(layersValue, begin) ?? 1));
+  const result: PlaybackEvent[] = [];
+  for (let layer = 0; layer < layers; layer += 1) {
+    const rotation = layer / layers;
+    const pan = layers > 1 ? (layer / (layers - 1)) * 2 - 1 : 0;
+    const shifted = shiftEvents(
+      queryPattern(target, begin + rotation, end + rotation, context),
+      -rotation,
+      begin,
+      end,
+    ).map((event) => ({ ...event, payload: { ...event.payload, pan } }));
+    result.push(...shifted);
+  }
+  return result;
+}
+
+/**
+ * striate(n) / chop(n): split each event into n sequential slices spanning
+ * the original window; each slice plays the matching fraction of the sample
+ * (via begin/end window annotations).
+ */
+function applyStriate(
+  currentEvents: PlaybackEvent[],
+  countValue: ExpressionValue | undefined,
+  begin: number,
+): PlaybackEvent[] {
+  const slices = Math.max(1, Math.floor(evaluateNumericValue(countValue, begin) ?? 1));
+  const result: PlaybackEvent[] = [];
+  for (const event of currentEvents) {
+    const sliceDuration = event.duration / slices;
+    for (let slice = 0; slice < slices; slice += 1) {
+      result.push({
+        ...event,
+        begin: event.begin + sliceDuration * slice,
+        duration: sliceDuration,
+        end: event.begin + sliceDuration * (slice + 1),
+        payload: {
+          ...event.payload,
+          begin: slice / slices,
+          end: (slice + 1) / slices,
+        },
+      });
+    }
+  }
+  return result;
+}
+
+/**
+ * fastspread / slowspread: stack the target once per factor, each copy
+ * time-scaled by that factor (`fast(k)` / `slow(k)`).
+ *
+ * Factors are collected from the arguments — plain numbers and/or nested
+ * arrays of numbers, e.g. `.fastspread(0.5, [0.75, 1], 2)`.
+ */
+function applySpread(
+  target: ExpressionValue,
+  args: readonly ExpressionValue[],
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+  slow: boolean,
+): PlaybackEvent[] {
+  const factors: number[] = [];
+  for (const entry of args) {
+    const entries = Array.isArray(entry) ? entry : [entry];
+    for (const item of entries) {
+      const factor = evaluateNumericValue(item as ExpressionValue, begin);
+      if (factor !== undefined && Number.isFinite(factor) && factor > 0) {
+        factors.push(factor);
+      }
+    }
+  }
+  if (factors.length === 0) {
+    return [];
+  }
+  return factors.flatMap((factor) =>
+    slow
+      ? transformSlow(target, begin, end, factor, context)
+      : transformFast(target, begin, end, factor, context),
+  );
+}
+
+/**
+ * fit(size, table): map the target's integer step values through a lookup
+ * table. Only the first `size` entries are addressable; indices wrap
+ * modulo that limit.
+ */
+function applyFit(
+  currentEvents: PlaybackEvent[],
+  sizeValue: ExpressionValue | undefined,
+  tableValue: ExpressionValue | undefined,
+  begin: number,
+): PlaybackEvent[] {
+  const rawTable = Array.isArray(tableValue) ? tableValue : tableValue === undefined ? [] : [tableValue];
+  const table: number[] = [];
+  for (const entry of rawTable) {
+    const numeric = evaluateNumericValue(entry as ExpressionValue, begin);
+    if (numeric !== undefined) {
+      table.push(numeric);
+    }
+  }
+  if (table.length === 0) {
+    return currentEvents;
+  }
+  const limit = Math.max(
+    1,
+    Math.min(Math.floor(evaluateNumericValue(sizeValue, begin) ?? table.length), table.length),
+  );
+  const stepKeys = ['n', 'i', 'value', 'note'] as const;
+  return currentEvents.map((event) => {
+    const stepKey = stepKeys.find((key) => typeof event.payload[key] === 'number');
+    if (!stepKey) {
+      return event;
+    }
+    const mapped = table[positiveMod(Math.trunc(event.payload[stepKey] as number), limit)];
+    if (mapped === undefined) {
+      return event;
+    }
+    return { ...event, payload: { ...event.payload, [stepKey]: mapped } };
+  });
+}
+
+/**
+ * bite(count, generator): divides each cycle into `count` slices; the
+ * generator pattern's integer events pick which slice of the target plays
+ * during their span.
+ */
+function applyBite(
+  target: ExpressionValue,
+  countValue: ExpressionValue | undefined,
+  generatorValue: ExpressionValue | undefined,
+  begin: number,
+  end: number,
+  context: InternalQueryContext,
+): PlaybackEvent[] {
+  const slices = Math.max(1, Math.floor(evaluateNumericValue(countValue, begin) ?? 1));
+  const generatorEvents = queryValueEvents(generatorValue, begin, end, context);
+  const result: PlaybackEvent[] = [];
+  for (const generatorEvent of generatorEvents) {
+    const index = positiveMod(Math.trunc(Number(generatorEvent.value) || 0), slices);
+    const outBegin = Math.max(generatorEvent.begin, begin);
+    const outEnd = Math.min(generatorEvent.end, end);
+    if (outEnd <= outBegin) {
+      continue;
+    }
+    result.push(...transformZoom(target, outBegin, outEnd, index / slices, (index + 1) / slices, context));
+  }
+  return result;
+}
+
 function applyWhen(
   currentEvents: PlaybackEvent[],
   transformedPattern: ExpressionValue | undefined,
@@ -3713,11 +3919,19 @@ function evaluateSignalExpression(expr: ExpressionNode, cycle: number): number {
           ),
         );
       case 'midin':
+        return coerceSignalNumber(
+          getInputValue(
+            resolveMidiInputKey('note', `${expr.args[0] ?? 'default'}`),
+            resolveSignalFallback(expr.args[1]),
+          ),
+        );
       case 'midikeys':
-        throw new TusselCoreError(`${expr.name}() is not implemented yet.`, {
-          code: 'TUSSEL_UNSUPPORTED_SIGNAL',
-          details: { name: expr.name },
-        });
+        return coerceSignalNumber(
+          getInputValue(
+            resolveMidiInputKey('keys', `${expr.args[0] ?? 'default'}`),
+            resolveSignalFallback(expr.args[1]),
+          ),
+        );
       case 'gamepad':
         return coerceSignalNumber(
           getInputValue(

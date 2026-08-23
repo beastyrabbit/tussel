@@ -18,15 +18,22 @@ const SET_CPM_LINE = /^setcpm\s+(.+)$/i;
 
 const BASE_CALLS = new Set(['chord', 'n', 'note', 's', 'sound', 'value']);
 const METHOD_NAMES = new Set([
+  'accelerate',
   'almostAlways',
   'almostNever',
   'anchor',
   'attack',
+  'bandf',
+  'bandq',
   'bank',
   'begin',
+  'bite',
+  'chop',
   'chunk',
   'clip',
+  'coarse',
   'compress',
+  'crush',
   'cut',
   'decay',
   'degrade',
@@ -38,15 +45,21 @@ const METHOD_NAMES = new Set([
   'every',
   'fast',
   'fastGap',
+  'fastspread',
+  'fit',
   'fm',
   'gain',
+  'hcutoff',
   'hpf',
+  'hresonance',
   'hurry',
   'jux',
   'juxBy',
   'late',
   'layer',
+  'legato',
   'linger',
+  'loop',
   'lpf',
   'mask',
   'off',
@@ -67,15 +80,26 @@ const METHOD_NAMES = new Set([
   'shuffle',
   'size',
   'slow',
+  'slowGap',
+  'slowspread',
   'sometimes',
   'sometimesBy',
   'speed',
+  'spin',
+  'striate',
   'struct',
+  'stut',
   'superimpose',
   'sustain',
+  'swing',
+  'swingBy',
   'transpose',
+  'unit',
+  'up',
   'voicing',
+  'vowel',
   'when',
+  'whenmod',
   'within',
   'zoom',
 ]);
@@ -263,6 +287,17 @@ function translateAtom(
     return `${callee}(${translateArgument(argument, bindings, visited)})`;
   }
 
+  // Bare method applications used as values, e.g. `whenmod 8 5 (fast 2)`.
+  if (head && METHOD_NAMES.has(head)) {
+    if (NO_ARG_METHODS.has(head)) {
+      return `${head}()`;
+    }
+    if (rest.length > 0) {
+      const args = rest.map((token) => translateArgument(token, bindings, visited));
+      return `${head}(${args.join(', ')})`;
+    }
+  }
+
   if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
     return `(${translateExpr(trimmed.slice(1, -1), bindings, visited)})`;
   }
@@ -287,11 +322,11 @@ function applyPrefix(
   if (NO_ARG_METHODS.has(head)) {
     return `${target}.${head}()`;
   }
-  const argument = rest.join(' ').trim();
-  if (!argument) {
+  if (rest.length === 0) {
     throw new TusselParseError(`Missing tidal argument for ${head}`);
   }
-  return `${target}.${head}(${translateArgument(argument, bindings, visited)})`;
+  const args = rest.map((token) => translateArgument(token, bindings, visited));
+  return `${target}.${head}(${args.join(', ')})`;
 }
 
 function applyControl(
@@ -321,11 +356,11 @@ function applyControl(
   if (NO_ARG_METHODS.has(head)) {
     return `${target}.${head}()`;
   }
-  const argument = rest.join(' ').trim();
-  if (!argument) {
+  if (rest.length === 0) {
     throw new TusselParseError(`Missing tidal control value for ${head}`);
   }
-  return `${target}.${head}(${translateArgument(argument, bindings, visited)})`;
+  const args = rest.map((token) => translateArgument(token, bindings, visited));
+  return `${target}.${head}(${args.join(', ')})`;
 }
 
 function translateArgument(
@@ -353,6 +388,25 @@ function translateArgument(
   }
   if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
     return trimmed;
+  }
+  // Bare pattern applications used as transform values, e.g.
+  // `whenmod 8 5 (fast 2)` or `bite 4 (n 1)` — trimOuter strips the parens
+  // before we get here, so this also covers `(fast 2)` / `(rev)` spellings.
+  const tokens = tokenize(trimmed);
+  const [methodHead, ...methodRest] = tokens;
+  if (methodHead && METHOD_NAMES.has(methodHead)) {
+    if (NO_ARG_METHODS.has(methodHead) && methodRest.length === 0) {
+      return `${methodHead}()`;
+    }
+    if (methodRest.length > 0) {
+      const args = methodRest.map((token) => translateArgument(token, bindings, visited));
+      return `${methodHead}(${args.join(', ')})`;
+    }
+  }
+  if (methodHead && BASE_CALLS.has(methodHead)) {
+    const callee = methodHead === 'sound' ? 's' : methodHead === 'note' ? 'n' : methodHead;
+    const args = methodRest.map((token) => translateArgument(token, bindings, visited));
+    return `${callee}(${args.join(', ')})`;
   }
   throw new TusselParseError(`Unsupported tidal argument: ${argument}`);
 }

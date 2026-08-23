@@ -6,6 +6,10 @@
  * with cents and just-intonation ratios.
  */
 
+import { midiNoteToFrequency as midiToFrequency, namedPitchToFrequency } from '@tussel/ir';
+
+export { namedPitchToFrequency };
+
 /** Default base frequency — middle C (C4) in 12-TET. */
 const DEFAULT_BASE_FREQ = 261.63;
 
@@ -144,4 +148,45 @@ export function parseXenValue(notation: string): number | undefined {
  */
 export function resolveEdoFrequency(step: number, edo: number, baseFreq?: number): number {
   return edoFrequency(step, edo, baseFreq);
+}
+
+/**
+ * Compute the frequency of a tuning-table step.
+ *
+ * Supported specs (mirroring Strudel's xenharmonic surface):
+ * - number: cents detune applied to the step's standard 12-TET pitch
+ * - string `"Nedo"` (e.g. `"31edo"`): N-EDO frequency for the step
+ * - array of ratios: ratio table lookup with octave wrapping
+ *   (`step` wraps modulo the table length, octaves multiply by 2)
+ */
+export function tunedStepFrequency(
+  spec: unknown,
+  step: number,
+  baseFreq: number = DEFAULT_BASE_FREQ,
+): number | undefined {
+  if (typeof spec === 'number' && Number.isFinite(spec)) {
+    return midiToFrequency(60 + step) * centsToRatio(spec);
+  }
+  if (typeof spec === 'string') {
+    const edoMatch = /^(\d+)edo$/i.exec(spec.trim());
+    if (edoMatch?.[1]) {
+      return edoFrequency(step, Number(edoMatch[1]), baseFreq);
+    }
+    const ratio = parseXenValue(spec);
+    if (ratio !== undefined && ratio > 0) {
+      return baseFreq * ratio;
+    }
+    return undefined;
+  }
+  if (Array.isArray(spec)) {
+    const ratios = spec.filter((entry): entry is number => typeof entry === 'number' && entry > 0);
+    if (ratios.length === 0) {
+      return undefined;
+    }
+    const normalized = ((Math.trunc(step) % ratios.length) + ratios.length) % ratios.length;
+    const octave = Math.floor(Math.trunc(step) / ratios.length);
+    const ratio = ratios[normalized];
+    return baseFreq * (ratio ?? 1) * 2 ** octave;
+  }
+  return undefined;
 }

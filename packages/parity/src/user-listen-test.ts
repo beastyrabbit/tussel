@@ -6,6 +6,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ensureSamplePackLocal, renderSceneToWavBuffer } from '@tussel/audio';
 import { resolveTusselCacheDir, stableJson } from '@tussel/ir';
+import { encodeCanonicalWav, parseCanonicalWav } from '@tussel/testkit';
 import { renderStrudelAudio } from './adapters/strudel.js';
 import { prepareTusselScene, readCanonicalScene, renderTusselAudio } from './adapters/tussel.js';
 import { compareAudio, isAudibleWav } from './compare-audio.js';
@@ -475,36 +476,6 @@ function concatenateCanonicalWavs(buffers: Buffer[]): Buffer {
     }
   }
   return encodeCanonicalWav(sampleRate, channels, Buffer.concat(parsed.map((wav) => wav.data)));
-}
-
-function parseCanonicalWav(buffer: Buffer): { channels: number; data: Buffer; sampleRate: number } {
-  if (buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WAVE') {
-    throw new Error('Expected canonical RIFF/WAVE listen data.');
-  }
-  return {
-    channels: buffer.readUInt16LE(22),
-    data: buffer.subarray(44),
-    sampleRate: buffer.readUInt32LE(24),
-  };
-}
-
-function encodeCanonicalWav(sampleRate: number, channels: number, data: Buffer): Buffer {
-  const result = Buffer.alloc(data.byteLength + 44);
-  result.write('RIFF', 0, 'ascii');
-  result.writeUInt32LE(result.byteLength - 8, 4);
-  result.write('WAVE', 8, 'ascii');
-  result.write('fmt ', 12, 'ascii');
-  result.writeUInt32LE(16, 16);
-  result.writeUInt16LE(1, 20);
-  result.writeUInt16LE(channels, 22);
-  result.writeUInt32LE(sampleRate, 24);
-  result.writeUInt32LE(sampleRate * channels * 2, 28);
-  result.writeUInt16LE(channels * 2, 32);
-  result.writeUInt16LE(16, 34);
-  result.write('data', 36, 'ascii');
-  result.writeUInt32LE(data.byteLength, 40);
-  data.copy(result, 44);
-  return result;
 }
 
 async function maybePlayFile(filePath: string): Promise<void> {

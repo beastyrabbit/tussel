@@ -3,7 +3,9 @@ export * from './errors.js';
 export * from './hydra.js';
 export * from './input.js';
 export * from './logger.js';
+export * from './methods.js';
 export * from './paths.js';
+export * from './pitch.js';
 
 import { TusselValidationError } from './errors.js';
 

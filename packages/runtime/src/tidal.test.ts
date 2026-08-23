@@ -68,6 +68,31 @@ describe('Tidal dialect translation', () => {
     expect(result.channels[0]?.expr).toBe('s("bd sd").rev()');
   });
 
+  it('translates newly supported transforms', () => {
+    const cases: Array<[string, string]> = [
+      ['d1 $ swingBy 0.25 2 $ s "bd"', 's("bd").swingBy(0.25, 2)'],
+      ['d1 $ s "bd" # vowel "a"', 's("bd").vowel("a")'],
+      ['d1 $ s "bd" # hcutoff 4000', 's("bd").hcutoff(4000)'],
+      ['d1 $ loop 2 $ s "bd"', 's("bd").loop(2)'],
+      ['d1 $ s "bd" # up 12', 's("bd").up(12)'],
+      ['d1 $ whenmod 8 5 (fast 2) $ s "bd"', 's("bd").whenmod(8, 5, fast(2))'],
+      ['d1 $ legato 0.7 $ s "bd sd"', 's("bd sd").legato(0.7)'],
+      ['d1 $ chop 4 $ s "bd"', 's("bd").chop(4)'],
+      ['d1 $ striate 8 $ s "bd"', 's("bd").striate(8)'],
+      ['d1 $ stut 3 0.125 0.5 $ s "bd"', 's("bd").stut(3, 0.125, 0.5)'],
+      ['d1 $ spin 3 $ s "bd"', 's("bd").spin(3)'],
+      ['d1 $ s "bd" # crush 8', 's("bd").crush(8)'],
+      ['d1 $ s "bd" # bandf 800', 's("bd").bandf(800)'],
+      ['d1 $ accelerate 1 $ s "bd"', 's("bd").accelerate(1)'],
+      ['d1 $ bite 4 (n 1) $ s "bd"', 's("bd").bite(4, n(1))'],
+      ['d1 $ unit "r" $ s "bd"', 's("bd").unit("r")'],
+    ];
+    for (const [source, expected] of cases) {
+      const result = translateTidalToStrudelProgram(source);
+      expect(result.channels[0]?.expr).toBe(expected);
+    }
+  });
+
   // ---------------------------------------------------------------------------
   // Bindings
   // ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import {
   createParam,
   createParams,
   defineScene,
+  getStringPrototypeInstalledMethods,
   installStringPrototypeExtensions,
   note,
   PatternBuilder,
@@ -13,6 +14,7 @@ import {
   rand,
   SceneRecorder,
   SignalBuilder,
+  STRING_PATTERN_METHODS,
   s,
   saw,
   seq,
@@ -1000,71 +1002,20 @@ describe('String prototype extensions: detailed behavior', () => {
   it('all STRING_PATTERN_METHODS are installed', () => {
     installStringPrototypeExtensions();
 
-    const expectedMethods = [
-      'add',
-      'almostAlways',
-      'almostNever',
-      'compress',
-      'contract',
-      'degrade',
-      'degradeBy',
-      'div',
-      'drop',
-      'edo',
-      'every',
-      'early',
-      'expand',
-      'extend',
-      'fast',
-      'fastGap',
-      'grow',
-      'hurry',
-      'jux',
-      'juxBy',
-      'late',
-      'layer',
-      'linger',
-      'log',
-      'loop',
-      'midichan',
-      'midicc',
-      'midiport',
-      'midivalue',
-      'mul',
-      'off',
-      'often',
-      'osc',
-      'oschost',
-      'oscport',
-      'pace',
-      'ply',
-      'rarely',
-      'rev',
-      'rootNotes',
-      'scramble',
-      'scale',
-      'scaleTranspose',
-      'shuffle',
-      'shrink',
-      'slow',
-      'slowGap',
-      'sometimes',
-      'sometimesBy',
-      'sub',
-      'superimpose',
-      'take',
-      'tour',
-      'transpose',
-      'velocity',
-      'voicings',
-      'when',
-      'within',
-      'zoom',
-    ];
-
-    for (const method of expectedMethods) {
+    for (const method of STRING_PATTERN_METHODS) {
       expect(typeof ('' as unknown as Record<string, unknown>)[method]).toBe('function');
     }
+  });
+
+  it('installed methods exactly match STRING_SAFE_METHODS from the registry', () => {
+    // Compute native collisions BEFORE installing — installs add the names
+    // to String.prototype themselves. Names colliding with native methods
+    // (e.g. 'sub', a legacy HTML wrapper) are skipped at install time by design.
+    const expected = new Set(
+      STRING_PATTERN_METHODS.filter((method) => !Object.hasOwn(String.prototype, method)),
+    );
+    installStringPrototypeExtensions();
+    expect(getStringPrototypeInstalledMethods()).toEqual(expected);
   });
 
   it('all methods are removed after uninstallation', () => {

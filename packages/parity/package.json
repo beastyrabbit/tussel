@@ -23,6 +23,7 @@
     "@tussel/audio": "workspace:*",
     "@tussel/core": "workspace:*",
     "@tussel/ir": "workspace:*",
-    "@tussel/runtime": "workspace:*"
+    "@tussel/runtime": "workspace:*",
+    "@tussel/testkit": "workspace:*"
   }
 }

@@ -56,6 +56,58 @@ export function setMotionValue(axis: string, value: InputValue): void {
   setInputValue(resolveMotionInputKey(axis), value);
 }
 
+// ---------------------------------------------------------------------------
+// MIDI note state (for midin() / midikeys() signals)
+// ---------------------------------------------------------------------------
+
+const MIDI_HELD_NOTES_KEY = Symbol.for('tussel.midiHeldNotes');
+
+function midiHeldNotes(): Map<string, Set<number>> {
+  const root = globalThis as typeof globalThis & { [MIDI_HELD_NOTES_KEY]?: Map<string, Set<number>> };
+  root[MIDI_HELD_NOTES_KEY] ??= new Map<string, Set<number>>();
+  return root[MIDI_HELD_NOTES_KEY];
+}
+
+/** Registry key holding the most recent note-on pitch for a port. */
+const NOTE_KEY_CONTROL = 'note';
+/** Registry key holding the count of currently held notes for a port. */
+const KEYS_KEY_CONTROL = 'keys';
+
+/**
+ * Record a MIDI note-on: tracks the note as held and publishes both the
+ * latest pitch (`midin()`) and the held-note count (`midikeys()`) to the
+ * input registry.
+ */
+export function setMidiNoteOn(note: number, velocity = 127, port: string | number = 'default'): void {
+  const normalizedPort = `${port}`.trim() || 'default';
+  const held = midiHeldNotes().get(normalizedPort) ?? new Set<number>();
+  held.add(Math.trunc(note));
+  midiHeldNotes().set(normalizedPort, held);
+  setMidiValue(NOTE_KEY_CONTROL, Math.trunc(note), normalizedPort);
+  setMidiValue(KEYS_KEY_CONTROL, held.size, normalizedPort);
+}
+
+/** Record a MIDI note-off: releases the note and refreshes the held-note count. */
+export function setMidiNoteOff(note: number, port: string | number = 'default'): void {
+  const normalizedPort = `${port}`.trim() || 'default';
+  const held = midiHeldNotes().get(normalizedPort);
+  if (held) {
+    held.delete(Math.trunc(note));
+    setMidiValue(KEYS_KEY_CONTROL, held.size, normalizedPort);
+  }
+}
+
+/** Currently held note numbers for a port (unordered copy). */
+export function getHeldMidiNotes(port: string | number = 'default'): number[] {
+  const held = midiHeldNotes().get(`${port}`.trim() || 'default');
+  return held ? [...held] : [];
+}
+
+/** Clear all MIDI note tracking state (used by tests and scene resets). */
+export function resetMidiNoteState(): void {
+  midiHeldNotes().clear();
+}
+
 function normalizeInputKey(name: string): string {
   if (typeof name !== 'string') {
     throw new TusselInputError(`Input key must be a string, received ${typeof name}.`);

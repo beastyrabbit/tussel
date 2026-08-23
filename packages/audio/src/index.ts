@@ -5,10 +5,12 @@ import {
   type ExternalDispatchEvent,
   edoFrequency,
   evaluateNumericValue,
+  namedPitchToFrequency,
   type PlaybackEvent,
   parseXenValue,
   queryScene,
   Scheduler,
+  tunedStepFrequency,
 } from '@tussel/core';
 import {
   coerceFiniteNumber,
@@ -724,15 +726,42 @@ async function playSample(
   cps: number,
 ): Promise<LoadedVoice> {
   const env = createEnvelope(context, event, targetTime, cps, DEFAULT_SAMPLE_ENVELOPE);
+  // Playback unit convention (SuperDirt-style):
+  // - 'c' (default): begin/end/speed are cycle fractions
+  // - 's': begin/end are seconds into the sample
+  // - 'r': relative — speed is scaled so speed=1 fits the whole sample in the event window
+  const unitMode = typeof event.payload.unit === 'string' ? event.payload.unit.trim().toLowerCase() : 'c';
   const requestedSpeed = coerceFiniteNumber(event.payload.speed) ?? 1;
-  const playbackRate = Math.max(Math.abs(requestedSpeed), MIN_PLAYBACK_RATE);
+  const playbackWindow = Math.max(
+    event.duration / Math.max(cps, MIN_CPS_DIVISOR),
+    MIN_PLAYBACK_DURATION_SECONDS,
+  );
+  let playbackRate = Math.max(Math.abs(requestedSpeed), MIN_PLAYBACK_RATE);
+  if (unitMode === 'r') {
+    playbackRate = Math.max((Math.abs(requestedSpeed) * buffer.duration) / playbackWindow, MIN_PLAYBACK_RATE);
+  }
   const reverse = requestedSpeed < 0;
   const sourceBuffer = reverse ? getReversedBuffer(context, buffer) : buffer;
-  const begin = clampNumber(event.payload.begin, 0, 0.99, 0);
-  const end = clampNumber(event.payload.end, begin + MIN_PLAYBACK_DURATION_SECONDS, 1, 1);
+  const rawBegin = coerceFiniteNumber(event.payload.begin) ?? 0;
+  const rawEnd = coerceFiniteNumber(event.payload.end) ?? 1;
+  // Normalize the sample window to seconds.
+  let windowBeginSeconds: number;
+  let windowEndSeconds: number;
+  if (unitMode === 's') {
+    windowBeginSeconds = clamp(rawBegin, 0, buffer.duration);
+    windowEndSeconds = clamp(rawEnd, windowBeginSeconds + MIN_PLAYBACK_DURATION_SECONDS, buffer.duration);
+  } else {
+    const beginFraction = clamp(rawBegin, 0, 0.99);
+    windowBeginSeconds = beginFraction * buffer.duration;
+    windowEndSeconds =
+      clamp(rawEnd, beginFraction + MIN_PLAYBACK_DURATION_SECONDS / Math.max(buffer.duration, 1e-6), 1) *
+      buffer.duration;
+  }
   const loopEnabled = isLoopEnabled(event.payload.loop);
-  const loopStart = reverse ? (1 - end) * buffer.duration : begin * buffer.duration;
-  const loopEnd = reverse ? (1 - begin) * buffer.duration : end * buffer.duration;
+  const loopStart = reverse ? Math.max(0, buffer.duration - windowEndSeconds) : windowBeginSeconds;
+  const loopEnd = reverse
+    ? Math.max(loopStart + MIN_PLAYBACK_DURATION_SECONDS, buffer.duration - windowBeginSeconds)
+    : windowEndSeconds;
   const source = new BufferSourceNode(context, {
     buffer: sourceBuffer,
     loop: loopEnabled,
@@ -740,9 +769,8 @@ async function playSample(
     loopStart,
     playbackRate,
   });
-  const availableDuration = Math.max(buffer.duration * (end - begin), MIN_PLAYBACK_DURATION_SECONDS);
+  const availableDuration = Math.max(windowEndSeconds - windowBeginSeconds, MIN_PLAYBACK_DURATION_SECONDS);
   const offset = loopStart;
-  const playbackWindow = Math.max(event.duration / cps, MIN_PLAYBACK_DURATION_SECONDS);
   const sampleWindow = availableDuration / playbackRate;
   const duration = loopEnabled ? playbackWindow : Math.min(sampleWindow, playbackWindow);
   const stopTime =
@@ -757,6 +785,16 @@ async function playSample(
   );
   source.connect(destination);
   source.start(targetTime, offset);
+  const accelerate = coerceFiniteNumber(event.payload.accelerate);
+  if (accelerate !== undefined && accelerate !== 0) {
+    // Playback-rate ramp: accelerate is in octaves per cycle.
+    const durationCycles = event.duration / Math.max(cps, MIN_CPS_DIVISOR);
+    source.playbackRate.setValueAtTime(playbackRate, targetTime);
+    source.playbackRate.linearRampToValueAtTime(
+      Math.max(playbackRate * 2 ** (accelerate * durationCycles), MIN_PLAYBACK_RATE),
+      stopTime,
+    );
+  }
   source.stop(stopTime);
   return { gate: env, sources: [source] };
 }
@@ -842,6 +880,16 @@ function playSynth(
     type: soundName === 'saw' ? 'sawtooth' : (soundName as OscillatorType),
   });
   const sources: Array<AudioBufferSourceNode | OscillatorNode> = [oscillator];
+  const accelerate = coerceFiniteNumber(event.payload.accelerate);
+  if (accelerate !== undefined && accelerate !== 0) {
+    // Frequency ramp: accelerate is in octaves per cycle.
+    const durationCycles = event.duration / Math.max(cps, MIN_CPS_DIVISOR);
+    oscillator.frequency.setValueAtTime(frequency, targetTime);
+    oscillator.frequency.linearRampToValueAtTime(
+      Math.max(frequency * 2 ** (accelerate * durationCycles), 1),
+      stopTime,
+    );
+  }
   const fmAmount = coerceFiniteNumber(event.payload.fm);
   if (fmAmount !== undefined && fmAmount > 0) {
     const depth = clamp(fmAmount, 0.05, 8);
@@ -958,6 +1006,53 @@ function connectOutputChain(
     const filter = new BiquadFilterNode(context, {
       frequency: clamp(hpf, MIN_AUDIBLE_FREQUENCY_HZ, MAX_AUDIBLE_FREQUENCY_HZ),
       type: 'highpass',
+    });
+    const hresonance = coerceFiniteNumber(payload.hresonance);
+    if (hresonance !== undefined) {
+      filter.Q.value = clamp(hresonance, 0.0001, 30);
+    }
+    current.connect(filter);
+    current = filter;
+  }
+
+  const bandf = coerceFiniteNumber(payload.bandf);
+  if (bandf !== undefined) {
+    const filter = new BiquadFilterNode(context, {
+      frequency: clamp(bandf, MIN_AUDIBLE_FREQUENCY_HZ, MAX_AUDIBLE_FREQUENCY_HZ),
+      type: 'bandpass',
+    });
+    const bandq = coerceFiniteNumber(payload.bandq);
+    if (bandq !== undefined) {
+      filter.Q.value = clamp(bandq, 0.0001, 30);
+    }
+    current.connect(filter);
+    current = filter;
+  }
+
+  const crushBits = coerceFiniteNumber(payload.crush);
+  if (crushBits !== undefined && crushBits > 0) {
+    // Bit-crush: quantize amplitude to `bits` levels via a staircase curve.
+    const shaper = new WaveShaperNode(context);
+    const bits = clamp(Math.round(crushBits), 1, 16);
+    const steps = 2 ** bits;
+    const curve = new Float32Array(1024);
+    for (let index = 0; index < curve.length; index += 1) {
+      const input = (index / (curve.length - 1)) * 2 - 1;
+      curve[index] = Math.round(input * (steps / 2)) / (steps / 2);
+    }
+    shaper.curve = curve;
+    shaper.oversample = 'none';
+    current.connect(shaper);
+    current = shaper;
+  }
+
+  const coarse = coerceFiniteNumber(payload.coarse);
+  if (coarse !== undefined && coarse > 0) {
+    // Sample-rate reduction approximation: zero-order-hold is unavailable in a
+    // plain node graph, so band-limit at half the target rate instead.
+    const filter = new BiquadFilterNode(context, {
+      frequency: clamp(coarse, MIN_AUDIBLE_FREQUENCY_HZ, MAX_AUDIBLE_FREQUENCY_HZ) / 2,
+      type: 'lowpass',
     });
     current.connect(filter);
     current = filter;
@@ -1078,6 +1173,16 @@ function createEnvelope(
 }
 
 function resolveFrequency(payload: Record<string, unknown>): number {
+  const base = resolveBaseFrequency(payload);
+  // `up`: semitone offset applied on top of the resolved pitch.
+  const up = coerceFiniteNumber(payload.up);
+  if (up !== undefined && up !== 0) {
+    return base * 2 ** (up / 12);
+  }
+  return base;
+}
+
+function resolveBaseFrequency(payload: Record<string, unknown>): number {
   const frequency = coerceFiniteNumber(payload.freq);
   if (frequency !== undefined && frequency > 0) {
     return frequency;
@@ -1096,6 +1201,23 @@ function resolveFrequency(payload: Record<string, unknown>): number {
 
   const note = payload.note ?? payload.n;
 
+  // Xenharmonic tuning table (`tune()`): map the event's step value
+  // (`i`/`n`/`note`) through a tuning spec — "Nedo" scale, ratio array, or
+  // cents detune — instead of standard 12-TET.
+  const tuneSpec = payload.tune;
+  if (tuneSpec !== undefined && tuneSpec !== null) {
+    const step =
+      coerceFiniteNumber(payload.i) ??
+      coerceFiniteNumber(note) ??
+      (typeof note === 'string' ? coerceFiniteNumber(Number(note)) : undefined);
+    if (step !== undefined && Number.isFinite(step)) {
+      const tuned = tunedStepFrequency(tuneSpec, step, coerceFiniteNumber(payload.baseFreq) ?? undefined);
+      if (tuned !== undefined && tuned > 0) {
+        return tuned;
+      }
+    }
+  }
+
   // EDO tuning: when payload.edo is a positive number, use N-EDO frequency
   // calculation instead of standard 12-TET.
   const edoDivisions = coerceFiniteNumber(payload.edo);
@@ -1112,7 +1234,7 @@ function resolveFrequency(payload: Record<string, unknown>): number {
   }
 
   if (typeof note === 'string') {
-    const named = parseNamedPitch(note);
+    const named = namedPitchToFrequency(note);
     if (named) {
       return named;
     }
@@ -1131,26 +1253,6 @@ function midiToFrequency(midi: number): number {
 
 function frequencyToMidi(frequency: number): number {
   return 69 + 12 * Math.log2(Math.max(frequency, 1e-6) / 440);
-}
-
-function parseNamedPitch(value: string): number | undefined {
-  const match = /^([A-Ga-g])([#b]?)(-?\d)$/.exec(value.trim());
-  if (!match) {
-    return undefined;
-  }
-  const [, noteName, accidental, octaveRaw] = match;
-  if (!noteName || !octaveRaw) {
-    return undefined;
-  }
-  const octave = Number(octaveRaw);
-  const scale = { A: 9, B: 11, C: 0, D: 2, E: 4, F: 5, G: 7 } as const;
-  let semitone = scale[noteName.toUpperCase() as keyof typeof scale];
-  if (accidental === '#') {
-    semitone += 1;
-  } else if (accidental === 'b') {
-    semitone -= 1;
-  }
-  return midiToFrequency((octave + 1) * 12 + semitone);
 }
 
 function createNoiseBuffer(context: AnyContext): AudioBuffer {

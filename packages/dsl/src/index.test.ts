@@ -658,9 +658,11 @@ describe('G.06 — normalizeValue with complex nesting', () => {
     const setArg = json.args[0] as Record<string, unknown>;
     const effects = setArg.effects as Array<Record<string, unknown>>;
     expect(effects.length).toBe(2);
-    expect((effects[0]?.mod as { kind: string }).kind).toBe('method');
+    const firstMod = effects[0]?.mod as { kind: string } | undefined;
+    const secondMod = effects[1]?.mod as { kind: string } | undefined;
+    expect(firstMod?.kind).toBe('method');
     expect(effects[0]?.name).toBe('chorus');
-    expect((effects[1]?.mod as { kind: string }).kind).toBe('method');
+    expect(secondMod?.kind).toBe('method');
     expect(effects[1]?.name).toBe('flanger');
   });
 

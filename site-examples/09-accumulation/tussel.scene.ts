@@ -1,4 +1,4 @@
-import { type PatternBuilder, defineScene, s } from '@tussel/dsl';
+import { defineScene, type PatternBuilder, s } from '@tussel/dsl';
 
 export default defineScene({
   samples: [{ ref: './examples/assets/basic-kit' }],

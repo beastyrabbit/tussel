@@ -785,7 +785,7 @@ describe('H.03 — concurrent tick guard', () => {
 // ---------------------------------------------------------------------------
 describe('scheduler async onTrigger dispatch', () => {
   it('handles async onTrigger without blocking subsequent events', () => {
-    let currentTime = 0;
+    const currentTime = 0;
     const timers = createFakeTimers();
     const triggerOrder: string[] = [];
     let resolveFirst: (() => void) | undefined;
@@ -821,7 +821,7 @@ describe('scheduler async onTrigger dispatch', () => {
   });
 
   it('catches rejected async onTrigger without crashing', () => {
-    let currentTime = 0;
+    const currentTime = 0;
     const timers = createFakeTimers();
     const errors: string[] = [];
     const originalError = console.error;
@@ -854,7 +854,7 @@ describe('scheduler async onTrigger dispatch', () => {
   });
 
   it('catches rejected async onExternalDispatch without crashing', () => {
-    let currentTime = 0;
+    const currentTime = 0;
     const timers = createFakeTimers();
     const originalError = console.error;
     console.error = () => {};

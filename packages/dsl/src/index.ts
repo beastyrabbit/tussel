@@ -12,6 +12,8 @@ import {
   isExpressionNode,
   isPlainObject,
   type MetadataSpec,
+  midiNoteToFrequency,
+  namedPitchToFrequency,
   normalizeChannelSpec,
   normalizeHydraSceneSpec,
   normalizeSampleSource,
@@ -20,6 +22,7 @@ import {
   type SampleSourceSpec,
   type SceneInput,
   type SceneSpec,
+  STRING_SAFE_METHODS,
   type TransportSpec,
   TusselHydraError,
   TusselValidationError,
@@ -237,6 +240,10 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
 
   end(value: unknown): PatternBuilder {
     return this.method('end', [value]);
+  }
+
+  freq(value: unknown): PatternBuilder {
+    return this.method('freq', [value]);
   }
 
   expand(value: unknown): PatternBuilder {
@@ -538,6 +545,91 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
 
   sustain(value: unknown): PatternBuilder {
     return this.method('sustain', [value]);
+  }
+
+  tune(value: unknown): PatternBuilder {
+    return this.method('tune', [value]);
+  }
+
+  up(value: unknown): PatternBuilder {
+    return this.method('up', [value]);
+  }
+
+  unit(value: unknown): PatternBuilder {
+    return this.method('unit', [value]);
+  }
+
+  bite(count: unknown, generator: unknown): PatternBuilder {
+    return this.method('bite', [count, generator]);
+  }
+
+  fit(size: unknown, table: unknown): PatternBuilder {
+    return this.method('fit', [size, table]);
+  }
+
+  fastspread(...factors: unknown[]): PatternBuilder {
+    const args = factors.length === 1 && Array.isArray(factors[0]) ? (factors[0] as unknown[]) : factors;
+    return this.method('fastspread', args);
+  }
+
+  slowspread(...factors: unknown[]): PatternBuilder {
+    const args = factors.length === 1 && Array.isArray(factors[0]) ? (factors[0] as unknown[]) : factors;
+    return this.method('slowspread', args);
+  }
+
+  accelerate(value: unknown): PatternBuilder {
+    return this.method('accelerate', [value]);
+  }
+
+  bandf(value: unknown): PatternBuilder {
+    return this.method('bandf', [value]);
+  }
+
+  bandq(value: unknown): PatternBuilder {
+    return this.method('bandq', [value]);
+  }
+
+  coarse(value: unknown): PatternBuilder {
+    return this.method('coarse', [value]);
+  }
+
+  crush(value: unknown): PatternBuilder {
+    return this.method('crush', [value]);
+  }
+
+  hresonance(value: unknown): PatternBuilder {
+    return this.method('hresonance', [value]);
+  }
+
+  legato(value: unknown): PatternBuilder {
+    return this.method('legato', [value]);
+  }
+
+  chop(value: unknown): PatternBuilder {
+    return this.method('chop', [value]);
+  }
+
+  spin(value: unknown): PatternBuilder {
+    return this.method('spin', [value]);
+  }
+
+  striate(value: unknown): PatternBuilder {
+    return this.method('striate', [value]);
+  }
+
+  stut(count: unknown, time?: unknown, feedback?: unknown): PatternBuilder {
+    const args = [count];
+    if (time !== undefined) {
+      args.push(time);
+    }
+    if (feedback !== undefined) {
+      args.push(feedback);
+    }
+    return this.method('stut', args);
+  }
+
+  whenmod(n: unknown, t: unknown, pattern: unknown): PatternBuilder {
+    return this.method('whenmod', [n, t, pattern]);
   }
 
   velocity(value: unknown): PatternBuilder {
@@ -913,6 +1005,29 @@ export function n(source: unknown): PatternBuilder {
   return patternCall('n', [source]);
 }
 
+/**
+ * Tuning-index source: like `n()`, but semantically the step index into a
+ * tuning table (see `.tune()`). `i("0 1 2 3").tune("31edo").freq(220)`.
+ */
+export function i(source: unknown): PatternBuilder {
+  return patternCall('i', [source]);
+}
+
+/**
+ * Base-frequency helper: resolve a pitch name (`'c3'`) or MIDI note number
+ * (69 = A4 = 440 Hz) to Hz. Useful with `mul`/`freq`, e.g.
+ * `i("0 1 2").tune("hexany").mul(getFreq('c3')).freq()`.
+ */
+export function getFreq(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return midiNoteToFrequency(Math.trunc(value));
+  }
+  if (typeof value === 'string') {
+    return namedPitchToFrequency(value) ?? undefined;
+  }
+  return undefined;
+}
+
 export function chord(source: unknown): PatternBuilder {
   return patternCall('chord', [source]);
 }
@@ -937,12 +1052,20 @@ export function cc(control: unknown, port?: unknown): SignalBuilder {
   return signalCall('cc', port === undefined ? [control] : [control, port]);
 }
 
-export function midin(channel?: unknown): SignalBuilder {
-  return signalCall('midin', channel === undefined ? [] : [channel]);
+/** Latest MIDI note-on pitch for a port (see `setMidiNoteOn`). */
+export function midin(port?: unknown, fallback?: unknown): SignalBuilder {
+  if (fallback === undefined) {
+    return signalCall('midin', port === undefined ? [] : [port]);
+  }
+  return signalCall('midin', [port, fallback]);
 }
 
-export function midikeys(channel?: unknown): SignalBuilder {
-  return signalCall('midikeys', channel === undefined ? [] : [channel]);
+/** Number of currently held MIDI notes for a port (see `setMidiNoteOn`/`setMidiNoteOff`). */
+export function midikeys(port?: unknown, fallback?: unknown): SignalBuilder {
+  if (fallback === undefined) {
+    return signalCall('midikeys', port === undefined ? [] : [port]);
+  }
+  return signalCall('midikeys', [port, fallback]);
 }
 
 export function gamepad(control: unknown, index?: unknown): SignalBuilder {
@@ -1080,84 +1203,12 @@ export function createParams<const TNames extends readonly string[]>(
   };
 }
 
-const STRING_PATTERN_METHODS = [
-  'add',
-  'almostAlways',
-  'almostNever',
-  'compress',
-  'contract',
-  'cpm',
-  'degrade',
-  'degradeBy',
-  'density',
-  'div',
-  'drop',
-  'edo',
-  'euclidLegato',
-  'euclidRot',
-  'euclidrot',
-  'every',
-  'early',
-  'expand',
-  'extend',
-  'fast',
-  'fastGap',
-  'fmap',
-  'grow',
-  'hurry',
-  'inside',
-  'iter',
-  'iterBack',
-  'iterback',
-  'jux',
-  'juxBy',
-  'late',
-  'layer',
-  'linger',
-  'log',
-  'loop',
-  'midichan',
-  'midicc',
-  'midiport',
-  'midivalue',
-  'mul',
-  'off',
-  'often',
-  'osc',
-  'oschost',
-  'oscport',
-  'outside',
-  'pace',
-  'palindrome',
-  'ply',
-  'rarely',
-  'rev',
-  'rib',
-  'ribbon',
-  'rootNotes',
-  'scramble',
-  'scale',
-  'scaleTranspose',
-  'shuffle',
-  'shrink',
-  'slow',
-  'slowGap',
-  'sometimes',
-  'sometimesBy',
-  'sparsity',
-  'sub',
-  'superimpose',
-  'swing',
-  'swingBy',
-  'take',
-  'tour',
-  'transpose',
-  'velocity',
-  'voicings',
-  'when',
-  'within',
-  'zoom',
-] as const;
+/**
+ * Methods installed onto String.prototype for `"bd".fast(2)` syntax.
+ * Derived from the shared PATTERN_METHOD_REGISTRY in @tussel/ir
+ * (entries flagged stringSafe).
+ */
+export const STRING_PATTERN_METHODS: readonly string[] = STRING_SAFE_METHODS;
 
 const STRING_EXTENSION_STATE_KEY = Symbol.for('tussel.stringPrototypeExtensions');
 
@@ -1269,6 +1320,11 @@ export function uninstallStringPrototypeExtensions(): void {
 
 export function areStringPrototypeExtensionsInstalled(): boolean {
   return getStringExtensionState().refCount > 0;
+}
+
+/** Currently installed String.prototype extension names (for tests and introspection). */
+export function getStringPrototypeInstalledMethods(): ReadonlySet<string> {
+  return new Set(getStringExtensionState().installedMethods);
 }
 
 /**

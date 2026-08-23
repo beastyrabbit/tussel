@@ -2,6 +2,8 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+export * from './wav.js';
+
 export async function createFixtureDirectory(prefix = 'tussel-fixture-'): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), prefix));
 }
