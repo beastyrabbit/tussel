@@ -112,3 +112,21 @@ describe('tidal expansion transforms', () => {
     expect(events.map((event) => event.payload.unit)).toEqual(['r']);
   });
 });
+
+describe('spread combinators', () => {
+  it('spread stacks fn(arg) applied to the target for each arg', async () => {
+    const { spread, slow } = await import('@tussel/dsl');
+    const events = queryChannel(spread(slow, [1, 2], s('bd sd')), 0, 1);
+    // slow(1) layer: 2 hits; slow(2) layer: 1 hit stretched across the cycle
+    expect(events.length).toBe(3);
+  });
+
+  it('slowspread and fastspread compose through slow/fast', async () => {
+    const { fastspread, slowspread } = await import('@tussel/dsl');
+    const spreadSlow = queryChannel(slowspread([1], s('bd sd')), 0, 1);
+    expect(spreadSlow.length).toBe(2);
+    const spreadFast = queryChannel(fastspread([2], s('bd sd')), 0, 1);
+    // fast(2) compresses two cycles into the window
+    expect(spreadFast.length).toBe(4);
+  });
+});

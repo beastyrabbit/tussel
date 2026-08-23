@@ -957,6 +957,35 @@ export function stack(...nodes: unknown[]): PatternBuilder {
   return patternCall('stack', nodes);
 }
 
+/**
+ * Tidal-style spread: apply `fn(arg)` for every arg in `args` to the target
+ * and stack the results.
+ *
+ * ```ts
+ * spread(slow, [1, 2, 4], s('bd sd')) // stack(slow(1)(p), slow(2)(p), slow(4)(p))
+ * ```
+ *
+ * Because this composes builders eagerly, it serializes fine to scene JSON —
+ * no function-valued IR is needed.
+ */
+export function spread(
+  fn: (arg: unknown) => (target: PatternBuilder) => PatternBuilder,
+  args: readonly unknown[],
+  target: PatternBuilder,
+): PatternBuilder {
+  return stack(...args.map((arg) => fn(arg)(target)));
+}
+
+/** spread specialised through {@link slow}. */
+export function slowspread(factors: readonly unknown[], target: PatternBuilder): PatternBuilder {
+  return spread((factor) => (pattern) => pattern.slow(factor), factors, target);
+}
+
+/** spread specialised through {@link fast}. */
+export function fastspread(factors: readonly unknown[], target: PatternBuilder): PatternBuilder {
+  return spread((factor) => (pattern) => pattern.fast(factor), factors, target);
+}
+
 export function cat(...nodes: unknown[]): PatternBuilder {
   return patternCall('cat', nodes);
 }
