@@ -286,42 +286,33 @@ describe('SignalBuilder', () => {
 // createParam / createParams
 // ---------------------------------------------------------------------------
 describe('createParam', () => {
-  it('creates a working custom parameter method', () => {
+  it('returns a live control param bound to its name', () => {
     const myParam = createParam('myCustomParam');
-    const result = myParam('hello');
-    expect(result).toBeInstanceOf(PatternBuilder);
-    expect(result.show()).toBe('myCustomParam("hello")');
+    const signal = myParam();
+    expect(signal).toBeInstanceOf(SignalBuilder);
+    expect(signal.show()).toBe('param("myCustomParam")');
   });
 
-  it('registers the method on PatternBuilder so it can be chained', () => {
-    createParam('chainableParam');
-    const result = s('bd');
-    // After createParam, the method should be available via dynamic dispatch
-    const fn = (result as unknown as Record<string, (...args: unknown[]) => PatternBuilder>).chainableParam;
-    expect(fn).toBeDefined();
-    const chained = (fn as (...args: unknown[]) => PatternBuilder).call(result, 'test');
-    expect(chained).toBeInstanceOf(PatternBuilder);
-    expect(chained.show()).toBe('s("bd").chainableParam("test")');
-  });
-
-  it('does not override built-in methods', () => {
-    const originalGain = s('bd').gain;
-    createParam('gain');
-    // Should still be the original method
-    expect(s('bd').gain).toBe(originalGain);
+  it('calling with a value sets the live value and yields the signal', () => {
+    const vol = createParam('vol');
+    const returned = vol(0.8);
+    expect(returned).toBeInstanceOf(SignalBuilder);
+    expect(vol.get()).toBe(0.8);
+    vol.set(0.2);
+    expect(vol.get()).toBe(0.2);
   });
 });
 
 describe('createParams', () => {
-  it('creates multiple custom params at once', () => {
+  it('creates multiple control params at once', () => {
     const params = createParams('foo', 'bar', 'baz');
     expect(typeof params.foo).toBe('function');
     expect(typeof params.bar).toBe('function');
     expect(typeof params.baz).toBe('function');
 
-    expect(params.foo(1).show()).toBe('foo(1)');
-    expect(params.bar('x').show()).toBe('bar("x")');
-    expect(params.baz(true).show()).toBe('baz(true)');
+    expect(params.foo().show()).toBe('param("foo")');
+    expect(params.bar().show()).toBe('param("bar")');
+    expect(params.baz().show()).toBe('param("baz")');
   });
 });
 
@@ -828,52 +819,44 @@ describe('exported signal constants', () => {
 // createParam / createParams: edge cases
 // ---------------------------------------------------------------------------
 describe('createParam edge cases', () => {
-  it('custom param accepts numeric arguments', () => {
+  it('calling with a value stores it and yields the live-value signal', () => {
     const freq = createParam('freq');
-    expect(freq(440).show()).toBe('freq(440)');
+    const signal = freq(440);
+    expect(signal.show()).toBe('param("freq")');
+    expect(freq.get()).toBe(440);
   });
 
-  it('custom param accepts boolean arguments', () => {
+  it('accepts boolean values', () => {
     const toggle = createParam('toggle');
-    expect(toggle(true).show()).toBe('toggle(true)');
-    expect(toggle(false).show()).toBe('toggle(false)');
+    toggle(true);
+    expect(toggle.get()).toBe(true);
+    toggle(false);
+    expect(toggle.get()).toBe(false);
   });
 
-  it('custom param accepts builder arguments', () => {
-    const modParam = createParam('modulation');
-    const result = modParam(sine.range(0, 1));
-    const json = result.toJSON();
-    expect(json.args.length).toBe(1);
-    const arg = json.args[0] as { kind: string; name: string };
-    expect(arg.kind).toBe('method');
-    expect(arg.name).toBe('range');
+  it('supports SignalBuilder methods directly on the param', () => {
+    const modParam = createParam('modulation').range(0, 1);
+    const json = modParam.toJSON();
+    expect(json.kind).toBe('method');
+    expect(json.name).toBe('range');
+    const target = json.target as { kind: string; name: string };
+    expect(target.kind).toBe('call');
+    expect(target.name).toBe('param');
   });
 
-  it('custom param method is chainable from existing patterns', () => {
-    createParam('customEffect');
-    const result = s('bd').fast(2);
-    const fn = (result as unknown as Record<string, (...args: unknown[]) => PatternBuilder>).customEffect;
-    expect(fn).toBeDefined();
-    // biome-ignore lint/style/noNonNullAssertion: fn is verified by toBeDefined above
-    const chained = fn!.call(result, 0.7);
-    expect(chained.show()).toBe('s("bd").fast(2).customEffect(0.7)');
-  });
-
-  it('ignores names with invalid JS identifiers', () => {
-    // Names starting with numbers or containing spaces should be silently ignored
-    // for prototype registration, but the factory still works
+  it('params with unusual names still work as registry keys', () => {
     const fn = createParam('123invalid');
-    expect(fn(1).show()).toBe('123invalid(1)');
-    // Should not be registered on prototype (since the name is invalid)
-    expect('123invalid' in PatternBuilder.prototype).toBe(false);
+    fn(7);
+    expect(fn.get()).toBe(7);
+    expect(fn().show()).toBe('param("123invalid")');
   });
 
-  it('does not override existing built-in methods when called multiple times', () => {
-    const firstFn = createParam('uniqueParam1');
-    const secondFn = createParam('uniqueParam1');
-    // Both factory functions work
-    expect(firstFn(1).show()).toBe('uniqueParam1(1)');
-    expect(secondFn(2).show()).toBe('uniqueParam1(2)');
+  it('re-creating a param shares the same registry slot', () => {
+    const first = createParam('uniqueParam1');
+    first(1);
+    const second = createParam('uniqueParam1');
+    second(2);
+    expect(first.get()).toBe(2);
   });
 });
 
@@ -887,23 +870,23 @@ describe('createParams edge cases', () => {
     const params = createParams('alpha', 'beta');
     const a = params.alpha(10);
     const b = params.beta(20);
-    expect(a.show()).toBe('alpha(10)');
-    expect(b.show()).toBe('beta(20)');
-    // They produce independent expression trees
-    expect(a.toJSON().name).toBe('alpha');
-    expect(b.toJSON().name).toBe('beta');
+    expect(a.show()).toBe('param("alpha")');
+    expect(b.show()).toBe('param("beta")');
+    expect(params.alpha.get()).toBe(10);
+    expect(params.beta.get()).toBe(20);
+    // They produce independent expression trees bound to distinct names
+    expect(a.toJSON().args[0]).toBe('alpha');
+    expect(b.toJSON().args[0]).toBe('beta');
   });
 
-  it('params can be chained onto patterns', () => {
-    const _params = createParams('x', 'y');
-    const result = s('bd');
-    const xFn = (result as unknown as Record<string, (...args: unknown[]) => PatternBuilder>).x;
-    const yFn = (result as unknown as Record<string, (...args: unknown[]) => PatternBuilder>).y;
-    expect(xFn).toBeDefined();
-    expect(yFn).toBeDefined();
-    // biome-ignore lint/style/noNonNullAssertion: verified above
-    const chained = yFn!.call(xFn!.call(result, 1), 2);
-    expect(chained.show()).toBe('s("bd").x(1).y(2)');
+  it('params can be used as pattern values', () => {
+    const { x, y } = createParams('x', 'y');
+    x(0.25);
+    y(0.75);
+    const chained = s('bd').gain(x).pan(y);
+    const gainJson = chained.toJSON().args[0] as unknown;
+    // gain receives the param signal call
+    expect(JSON.stringify(gainJson)).toContain('"param"');
   });
 });
 

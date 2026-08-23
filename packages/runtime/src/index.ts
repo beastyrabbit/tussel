@@ -1021,6 +1021,7 @@ const BUILTIN_DSL_CALLS = new Set([
   'motion',
   'n',
   'note',
+  'param',
   'pace',
   'perlin',
   'ply',

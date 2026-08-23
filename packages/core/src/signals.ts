@@ -2,6 +2,7 @@ import {
   type ExpressionNode,
   type ExpressionValue,
   getInputValue,
+  getParamValue,
   isExpressionNode,
   resolveGamepadInputKey,
   resolveInputKey,
@@ -25,6 +26,8 @@ export function evaluateSignalExpression(expr: ExpressionNode, cycle: number): n
             resolveSignalFallback(expr.args[1]),
           ),
         );
+      case 'param':
+        return coerceSignalNumber(getParamValue(`${expr.args[0] ?? ''}`, resolveParamFallback(expr.args[1])));
       case 'midi':
       case 'cc':
         return coerceSignalNumber(
@@ -127,6 +130,10 @@ export function evaluateSignalValue(value: ExpressionValue | undefined, cycle: n
   }
 
   return 0;
+}
+
+function resolveParamFallback(value: ExpressionValue | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 export function resolveSignalFallback(value: ExpressionValue | undefined): number {

@@ -159,6 +159,7 @@ const BUILTIN_CALLS = new Set([
   'i',
   'n',
   'note',
+  'param',
   'pace',
   'perlin',
   'ply',

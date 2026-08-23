@@ -8,6 +8,7 @@ import {
   type ExpressionNode,
   type ExpressionValue,
   type ExprType,
+  getParamValue,
   type HydraSceneSpec,
   isExpressionNode,
   isPlainObject,
@@ -23,6 +24,7 @@ import {
   type SceneInput,
   type SceneSpec,
   STRING_SAFE_METHODS,
+  setParamValue,
   type TransportSpec,
   TusselHydraError,
   TusselValidationError,
@@ -60,10 +62,12 @@ export interface DslSceneInput {
 
 function isBuilderLike(value: unknown): value is BuilderLike {
   return (
-    isPlainObject(value) &&
+    // Functions qualify so callable builders (ControlParam) unwrap like builders.
+    (typeof value === 'object' || typeof value === 'function') &&
+    value !== null &&
     BUILDER in value &&
-    value[BUILDER as keyof typeof value] === true &&
-    isExpressionNode(value.expr)
+    (value as Record<symbol, unknown>)[BUILDER] === true &&
+    isExpressionNode((value as unknown as { expr: unknown }).expr)
   );
 }
 
@@ -1196,39 +1200,62 @@ export const square = signalCall('square');
 export const triangle = signalCall('triangle');
 export const tri = signalCall('tri');
 
-function registerCustomPatternMethod(name: string): void {
-  if (!/^[A-Za-z_$][\w$]*$/.test(name) || name in PatternBuilder.prototype) {
-    return;
-  }
-
-  Object.defineProperty(PatternBuilder.prototype, name, {
-    configurable: true,
-    enumerable: false,
-    value(this: PatternBuilder, ...args: unknown[]) {
-      return createBuilder(
-        'pattern',
-        createMethodExpression(
-          this.expr,
-          name,
-          args.map((entry) => normalizeValue(entry)),
-          'pattern',
-        ),
-      );
-    },
-    writable: true,
-  });
+/**
+ * A live control parameter.
+ *
+ * - Call with a value to set it: `vol(0.8)`
+ * - Use the object itself as a pattern value to read the live value:
+ *   `s('bd').gain(vol)` / `note(vol.range(0, 12))`
+ * - `vol.get()` / `vol.set(v)` for imperative access
+ */
+export interface ControlParam extends SignalBuilder {
+  (value?: unknown): SignalBuilder;
+  readonly name: string;
+  get(): unknown;
+  set(value: unknown): void;
 }
 
-export function createParam(name: string): (value: unknown) => PatternBuilder {
-  registerCustomPatternMethod(name);
-  return (value: unknown) => patternCall(name, [value]);
+function createControlParam(name: string): ControlParam {
+  const signal = signalCall('param', [name]) as unknown as BuilderLike & Record<string, unknown>;
+  const param = ((value?: unknown): SignalBuilder => {
+    if (value !== undefined) {
+      setParamValue(name, value as never);
+    }
+    // Return a fresh builder so chained mutations never alias the param itself.
+    return signalCall('param', [name]);
+  }) as ControlParam;
+  // Carry the underlying signal-builder state so the param doubles as a value:
+  // normalizeValue unwraps it like any builder and SignalBuilder methods work.
+  for (const key of Reflect.ownKeys(signal)) {
+    if (key !== 'length' && key !== 'name') {
+      Object.defineProperty(param, key, Object.getOwnPropertyDescriptor(signal, key)!);
+    }
+  }
+  Object.defineProperty(param, 'name', { value: `param:${name}` });
+  param.get = () => getParamValue(name);
+  param.set = (value: unknown) => setParamValue(name, value as never);
+  Object.setPrototypeOf(param, SignalBuilder.prototype as object);
+  return param;
+}
+
+/**
+ * Create a named, live-updatable control parameter.
+ *
+ * ```ts
+ * const vol = createParam('vol');
+ * s('bd*4').gain(vol);      // reads the live value every query
+ * vol(0.8);                 // update it — takes effect on the next cycle
+ * ```
+ */
+export function createParam(name: string): ControlParam {
+  return createControlParam(name);
 }
 
 export function createParams<const TNames extends readonly string[]>(
   ...names: TNames
-): { [TKey in TNames[number]]: (value: unknown) => PatternBuilder } {
-  return Object.fromEntries(names.map((name) => [name, createParam(name)])) as {
-    [TKey in TNames[number]]: (value: unknown) => PatternBuilder;
+): { [TKey in TNames[number]]: ControlParam } {
+  return Object.fromEntries(names.map((name) => [name, createControlParam(name)])) as {
+    [TKey in TNames[number]]: ControlParam;
   };
 }
 

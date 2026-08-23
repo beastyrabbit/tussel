@@ -419,45 +419,36 @@ describe('G.02 — SignalBuilder operations', () => {
 // G.03: createParam / createParams
 // ---------------------------------------------------------------------------
 describe('G.03 — createParam and createParams', () => {
-  it('createParam creates a top-level factory and registers it as chainable', () => {
+  it('createParam returns a live control param usable as a value', () => {
     const wobble = createParam('wobbleG03');
-    const topLevel = wobble(0.5);
-    expect(topLevel).toBeInstanceOf(PatternBuilder);
-    expect(topLevel.show()).toBe('wobbleG03(0.5)');
-
-    // Also chainable on existing patterns
-    const chained = s('bd') as unknown as Record<
-      string,
-      ((...args: unknown[]) => PatternBuilder) | undefined
-    >;
-    const result = chained.wobbleG03?.(0.8);
-    expect(result).toBeDefined();
-    expect(result?.show()).toBe('s("bd").wobbleG03(0.8)');
+    wobble(0.5);
+    expect(wobble.get()).toBe(0.5);
+    const signal = wobble();
+    expect(signal).toBeInstanceOf(SignalBuilder);
+    expect(signal.show()).toBe('param("wobbleG03")');
   });
 
-  it('createParams creates multiple independent param factories', () => {
+  it('createParams creates multiple independent live params', () => {
     const { attack03: atk, release03: rel } = createParams('attack03', 'release03');
-    expect(atk(0.01).show()).toBe('attack03(0.01)');
-    expect(rel(0.5).show()).toBe('release03(0.5)');
-    // Each factory is independent
-    expect(atk(0.01).toJSON().name).toBe('attack03');
-    expect(rel(0.5).toJSON().name).toBe('release03');
+    atk(0.01);
+    rel(0.5);
+    expect(atk.get()).toBe(0.01);
+    expect(rel.get()).toBe(0.5);
+    expect(atk().show()).toBe('param("attack03")');
+    expect(rel().show()).toBe('param("release03")');
   });
 
-  it('createParam accepts builder arguments', () => {
-    const depth = createParam('depthG03');
-    const result = depth(sine.range(0, 1));
-    const json = result.toJSON();
-    expect(json.args.length).toBe(1);
-    const arg = json.args[0] as { kind: string; name: string };
-    expect(arg.kind).toBe('method');
-    expect(arg.name).toBe('range');
+  it('createParam supports SignalBuilder chaining', () => {
+    const depth = createParam('depthG03').range(0, 1);
+    const json = depth.toJSON();
+    expect(json.name).toBe('range');
   });
 
-  it('createParam ignores invalid JS identifiers for prototype registration', () => {
+  it('createParam accepts unusual names as registry keys', () => {
     const fn = createParam('0startsBad');
-    expect(fn(1).show()).toBe('0startsBad(1)');
-    expect('0startsBad' in PatternBuilder.prototype).toBe(false);
+    fn(1);
+    expect(fn.get()).toBe(1);
+    expect(fn().show()).toBe('param("0startsBad")');
   });
 
   it('createParam does not override built-in PatternBuilder methods', () => {
