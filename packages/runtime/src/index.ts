@@ -6,6 +6,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { RealtimeAudioEngine, renderSceneToFile } from '@tussel/audio';
 import { type ExternalDispatchEvent, type PlaybackEvent, type QueryContext, queryScene } from '@tussel/core';
+
+export {
+  clearMixState,
+  getChannelRuntimeSnapshot,
+  isChannelAudible,
+  isHushed,
+  setChannelMuted,
+  setChannelSolo,
+  setHush,
+  toggleChannelMute,
+  toggleChannelSolo,
+} from '@tussel/core';
+
 import * as tusselDsl from '@tussel/dsl';
 import {
   ALL_PATTERN_METHOD_NAMES,

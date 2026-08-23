@@ -17,6 +17,7 @@ import {
   TusselCoreError,
 } from '@tussel/ir';
 import { inferMiniSteps, queryMini, queryMondo } from '@tussel/mini';
+import { isChannelAudible } from './channel-state.js';
 import {
   annotateEvents,
   applyBite,
@@ -86,6 +87,18 @@ import {
   remapEventPayload,
 } from './structure.js';
 
+export {
+  clearMixState,
+  getChannelRuntimeSnapshot,
+  isChannelAudible,
+  isHushed,
+  resetChannelRuntimeState,
+  setChannelMuted,
+  setChannelSolo,
+  setHush,
+  toggleChannelMute,
+  toggleChannelSolo,
+} from './channel-state.js';
 export { collectExternalDispatches };
 
 import { DEFAULT_MIDI_VALUE } from './constants.js';
@@ -299,6 +312,9 @@ function queryChannel(
   end: number,
   context: QueryContext,
 ): PlaybackEvent[] {
+  if (!isChannelAudible(channelName)) {
+    return [];
+  }
   try {
     const events = queryPattern(channel.node, begin, end, { ...context, channel: channelName });
     return events.map((event) => {
