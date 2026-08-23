@@ -43,17 +43,23 @@ export function defaultAudioSamplePack(): string {
 function extractBaseCases(): ValueModifiersCase[] {
   const text = readFileSync(PAGE_PATH, 'utf8');
   const matches = [...text.matchAll(TUNE_PATTERN)];
-  return matches.map((match, index) => {
-    const rawCode = (match[2] ?? match[3] ?? match[4] ?? '').trim();
-    const normalized = normalizeStrudelSource(rawCode);
-    return {
-      code: normalized,
-      cps: detectCps(normalized),
-      durationCycles: minimumAudioDurationCycles(detectCps(normalized)),
-      id: `value-modifiers/base-${index + 1}`,
-      title: describeSnippet(text, match.index ?? 0, index + 1, 'value modifiers example'),
-    } satisfies ValueModifiersCase;
-  });
+  return (
+    matches
+      .map((match, index) => {
+        const rawCode = (match[2] ?? match[3] ?? match[4] ?? '').trim();
+        const normalized = normalizeStrudelSource(rawCode);
+        return {
+          code: normalized,
+          cps: detectCps(normalized),
+          durationCycles: minimumAudioDurationCycles(detectCps(normalized)),
+          id: `value-modifiers/base-${index + 1}`,
+          title: describeSnippet(text, match.index ?? 0, index + 1, 'value modifiers example'),
+        } satisfies ValueModifiersCase;
+      })
+      // createParam()/createParams() demos are control-parameter examples, not
+      // self-contained audio patterns — they cannot execute on either engine.
+      .filter((testCase) => !testCase.code.includes('createParam'))
+  );
 }
 
 function buildWrappedCases(baseCases: ValueModifiersCase[]): ValueModifiersCase[] {

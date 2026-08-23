@@ -33,16 +33,21 @@ const METHOD_NAMES = new Set([
   'clip',
   'coarse',
   'compress',
+  'cpm',
   'crush',
   'cut',
   'decay',
   'degrade',
   'degradeBy',
   'delay',
+  'density',
   'dict',
   'early',
   'end',
+  'euclidLegato',
+  'euclidRot',
   'every',
+  'fmap',
   'fast',
   'fastGap',
   'fastspread',
@@ -53,6 +58,10 @@ const METHOD_NAMES = new Set([
   'hpf',
   'hresonance',
   'hurry',
+  'inside',
+  'iter',
+  'iterBack',
+  'iterback',
   'jux',
   'juxBy',
   'late',
@@ -65,12 +74,15 @@ const METHOD_NAMES = new Set([
   'off',
   'offset',
   'often',
+  'outside',
+  'palindrome',
   'pan',
   'phaser',
   'ply',
   'rarely',
   'release',
   'rev',
+  'ribbon',
   'room',
   'scale',
   'scaleTranspose',
@@ -84,6 +96,7 @@ const METHOD_NAMES = new Set([
   'slowspread',
   'sometimes',
   'sometimesBy',
+  'sparsity',
   'speed',
   'spin',
   'striate',
@@ -104,7 +117,7 @@ const METHOD_NAMES = new Set([
   'zoom',
 ]);
 
-const NO_ARG_METHODS = new Set(['degrade', 'rev', 'voicing']);
+const NO_ARG_METHODS = new Set(['degrade', 'palindrome', 'rev', 'voicing']);
 
 export function translateTidalToSceneModule(source: string, options: { entry?: string } = {}): string {
   const program = translateTidalToStrudelProgram(source, options);
@@ -246,6 +259,23 @@ function translateExpr(
     return applyPrefix(left, translateExpr(right, bindings, visited), bindings, visited);
   }
 
+  // `pattern |> transform` applies the transform on the right to the pattern
+  // on the left (Tidal's reverse-application operator).
+  const pipeRight = findTopLevelToken(trimmed, '|>');
+  if (pipeRight !== -1) {
+    const left = trimOuter(trimmed.slice(0, pipeRight));
+    const right = trimOuter(trimmed.slice(pipeRight + 2));
+    return applyPrefix(right, translateExpr(left, bindings, visited), bindings, visited);
+  }
+
+  // `transform <| pattern` mirrors `f $ p`.
+  const pipeLeft = findTopLevelToken(trimmed, '<|');
+  if (pipeLeft !== -1) {
+    const left = trimOuter(trimmed.slice(0, pipeLeft));
+    const right = trimOuter(trimmed.slice(pipeLeft + 2));
+    return applyPrefix(left, translateExpr(right, bindings, visited), bindings, visited);
+  }
+
   const hashParts = splitTopLevel(trimmed, '#');
   let current = translateAtom(hashParts[0] ?? '', bindings, visited);
   for (const part of hashParts.slice(1)) {
@@ -296,6 +326,11 @@ function translateAtom(
       const args = rest.map((token) => translateArgument(token, bindings, visited));
       return `${head}(${args.join(', ')})`;
     }
+  }
+
+  // A lone quoted mini-notation string is a valid anonymous pattern.
+  if (isQuoted(trimmed)) {
+    return `value(${JSON.stringify(unquote(trimmed))})`;
   }
 
   if (trimmed.startsWith('(') && trimmed.endsWith(')')) {
@@ -494,6 +529,47 @@ function findTopLevelOperator(value: string, operator: string): number {
     }
   }
   return -1;
+}
+
+/** Like findTopLevelOperator, but matches a multi-character token. */
+function findTopLevelToken(value: string, token: string): number {
+  let depth = 0;
+  let quote: '"' | "'" | undefined;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (quote) {
+      if (char === quote && value[index - 1] !== '\\') {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+    if (char === ')') {
+      depth -= 1;
+      continue;
+    }
+    if (
+      depth === 0 &&
+      value.startsWith(token, index) &&
+      // A `|>` must not match the tail of a longer operator sequence.
+      !isOperatorChar(value[index - 1]) &&
+      !isOperatorChar(value[index + token.length])
+    ) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function isOperatorChar(char: string | undefined): boolean {
+  return char !== undefined && /[|$<>]/.test(char);
 }
 
 function splitTopLevel(value: string, separator: string): string[] {

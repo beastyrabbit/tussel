@@ -93,27 +93,28 @@ export function decodePcmWav(buffer: Buffer): DecodedWav {
 
 const CANONICAL_HEADER_LENGTH = 44;
 
-function writeWavHeader(view: DataView, sampleRate: number, channels: number, dataLength: number): void {
+function writeWavHeader(buffer: Buffer, sampleRate: number, channels: number, dataLength: number): void {
   const totalLength = CANONICAL_HEADER_LENGTH + dataLength;
-  view.setUint32(0, 0x52494646, true); // 'RIFF'
-  view.setUint32(4, totalLength - 8, true);
-  view.setUint32(8, 0x57415645, true); // 'WAVE'
-  view.setUint32(12, 0x666d7420, true); // 'fmt '
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, channels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * channels * 2, true);
-  view.setUint16(32, channels * 2, true);
-  view.setUint16(34, 16, true);
-  view.setUint32(36, 0x64617461, true); // 'data'
-  view.setUint32(40, dataLength, true);
+  // ASCII field identifiers must land byte-exact; numeric fields are little-endian.
+  buffer.write('RIFF', 0, 'ascii');
+  buffer.writeUInt32LE(totalLength - 8, 4);
+  buffer.write('WAVE', 8, 'ascii');
+  buffer.write('fmt ', 12, 'ascii');
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20); // PCM
+  buffer.writeUInt16LE(channels, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * channels * 2, 28);
+  buffer.writeUInt16LE(channels * 2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write('data', 36, 'ascii');
+  buffer.writeUInt32LE(dataLength, 40);
 }
 
 /** Encode interleaved PCM16 data (already in WAV byte order) into a canonical WAV buffer. */
 export function encodeCanonicalWav(sampleRate: number, channels: number, pcmData: Buffer): Buffer {
   const result = Buffer.alloc(CANONICAL_HEADER_LENGTH + pcmData.byteLength);
-  writeWavHeader(new DataView(result.buffer), sampleRate, channels, pcmData.byteLength);
+  writeWavHeader(result, sampleRate, channels, pcmData.byteLength);
   pcmData.copy(result, CANONICAL_HEADER_LENGTH);
   return result;
 }

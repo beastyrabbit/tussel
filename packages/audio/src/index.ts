@@ -607,6 +607,11 @@ async function buildVoice(
   targetTime: number,
   cps: number,
 ): Promise<LoadedVoice | undefined> {
+  // Events shifted before the render/audition window (e.g. via `early`) cannot
+  // be scheduled — WebAudio rejects negative times.
+  if (!(targetTime >= 0)) {
+    return undefined;
+  }
   const clipValue = coerceFiniteNumber(event.payload.clip);
   const clippedEvent =
     clipValue !== undefined && clipValue !== 1
