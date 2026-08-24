@@ -43,12 +43,15 @@ import chokidar, { type FSWatcher } from 'chokidar';
 import { build as esbuild, type Plugin } from 'esbuild';
 import ts from 'typescript';
 
+export type { MixActionResult, MixControlContext } from './mix-controls.js';
+export { attachMixControls, handleMixKeystroke, MIX_HELP_LINE, printMixStatus } from './mix-controls.js';
 export { translateTidalToStrudelProgram } from './tidal.js';
 
 import { normalizeStrudelSource } from './strudel-normalize.js';
 
 const runtimeLogger = createLogger('tussel/runtime');
 
+import { attachMixControls } from './mix-controls.js';
 import { translateTidalToSceneModule } from './tidal.js';
 
 export { normalizeStrudelSource } from './strudel-normalize.js';
@@ -77,6 +80,9 @@ export interface PrepareSceneOptions {
 
 export interface RunSceneOptions extends PrepareSceneOptions {
   onExternalDispatch?: (dispatch: ExternalDispatchEvent, targetTime: number) => void | Promise<void>;
+
+  /** Set false to disable interactive mix keybindings (default: on for TTYs). */
+  interactive?: boolean;
 }
 
 const ajv = new Ajv2020({
@@ -397,10 +403,19 @@ export async function runScene(
     return drainingReloads;
   };
 
+  let detachMixControls: (() => void) | undefined;
+  const mixChannelNames = (): string[] => (lastGoodScene ? Object.keys(lastGoodScene.scene.channels) : []);
+  if (watch && options.interactive !== false && process.stdin.isTTY) {
+    detachMixControls = attachMixControls(process.stdin, mixChannelNames, (line: string) => {
+      runtimeLogger.info(line, { code: 'TUSSEL_MIX' });
+    });
+  }
+
   await requestReload();
   if (!lastGoodScene) {
     process.exitCode = 1;
   }
+  detachMixControls?.();
 
   if (!watch) {
     return;

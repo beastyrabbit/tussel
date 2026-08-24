@@ -836,10 +836,10 @@ describe('createParam edge cases', () => {
 
   it('supports SignalBuilder methods directly on the param', () => {
     const modParam = createParam('modulation').range(0, 1);
-    const json = modParam.toJSON();
+    const json = modParam.toJSON() as { kind: string; name: string; target: { kind: string; name: string } };
     expect(json.kind).toBe('method');
     expect(json.name).toBe('range');
-    const target = json.target as { kind: string; name: string };
+    const target = json.target;
     expect(target.kind).toBe('call');
     expect(target.name).toBe('param');
   });
