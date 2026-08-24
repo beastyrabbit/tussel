@@ -5,7 +5,13 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { RealtimeAudioEngine, renderSceneToFile } from '@tussel/audio';
-import { type ExternalDispatchEvent, type PlaybackEvent, type QueryContext, queryScene } from '@tussel/core';
+import {
+  type ExternalDispatchEvent,
+  type PlaybackEvent,
+  type QueryContext,
+  queryScene,
+  renderPunchcard,
+} from '@tussel/core';
 
 export {
   clearMixState,
@@ -22,6 +28,7 @@ export {
 import * as tusselDsl from '@tussel/dsl';
 import {
   ALL_PATTERN_METHOD_NAMES,
+  coerceFiniteNumber,
   collectCustomParamNames as collectCustomParamNamesFromIR,
   createLogger,
   findNearestPackageJsonDir,
@@ -1425,4 +1432,15 @@ function printSuccess(prepared: PreparedScene): void {
   runtimeLogger.info(
     `Loaded ${prepared.kind} with ${channels} channel${channels === 1 ? '' : 's'} from ${prepared.generatedPath}`,
   );
+  // One-cycle punchcard preview so livecoders see the pattern at a glance.
+  try {
+    const cps = coerceFiniteNumber(prepared.scene.transport.cps) ?? 2;
+    const events = queryScene(prepared.scene, 0, 1, { cps });
+    const card = renderPunchcard(events, { cycles: 1, widthPerCycle: 16 });
+    if (events.length > 0) {
+      runtimeLogger.info(`cycle preview:\n${card}`, { code: 'TUSSEL_PUNCHCARD' });
+    }
+  } catch {
+    // Preview is best-effort; never block loading.
+  }
 }

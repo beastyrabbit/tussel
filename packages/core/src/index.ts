@@ -134,6 +134,7 @@ import {
   transformZoom,
 } from './time-transforms.js';
 
+export { type PunchcardOptions, renderPunchcard } from './punchcard.js';
 export { evaluateNumericValue };
 
 import type { ExternalDispatchEvent, PlaybackEvent, QueryContext } from './types.js';
