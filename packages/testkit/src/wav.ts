@@ -17,8 +17,16 @@ export interface DecodedWav {
  * Supports PCM formats (format 1) with 16- or 24-bit samples.
  */
 export function inspectWav(buffer: Buffer): WavLayout {
-  if (buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WAVE') {
+  if (
+    buffer.byteLength < 12 ||
+    buffer.toString('ascii', 0, 4) !== 'RIFF' ||
+    buffer.toString('ascii', 8, 12) !== 'WAVE'
+  ) {
     throw new Error('Expected RIFF/WAVE data');
+  }
+  const riffEnd = buffer.readUInt32LE(4) + 8;
+  if (riffEnd > buffer.byteLength) {
+    throw new Error('Malformed WAV data: RIFF length exceeds buffer');
   }
 
   let channels = 0;
@@ -29,12 +37,19 @@ export function inspectWav(buffer: Buffer): WavLayout {
   let dataLength = 0;
   let offset = 12;
 
-  while (offset + 8 <= buffer.byteLength) {
+  while (offset + 8 <= riffEnd) {
     const chunkId = buffer.toString('ascii', offset, offset + 4);
     const chunkSize = buffer.readUInt32LE(offset + 4);
     const chunkOffset = offset + 8;
+    const chunkEnd = chunkOffset + chunkSize;
+    if (chunkEnd > riffEnd || chunkEnd > buffer.byteLength) {
+      throw new Error(`Malformed WAV data: ${JSON.stringify(chunkId)} chunk exceeds buffer`);
+    }
 
     if (chunkId === 'fmt ') {
+      if (chunkSize < 16) {
+        throw new Error('Malformed WAV data: "fmt " chunk is shorter than 16 bytes');
+      }
       format = buffer.readUInt16LE(chunkOffset);
       channels = buffer.readUInt16LE(chunkOffset + 2);
       sampleRate = buffer.readUInt32LE(chunkOffset + 4);
@@ -44,7 +59,11 @@ export function inspectWav(buffer: Buffer): WavLayout {
       dataLength = chunkSize;
     }
 
-    offset = chunkOffset + chunkSize + (chunkSize % 2);
+    const paddedChunkEnd = chunkEnd + (chunkSize % 2);
+    if (paddedChunkEnd > riffEnd) {
+      throw new Error(`Malformed WAV data: ${JSON.stringify(chunkId)} chunk padding exceeds buffer`);
+    }
+    offset = paddedChunkEnd;
   }
 
   if (channels <= 0 || sampleRate <= 0 || dataOffset < 0) {
@@ -56,6 +75,10 @@ export function inspectWav(buffer: Buffer): WavLayout {
 
 /** Read a single PCM16/PCM24 sample as a normalized float in [-1, 1]. */
 export function readPcmSample(buffer: Buffer, offset: number, bitDepth: number): number {
+  const bytesPerSample = bitDepth / 8;
+  if (!Number.isInteger(offset) || offset < 0 || offset + bytesPerSample > buffer.byteLength) {
+    throw new Error('Malformed PCM data: sample exceeds buffer');
+  }
   if (bitDepth === 16) {
     return buffer.readInt16LE(offset) / 0x8000;
   }
@@ -76,7 +99,11 @@ export function decodePcmWav(buffer: Buffer): DecodedWav {
   }
 
   const bytesPerSample = layout.bitDepth / 8;
-  const frames = layout.dataLength / (layout.channels * bytesPerSample);
+  const bytesPerFrame = layout.channels * bytesPerSample;
+  if (layout.dataLength % bytesPerFrame !== 0) {
+    throw new Error('Malformed PCM WAV data: data chunk does not contain whole frames');
+  }
+  const frames = layout.dataLength / bytesPerFrame;
   const channelData = Array.from({ length: layout.channels }, () => new Float32Array(frames));
   let cursor = layout.dataOffset;
   for (let frame = 0; frame < frames; frame += 1) {
@@ -113,6 +140,10 @@ function writeWavHeader(buffer: Buffer, sampleRate: number, channels: number, da
 
 /** Encode interleaved PCM16 data (already in WAV byte order) into a canonical WAV buffer. */
 export function encodeCanonicalWav(sampleRate: number, channels: number, pcmData: Buffer): Buffer {
+  assertWavEncodingLayout(sampleRate, channels);
+  if (pcmData.byteLength % (channels * 2) !== 0) {
+    throw new Error('PCM16 data must contain whole interleaved frames');
+  }
   const result = Buffer.alloc(CANONICAL_HEADER_LENGTH + pcmData.byteLength);
   writeWavHeader(result, sampleRate, channels, pcmData.byteLength);
   pcmData.copy(result, CANONICAL_HEADER_LENGTH);
@@ -121,7 +152,11 @@ export function encodeCanonicalWav(sampleRate: number, channels: number, pcmData
 
 /** Encode per-channel Float32 data (normalized [-1, 1]) into a canonical PCM16 WAV buffer. */
 export function encodeWavFromFloat32Channels(sampleRate: number, channels: Float32Array[]): Buffer {
+  assertWavEncodingLayout(sampleRate, channels.length);
   const frames = channels[0]?.length ?? 0;
+  if (channels.some((channel) => channel.length !== frames)) {
+    throw new Error('WAV channels must contain the same number of frames');
+  }
   const result = encodeCanonicalWav(sampleRate, channels.length, Buffer.alloc(frames * channels.length * 2));
   let offset = CANONICAL_HEADER_LENGTH;
   for (let frame = 0; frame < frames; frame += 1) {
@@ -153,9 +188,36 @@ export function parseCanonicalWav(buffer: Buffer): ParsedCanonicalWav {
   if (header.toString('ascii', 0, 4) !== 'RIFF' || header.toString('ascii', 8, 12) !== 'WAVE') {
     throw new Error('Expected canonical RIFF/WAVE data');
   }
+  if (
+    header.toString('ascii', 12, 16) !== 'fmt ' ||
+    header.readUInt32LE(16) !== 16 ||
+    header.toString('ascii', 36, 40) !== 'data'
+  ) {
+    throw new Error('Expected canonical 44-byte RIFF/WAVE header');
+  }
+  const dataLength = header.readUInt32LE(40);
+  if (
+    header.readUInt32LE(4) + 8 !== buffer.byteLength ||
+    dataLength + CANONICAL_HEADER_LENGTH !== buffer.byteLength
+  ) {
+    throw new Error('Malformed canonical RIFF/WAVE length');
+  }
   return {
     channels: header.readUInt16LE(22),
-    data: buffer.subarray(CANONICAL_HEADER_LENGTH),
+    data: buffer.subarray(CANONICAL_HEADER_LENGTH, CANONICAL_HEADER_LENGTH + dataLength),
     sampleRate: header.readUInt32LE(24),
   };
+}
+
+function assertWavEncodingLayout(sampleRate: number, channels: number): void {
+  if (!Number.isInteger(sampleRate) || sampleRate <= 0 || sampleRate > 0xffff_ffff) {
+    throw new Error('WAV sample rate must be a positive 32-bit integer');
+  }
+  if (!Number.isInteger(channels) || channels <= 0 || channels > 0xffff) {
+    throw new Error('WAV channel count must be a positive 16-bit integer');
+  }
+  const blockAlign = channels * 2;
+  if (blockAlign > 0xffff || sampleRate * blockAlign > 0xffff_ffff) {
+    throw new Error('WAV PCM16 byte rate exceeds canonical header limits');
+  }
 }

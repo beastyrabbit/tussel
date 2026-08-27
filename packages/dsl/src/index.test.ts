@@ -31,6 +31,7 @@ import {
   note,
   PatternBuilder,
   pace,
+  param,
   perlin,
   rand,
   rev,
@@ -419,6 +420,11 @@ describe('G.02 — SignalBuilder operations', () => {
 // G.03: createParam / createParams
 // ---------------------------------------------------------------------------
 describe('G.03 — createParam and createParams', () => {
+  it('param builds a serializable live signal with an optional fallback', () => {
+    expect(param('volume').show()).toBe('param("volume")');
+    expect(param('volume', 0.5).show()).toBe('param("volume", 0.5)');
+  });
+
   it('createParam returns a live control param usable as a value', () => {
     const wobble = createParam('wobbleG03');
     wobble(0.5);

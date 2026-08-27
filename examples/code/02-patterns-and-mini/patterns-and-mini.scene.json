@@ -38,7 +38,7 @@
             "kind": "method",
             "name": "s",
             "target": {
-              "args": ["<0 3 5 7>/2"],
+              "args": ["<60 63 65 67>/2"],
               "exprType": "pattern",
               "kind": "call",
               "name": "n"
@@ -67,7 +67,7 @@
             "kind": "method",
             "name": "s",
             "target": {
-              "args": ["0 [2 4] <7 9>"],
+              "args": ["60 [62 64] <67 69>"],
               "exprType": "pattern",
               "kind": "call",
               "name": "n"

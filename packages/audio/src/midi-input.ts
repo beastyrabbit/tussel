@@ -1,4 +1,4 @@
-import { createLogger, setMidiValue } from '@tussel/ir';
+import { createLogger, setMidiNoteOff, setMidiNoteOn, setMidiValue } from '@tussel/ir';
 
 const midiInputLogger = createLogger('tussel/midi-input');
 
@@ -136,49 +136,7 @@ export class MidiInputManager {
   }
 
   private handleMessage(message: number[], port: string): void {
-    if (!message || message.length < 2) {
-      return;
-    }
-
-    const status = message[0] ?? 0;
-    const statusType = status & 0xf0;
-    const channel = (status & 0x0f) + 1;
-    const data1 = message[1] ?? 0;
-    const data2 = message[2] ?? 0;
-
-    switch (statusType) {
-      case 0x90: // Note On
-        if (data2 > 0) {
-          setMidiValue(`note:${data1}`, data2 / 127, port);
-          setMidiValue(`velocity`, data2 / 127, port);
-          setMidiValue(`note`, data1, port);
-          setMidiValue(`channel`, channel, port);
-        } else {
-          // Note On with velocity 0 = Note Off
-          setMidiValue(`note:${data1}`, 0, port);
-        }
-        break;
-
-      case 0x80: // Note Off
-        setMidiValue(`note:${data1}`, 0, port);
-        break;
-
-      case 0xb0: // Control Change
-        setMidiValue(`${data1}`, data2 / 127, port);
-        setMidiValue(`cc:${data1}`, data2 / 127, port);
-        break;
-
-      case 0xe0: {
-        // Pitch Bend
-        const bend = ((data2 << 7) | data1) / 16383;
-        setMidiValue('pitchbend', bend * 2 - 1, port);
-        break;
-      }
-
-      case 0xd0: // Channel Pressure (Aftertouch)
-        setMidiValue('pressure', data1 / 127, port);
-        break;
-    }
+    applyMidiInputMessage(message, port);
   }
 
   private warnMissing(): void {
@@ -186,6 +144,51 @@ export class MidiInputManager {
       this.warned = true;
       midiInputLogger.warn('MIDI input unavailable. Install @julusian/midi for hardware MIDI support.');
     }
+  }
+}
+
+/** Apply a raw MIDI message to the shared input registry. */
+export function applyMidiInputMessage(message: number[], port = 'default'): void {
+  if (!message || message.length < 2) {
+    return;
+  }
+
+  const status = message[0] ?? 0;
+  const statusType = status & 0xf0;
+  const channel = (status & 0x0f) + 1;
+  const data1 = message[1] ?? 0;
+  const data2 = message[2] ?? 0;
+
+  switch (statusType) {
+    case 0x90: // Note On
+      if (data2 > 0) {
+        setMidiNoteOn(data1, data2, port);
+        setMidiValue('channel', channel, port);
+      } else {
+        // Note On with velocity 0 = Note Off
+        setMidiNoteOff(data1, port);
+      }
+      break;
+
+    case 0x80: // Note Off
+      setMidiNoteOff(data1, port);
+      break;
+
+    case 0xb0: // Control Change
+      setMidiValue(`${data1}`, data2 / 127, port);
+      setMidiValue(`cc:${data1}`, data2 / 127, port);
+      break;
+
+    case 0xe0: {
+      // Pitch Bend
+      const bend = ((data2 << 7) | data1) / 16383;
+      setMidiValue('pitchbend', bend * 2 - 1, port);
+      break;
+    }
+
+    case 0xd0: // Channel Pressure (Aftertouch)
+      setMidiValue('pressure', data1 / 127, port);
+      break;
   }
 }
 

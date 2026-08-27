@@ -1,7 +1,7 @@
 import { defineScene, n, s, sine } from '@tussel/dsl';
 
-const pulse = n('0 2 4 7').s('sine').attack(0.02).release(0.2);
-const counter = n('<7 5 4 2>').s('triangle').slow(2).pan(sine.range(-0.8, 0.8).slow(8));
+const pulse = n('60 62 64 67').s('sine').attack(0.02).release(0.2);
+const counter = n('<67 65 64 62>').s('triangle').slow(2).pan(sine.range(-0.8, 0.8).slow(8));
 
 export default defineScene({
   metadata: {

@@ -9,7 +9,7 @@ export default defineScene({
       node: s('bd sd hh cp').every(3, (x: PatternBuilder) => x.fast(2)),
     },
     melody: {
-      node: note('0 2 4 7')
+      node: note('60 62 64 67')
         .s('sine')
         .release(0.2)
         .gain(0.3)

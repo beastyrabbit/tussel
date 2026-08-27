@@ -9,7 +9,7 @@ export default defineScene({
       node: s('bd sd:1 bd sd:2').room(0.3).delay(0.25),
     },
     bass: {
-      node: note('0 3 5 7').s('saw').lpf(600).release(0.2),
+      node: note('60 63 65 67').s('saw').lpf(600).release(0.2),
       gain: 0.3,
     },
     hats: {

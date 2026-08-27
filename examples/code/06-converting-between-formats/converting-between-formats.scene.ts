@@ -16,7 +16,7 @@ export default defineScene({
       orbit: 'kit',
     },
     arp: {
-      node: n('0 2 4 7').s('square').fast(2).pan(triangle.range(-0.6, 0.6).slow(4)),
+      node: n('60 62 64 67').s('square').fast(2).pan(triangle.range(-0.6, 0.6).slow(4)),
       gain: 0.07,
       mute: false,
       orbit: 'arp',

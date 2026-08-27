@@ -1,9 +1,9 @@
 import { Chord, Interval, Note, Scale } from '@tonaljs/tonal';
-import { coerceFiniteNumber, type ExpressionValue } from '@tussel/ir';
+import type { ExpressionValue } from '@tussel/ir';
 import { evaluateNumericValue, resolvePropertyValue } from './evaluate.js';
 import type { InternalQueryContext } from './index.js';
 import type { PlaybackEvent } from './types.js';
-import { clampNumber, positiveMod } from './utils.js';
+import { positiveMod } from './utils.js';
 
 export function applyRootNotes(
   currentEvents: PlaybackEvent[],

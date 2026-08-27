@@ -6,7 +6,7 @@ export default defineScene({
   master: {},
   channels: {
     main: {
-      node: note('0 2 4 7').s('sine').release(0.2),
+      node: note('60 62 64 67').s('sine').release(0.2),
     },
   },
 });

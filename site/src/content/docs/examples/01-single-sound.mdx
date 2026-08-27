@@ -15,14 +15,14 @@ The simplest Tussel pattern: a single note played on a sine oscillator. This is 
 ```ts
 // tussel script-ts
 setcps(0.5);
-note("0").s("sine").release(0.3)
+note("60").s("sine").release(0.3)
 ```
   </Fragment>
   <Fragment slot="strudel">
 ```js
 // strudel
 setcps(0.5)
-note("0").s("sine").release(0.3)
+note("60").s("sine").release(0.3)
 ```
   </Fragment>
   <Fragment slot="tidal">
@@ -44,7 +44,7 @@ d1 $ note "0" # sound "sine" # release 0.3
 
 ## What's Happening
 
-- `note("0")` creates a pattern that plays MIDI note 0 (C) every cycle
+- `note("60")` creates a pattern that plays MIDI note 60 (C4) every cycle
 - `.s("sine")` selects the sine wave synthesizer
 - `.release(0.3)` sets a 300ms release envelope so the sound fades out smoothly
 - `setcps(0.5)` sets the tempo to 0.5 cycles per second (one cycle = 2 seconds)

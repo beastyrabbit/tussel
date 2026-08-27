@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { resetCsoundRegistry, resetInputRegistry } from '@tussel/dsl';
+import { note, resetCsoundRegistry, resetInputRegistry, resetParamValues } from '@tussel/dsl';
 import {
   convertScene,
   normalizeStrudelSource,
@@ -9,6 +9,7 @@ import {
   queryPreparedScene,
   renderHydraModule,
   renderScene,
+  runScene,
 } from '@tussel/runtime';
 import { createFixtureDirectory, extractMarkdownLinks, writeFixtureFile } from '@tussel/testkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -17,6 +18,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   resetCsoundRegistry();
   resetInputRegistry();
+  resetParamValues();
 });
 
 describe('runtime pipeline', () => {
@@ -73,7 +75,7 @@ describe('runtime pipeline', () => {
     expect(prepared.scene.transport.cps).toBe(2);
   });
 
-  it('rejects custom params during runtime preparation until execution support exists', async () => {
+  it('rejects unknown custom pattern methods during runtime preparation', async () => {
     await expect(
       prepareSceneFromSource(
         'scene-json',
@@ -101,9 +103,7 @@ describe('runtime pipeline', () => {
           filename: 'custom-param.scene.json',
         },
       ),
-    ).rejects.toThrow(
-      /createParam\(\) and createParams\(\) are not executable yet|Property 'wobble' does not exist/,
-    );
+    ).rejects.toThrow(/Unsupported custom pattern methods|Property 'wobble' does not exist/);
   });
 
   it('round-trips scene-json to scene-ts', async () => {
@@ -127,6 +127,52 @@ describe('runtime pipeline', () => {
     const converted = await convertScene(entry, 'scene-ts');
     expect(converted).toContain('defineScene');
     expect(converted).toContain('drums');
+  });
+
+  it('round-trips every executable alignment method through the shared registry', async () => {
+    const alignedPatterns = {
+      addIn: note(60).addIn(note('1 2')),
+      addMix: note(60).addMix(note('1 2')),
+      addOut: note(60).addOut(note('1 2')),
+      addReset: note(60).addReset(note('1 2')),
+      addRestart: note(60).addRestart(note('1 2')),
+      addSqueeze: note(60).addSqueeze(note('1 2')),
+      addSqueezeout: note(60).addSqueezeout(note('1 2')),
+    };
+    const prepared = await prepareSceneFromSource(
+      'scene-json',
+      JSON.stringify({
+        channels: Object.fromEntries(
+          Object.entries(alignedPatterns).map(([name, pattern]) => [name, { node: pattern.toJSON() }]),
+        ),
+        samples: [],
+        transport: { cps: 1 },
+      }),
+      { filename: 'alignment-methods.scene.json' },
+    );
+
+    expect(Object.keys(prepared.scene.channels).sort()).toEqual(Object.keys(alignedPatterns).sort());
+    expect(queryPreparedScene(prepared, 0, 1, { cps: 1 }).length).toBeGreaterThanOrEqual(7);
+    await expect(readFile(prepared.generatedPath, 'utf8')).resolves.not.toContain('createParam');
+  });
+
+  it('keeps worker-initialized live params when preparing the canonical scene', async () => {
+    const prepared = await prepareSceneFromSource(
+      'script-ts',
+      `const volume = createParam('workerVolume');
+volume(0.5);
+scene({ channels: { lead: { node: note(69).gain(volume) } }, samples: [], transport: { cps: 1 } });
+`,
+      { filename: 'worker-param.script.ts' },
+    );
+
+    expect(queryPreparedScene(prepared, 0, 1, { cps: 1 })[0]?.payload.gain).toBe(0.5);
+    await expect(readFile(prepared.canonicalSceneTsPath, 'utf8')).resolves.toContain('param("workerVolume")');
+
+    const canonical = await prepareScene(prepared.canonicalSceneTsPath, {
+      projectRoot: prepared.projectRoot,
+    });
+    expect(queryPreparedScene(canonical, 0, 1, { cps: 1 })[0]?.payload.gain).toBe(0.5);
   });
 
   it('typechecks scene-ts entries even when the project tsconfig does not enable allowImportingTsExtensions', async () => {
@@ -175,6 +221,26 @@ describe('runtime pipeline', () => {
     await renderScene(entry, output, 1);
     const info = await stat(output);
     expect(info.size).toBeGreaterThan(44);
+  });
+
+  it('handles termination during the initial watched scene load without leaking signal listeners', async () => {
+    const rootDir = await createFixtureDirectory();
+    const entry = await writeFixtureFile(
+      rootDir,
+      'terminating.scene.ts',
+      `import { defineScene, s } from '@tussel/dsl';\n\nexport default defineScene({ transport: { cps: 1 }, samples: [], channels: { lead: { node: s("sine") } } });\n`,
+    );
+    const sigintListeners = process.listenerCount('SIGINT');
+    const sigtermListeners = process.listenerCount('SIGTERM');
+
+    const running = runScene(entry, true, 'offline', { interactive: false, projectRoot: rootDir });
+    expect(process.listenerCount('SIGINT')).toBe(sigintListeners + 1);
+    expect(process.listenerCount('SIGTERM')).toBe(sigtermListeners + 1);
+    process.emit('SIGINT');
+
+    await running;
+    expect(process.listenerCount('SIGINT')).toBe(sigintListeners);
+    expect(process.listenerCount('SIGTERM')).toBe(sigtermListeners);
   });
 
   it('isolates generated artifacts for same-basename entries prepared in parallel', async () => {
@@ -285,6 +351,30 @@ $: note("c e g").sound("triangle").punchcard()
     });
 
     expect(prepared.scene.samples).toEqual([{ ref: path.resolve('reference', 'assets', 'basic-kit') }]);
+  });
+
+  it('preserves Tidal note offsets when importing numeric melodies', async () => {
+    const prepared = await prepareSceneFromSource('tidal', 'd1 $ note "0 3 7"', {
+      filename: 'tidal-note-offsets.tidal',
+    });
+
+    expect(queryPreparedScene(prepared, 0, 1, { cps: 1 }).map((event) => event.payload.note)).toEqual([
+      60, 63, 67,
+    ]);
+  });
+
+  it('imports Tidal transforms that contain a nested transform function', async () => {
+    const prepared = await prepareSceneFromSource(
+      'tidal',
+      'd1 $ whenmod 2 1 (fast 2) $ s "bd sd"\nd2 $ every 2 rev $ s "hh cp"',
+      {
+        filename: 'tidal-nested-transforms.tidal',
+      },
+    );
+
+    const events = queryPreparedScene(prepared, 0, 2, { cps: 1 });
+    expect(events.some((event) => event.channel === 'd1')).toBe(true);
+    expect(events.some((event) => event.channel === 'd2')).toBe(true);
   });
 
   it('imports seq-based Strudel examples into structural scenes', async () => {

@@ -43,7 +43,7 @@
               "kind": "method",
               "name": "s",
               "target": {
-                "args": ["<0 0 3 5>/2"],
+                "args": ["<60 60 63 65>/2"],
                 "exprType": "pattern",
                 "kind": "call",
                 "name": "n"
@@ -132,7 +132,7 @@
             "kind": "method",
             "name": "s",
             "target": {
-              "args": ["<7 10 12 14>/4"],
+              "args": ["<67 70 72 74>/4"],
               "exprType": "pattern",
               "kind": "call",
               "name": "n"
@@ -200,7 +200,7 @@
                     "kind": "method",
                     "name": "s",
                     "target": {
-                      "args": ["<12 10 7 [5 7]>"],
+                      "args": ["<72 70 67 [65 67]>"],
                       "exprType": "pattern",
                       "kind": "call",
                       "name": "n"

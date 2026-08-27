@@ -689,7 +689,24 @@ describe('collectExternalDispatches', () => {
     expect(dispatches[0]?.kind).toBe('midi-note');
     if (dispatches[0]?.kind === 'midi-note') {
       expect(dispatches[0]?.channelNumber).toBe(1);
+      expect(dispatches[0]?.note).toBe(60);
     }
+  });
+
+  it.each([
+    ['numeric string', '69', 69],
+    ['named pitch', 'a4', 69],
+    ['bare named pitch', 'a', 57],
+  ])('uses absolute MIDI for %s dispatches', (_label, pitch, expected) => {
+    const dispatches = collectExternalDispatches({
+      begin: 0,
+      channel: 'lead',
+      duration: 1,
+      end: 1,
+      payload: { midichan: 1, note: pitch },
+    });
+
+    expect(dispatches[0]).toMatchObject({ kind: 'midi-note', note: expected });
   });
 
   it('generates MIDI CC dispatch when midicc is set', () => {

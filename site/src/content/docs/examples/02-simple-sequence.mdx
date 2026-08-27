@@ -14,13 +14,13 @@ A sequence of four notes creates a simple melodic loop. Notes are evenly spaced 
   <Fragment slot="tussel">
 ```ts
 setcps(0.5);
-note("0 2 4 7").s("sine").release(0.2)
+note("60 62 64 67").s("sine").release(0.2)
 ```
   </Fragment>
   <Fragment slot="strudel">
 ```js
 setcps(0.5)
-note("0 2 4 7").s("sine").release(0.2)
+note("60 62 64 67").s("sine").release(0.2)
 ```
   </Fragment>
   <Fragment slot="tidal">
@@ -43,7 +43,7 @@ d1 $ note "0 2 4 7"
 
 ## What's Happening
 
-- `"0 2 4 7"` is **mini notation** — four values separated by spaces are evenly distributed across one cycle
-- Each number is a MIDI note offset: C, D, E, G (a major pentatonic fragment)
+- `"60 62 64 67"` is **mini notation** — four values separated by spaces are evenly distributed across one cycle
+- Each number is an absolute MIDI note: C4, D4, E4, G4 (a major pentatonic fragment)
 - The pattern repeats every cycle, creating a continuous melodic loop
 - `.release(0.2)` gives each note a short fade-out so they don't clip

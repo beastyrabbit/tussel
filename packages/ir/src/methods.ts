@@ -98,6 +98,7 @@ export const PATTERN_METHOD_REGISTRY: readonly PatternMethodDescriptor[] = [
   property('miditouch', false),
   property('midivalue', false, true),
   property('mode', true),
+  property('n', true),
   property('note', true),
   property('offset', true),
   property('orbit', true),
@@ -183,6 +184,13 @@ export const PATTERN_METHOD_REGISTRY: readonly PatternMethodDescriptor[] = [
 
   // -- Numeric operators ------------------------------------------------------
   method('add', 'numeric', true),
+  method('addIn', 'numeric', false, false),
+  method('addMix', 'numeric', false, false),
+  method('addOut', 'numeric', false, false),
+  method('addReset', 'numeric', false, false),
+  method('addRestart', 'numeric', false, false),
+  method('addSqueeze', 'numeric', false, false),
+  method('addSqueezeout', 'numeric', false, false),
   method('ceil', 'numeric', true, false),
   method('div', 'numeric', true),
   method('floor', 'numeric', true, false),

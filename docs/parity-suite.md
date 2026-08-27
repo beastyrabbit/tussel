@@ -29,7 +29,9 @@ pnpm parity:level5
 
 `pnpm parity:setup` installs the `.ref/strudel` submodule dependencies that the audio oracle requires. `pnpm parity:doctor` validates both the checkout and the pinned reference revisions, including the expected pnpm install metadata under `.ref/strudel/node_modules`.
 
-CI runs the same contract in order: `pnpm parity:setup`, `pnpm parity:doctor`, then parity levels 1 through 5.
+The self-contained CI suite excludes the three Strudel-oracle test files because the pinned `.ref`
+checkouts and their dependencies are not committed. Run the reference-backed parity suites locally
+with those checkouts in place before merging parity-sensitive changes.
 
 You can also call the runner directly:
 

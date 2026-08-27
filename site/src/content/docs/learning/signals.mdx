@@ -22,11 +22,11 @@ Signals are global variables available in script-ts:
 
 ```ts
 // Slowly sweep a filter
-note("0 2 4 7").s("saw")
+note("60 62 64 67").s("saw")
   .lpf(sine.range(300, 1400).slow(4))
 
 // Pan back and forth
-note("0 2 4 7").s("triangle")
+note("60 62 64 67").s("triangle")
   .pan(sine.range(-0.6, 0.6).slow(4))
 
 // Modulate gain
@@ -56,12 +56,12 @@ sine.fast(2)             // two complete waves per cycle
 
 ```ts
 // Auto-wah bass
-note("0 0 3 5").s("saw")
+note("60 60 63 65").s("saw")
   .lpf(sine.range(200, 2000).slow(2))
   .release(0.2)
 
 // Tremolo
-note("0 2 4 7").s("sine")
+note("60 62 64 67").s("sine")
   .gain(sine.range(0.05, 0.15).fast(4))
 
 // Stereo movement
@@ -82,7 +82,7 @@ export default defineScene({
   master: {},
   channels: {
     bass: {
-      node: n('0 2 4 7').s('saw')
+      node: n('60 62 64 67').s('saw')
         .lpf(sine.range(300, 1400).slow(4)),
     },
   },

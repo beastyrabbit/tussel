@@ -21,7 +21,7 @@ scene({
       orbit: 'hats',
     },
     bass: {
-      node: n('0 ~ 3 5').s('saw').slow(2).lpf(280),
+      node: n('60 ~ 63 65').s('saw').slow(2).lpf(280),
       gain: 0.08,
       mute: false,
       orbit: 'bass',

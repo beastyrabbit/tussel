@@ -5,12 +5,6 @@ pre-commit:
       run: pnpm lint
     test-fast:
       run: npx vitest run packages/core/ packages/dsl/ packages/mini/ packages/ir/
-
-pre-push:
-  parallel: true
-  commands:
-    test-full:
-      run: pnpm test
     gitleaks:
       run: |
         if command -v gitleaks >/dev/null 2>&1; then
@@ -28,3 +22,9 @@ pre-push:
           echo "$artifacts"
           exit 1
         fi
+
+pre-push:
+  parallel: true
+  commands:
+    test-full:
+      run: pnpm test

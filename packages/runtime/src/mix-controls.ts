@@ -111,10 +111,23 @@ export function printMixStatus(context: MixControlContext): void {
 }
 
 interface KeypressLikeEmitter {
+  isRaw?: boolean;
   isTTY?: boolean;
+  readableFlowing?: boolean | null;
   setRawMode?(enabled: boolean): unknown;
   on(event: 'keypress', listener: (chunk: string, key: { name: string; ctrl: boolean }) => void): unknown;
+  off?(event: 'keypress', listener: (chunk: string, key: { name: string; ctrl: boolean }) => void): unknown;
+  removeListener?(
+    event: 'keypress',
+    listener: (chunk: string, key: { name: string; ctrl: boolean }) => void,
+  ): unknown;
+  pause?: () => void;
   resume?: () => void;
+}
+
+export interface MixControlOptions {
+  emitKeypressEvents?: (stream: KeypressLikeEmitter) => Promise<void> | void;
+  onInterrupt?: () => void;
 }
 
 /**
@@ -125,22 +138,35 @@ export function attachMixControls(
   stdin: KeypressLikeEmitter,
   getChannels: () => string[],
   write: (line: string) => void,
+  options: MixControlOptions = {},
 ): () => void {
   if (!stdin.isTTY) {
     return () => {};
   }
 
-  // Lazy import keeps node:readline out of non-interactive paths.
   let detached = false;
-  const keypress = async (): Promise<void> => {
-    await import('node:readline');
-    type EmitKeypressEvents = typeof import('node:readline').emitKeypressEvents;
-    const readline = (await import('node:readline')) as { emitKeypressEvents: EmitKeypressEvents };
-    (readline as { emitKeypressEvents: (stream: object) => void }).emitKeypressEvents(stdin);
+  let rawModeChanged = false;
+  let resumedByControls = false;
+  const previousRawMode = stdin.isRaw ?? false;
+  const wasFlowing = stdin.readableFlowing === true;
+  const emitKeypressEvents =
+    options.emitKeypressEvents ??
+    (async (stream: KeypressLikeEmitter): Promise<void> => {
+      const readline = await import('node:readline');
+      readline.emitKeypressEvents(stream as NodeJS.ReadableStream);
+    });
+  const initializeKeypress = async (): Promise<void> => {
+    await emitKeypressEvents(stdin);
+    if (detached) {
+      return;
+    }
     stdin.setRawMode?.(true);
-    stdin.resume?.();
+    rawModeChanged = stdin.setRawMode !== undefined;
+    if (!wasFlowing && stdin.resume) {
+      stdin.resume();
+      resumedByControls = true;
+    }
   };
-  void keypress();
 
   const context: MixControlContext = { getChannels, write };
   const listener = (_chunk: string, key: { name: string; ctrl: boolean }): void => {
@@ -149,6 +175,7 @@ export function attachMixControls(
     }
     const name = key?.name ?? '';
     if (key?.ctrl && name === 'c') {
+      (options.onInterrupt ?? (() => process.kill(process.pid, 'SIGINT')))();
       return;
     }
     const result = handleMixKeystroke(name === 'return' ? '\n' : (_chunk ?? '').trim() || name, context);
@@ -162,8 +189,31 @@ export function attachMixControls(
   write(MIX_HELP_LINE);
   printMixStatus(context);
 
-  return () => {
+  const detach = (): void => {
+    if (detached) {
+      return;
+    }
     detached = true;
-    stdin.setRawMode?.(false);
+    if (stdin.off) {
+      stdin.off('keypress', listener);
+    } else {
+      stdin.removeListener?.('keypress', listener);
+    }
+    if (rawModeChanged) {
+      stdin.setRawMode?.(previousRawMode);
+    }
+    if (resumedByControls) {
+      stdin.pause?.();
+    }
   };
+
+  void initializeKeypress().catch((error: unknown) => {
+    if (detached) {
+      return;
+    }
+    detach();
+    write(`mix controls unavailable: ${error instanceof Error ? error.message : String(error)}`);
+  });
+
+  return detach;
 }

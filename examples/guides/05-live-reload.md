@@ -16,7 +16,7 @@ pnpm exec tussel run examples/code/05-live-reload/live-reload.script.ts --watch
 
 ## Edit Ideas
 
-- Change the `pulse` note pattern from `0 2 4 7` to `0 3 5 7`.
+- Change the `pulse` note pattern from `60 62 64 67` to `60 63 65 67`.
 - Raise the `air` filter from `5000` to `7000`.
 - Change the shared `late(0.01)` offset to `late(0.02)`.
 

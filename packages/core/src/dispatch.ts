@@ -1,8 +1,7 @@
 import { Note } from '@tonaljs/tonal';
-import { coerceFiniteNumber } from '@tussel/ir';
+import { coerceFiniteNumber, namedPitchToFrequency } from '@tussel/ir';
 import { DEFAULT_MIDI_VALUE } from './constants.js';
 import type { ExternalDispatchEvent, PlaybackEvent } from './types.js';
-import { clampNumber } from './utils.js';
 
 export function collectExternalDispatches(
   event: PlaybackEvent,
@@ -156,14 +155,19 @@ function resolveMidiDispatchNote(payload: Record<string, unknown>): number | und
 
   const numericNote = coerceFiniteNumber(payload.note ?? payload.n);
   if (numericNote !== undefined) {
-    return 60 + numericNote;
+    return numericNote;
   }
 
   const noteName = payload.note ?? payload.n;
   if (typeof noteName === 'string' && noteName.trim() !== '') {
-    const midi = Note.midi(noteName.trim());
+    const trimmed = noteName.trim();
+    const midi = Note.midi(trimmed);
     if (midi !== null) {
       return midi;
+    }
+    const namedFrequency = namedPitchToFrequency(trimmed);
+    if (namedFrequency !== undefined) {
+      return 69 + 12 * Math.log2(namedFrequency / 440);
     }
   }
 

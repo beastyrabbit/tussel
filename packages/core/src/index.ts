@@ -1,22 +1,13 @@
-import { Chord, Interval, Note, Scale } from '@tonaljs/tonal';
 import {
   type ChannelSpec,
-  coerceFiniteNumber,
   createLogger,
-  type ExpressionNode,
   type ExpressionValue,
-  getInputValue,
   isExpressionNode,
-  isPlainObject,
   PROPERTY_METHOD_NAMES,
-  resolveGamepadInputKey,
-  resolveInputKey,
-  resolveMidiInputKey,
-  resolveMotionInputKey,
   type SceneSpec,
   TusselCoreError,
 } from '@tussel/ir';
-import { inferMiniSteps, queryMini, queryMondo } from '@tussel/mini';
+import { queryMondo } from '@tussel/mini';
 import { isChannelAudible } from './channel-state.js';
 import {
   annotateEvents,
@@ -32,29 +23,10 @@ import {
   applyWhen,
   applyWhenMod,
   applyWithin,
-  MIN_CLIP_RATIO,
-  replaceEventsByWindow,
 } from './conditionals.js';
 import { collectExternalDispatches } from './dispatch.js';
-import {
-  coerceMiniValue,
-  evaluateMiniNumber,
-  evaluateNumericValue,
-  evaluatePatternValue,
-  extractEventValue,
-  firstPayloadEntry,
-  isTruthyMaskValue,
-  queryValueEvents,
-  resolvePropertyValue,
-} from './evaluate.js';
+import { evaluateNumericValue } from './evaluate.js';
 import { applyRootNotes, applyScale, applyScaleTranspose, applyTranspose, applyVoicing } from './pitch.js';
-import {
-  clampSignalResult,
-  coerceSignalNumber,
-  evaluateSignalExpression,
-  evaluateSignalValue,
-  resolveSignalFallback,
-} from './signals.js';
 import {
   applyChunk,
   applyContract,
@@ -71,7 +43,6 @@ import {
   applySegment,
   applySet,
   applyShrink,
-  applyStepwiseFactorTransform,
   applyTake,
   applyTour,
   callPattern,
@@ -84,7 +55,6 @@ import {
   queryStepcat,
   queryZip,
   rearrangeSlices,
-  remapEventPayload,
 } from './structure.js';
 
 export {
@@ -101,22 +71,12 @@ export {
 } from './channel-state.js';
 export { collectExternalDispatches };
 
-import { DEFAULT_MIDI_VALUE } from './constants.js';
 import {
-  alignIn,
-  alignMix,
-  alignOut,
-  alignReset,
-  alignSqueeze,
   applyAlignedOperation,
-  applyEuclideanMask,
   applyEuclidLegato,
   applyEuclidRot,
   applyFmap,
-  clipEvent,
   mapNumericPayload,
-  queryRepeatedCycleWindow,
-  remapCycleWindows,
   shiftEvents,
   transformCompress,
   transformFast,
@@ -137,19 +97,8 @@ import {
 export { type PunchcardOptions, renderPunchcard } from './punchcard.js';
 export { evaluateNumericValue };
 
-import type { ExternalDispatchEvent, PlaybackEvent, QueryContext } from './types.js';
-import {
-  clampNumber,
-  hashEvent,
-  hashString,
-  leastCommonMultiple,
-  normalizeCyclePhase,
-  normalizeWeightedEntry,
-  positiveMod,
-  seededRandom,
-  shuffledIndices,
-  smoothNoise,
-} from './utils.js';
+import type { PlaybackEvent, QueryContext } from './types.js';
+import { hashString, seededRandom, shuffledIndices } from './utils.js';
 
 export { createLogger } from '@tussel/ir';
 export { Scheduler } from './scheduler.js';

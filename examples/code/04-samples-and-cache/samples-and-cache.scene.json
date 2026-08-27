@@ -19,7 +19,7 @@
             "kind": "method",
             "name": "s",
             "target": {
-              "args": ["0 ~ 3 5"],
+              "args": ["60 ~ 63 65"],
               "exprType": "pattern",
               "kind": "call",
               "name": "n"

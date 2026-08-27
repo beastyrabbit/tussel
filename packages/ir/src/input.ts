@@ -80,21 +80,30 @@ const KEYS_KEY_CONTROL = 'keys';
  */
 export function setMidiNoteOn(note: number, velocity = 127, port: string | number = 'default'): void {
   const normalizedPort = `${port}`.trim() || 'default';
+  const normalizedNote = Math.trunc(note);
+  const normalizedVelocity = Math.max(0, Math.min(127, velocity));
   const held = midiHeldNotes().get(normalizedPort) ?? new Set<number>();
-  held.add(Math.trunc(note));
+  held.add(normalizedNote);
   midiHeldNotes().set(normalizedPort, held);
-  setMidiValue(NOTE_KEY_CONTROL, Math.trunc(note), normalizedPort);
+  setMidiValue(`note:${normalizedNote}`, normalizedVelocity / 127, normalizedPort);
+  setMidiValue('velocity', normalizedVelocity / 127, normalizedPort);
+  setMidiValue(NOTE_KEY_CONTROL, normalizedNote, normalizedPort);
   setMidiValue(KEYS_KEY_CONTROL, held.size, normalizedPort);
 }
 
 /** Record a MIDI note-off: releases the note and refreshes the held-note count. */
 export function setMidiNoteOff(note: number, port: string | number = 'default'): void {
   const normalizedPort = `${port}`.trim() || 'default';
-  const held = midiHeldNotes().get(normalizedPort);
-  if (held) {
-    held.delete(Math.trunc(note));
-    setMidiValue(KEYS_KEY_CONTROL, held.size, normalizedPort);
+  const normalizedNote = Math.trunc(note);
+  const held = midiHeldNotes().get(normalizedPort) ?? new Set<number>();
+  held.delete(normalizedNote);
+  if (held.size === 0) {
+    midiHeldNotes().delete(normalizedPort);
+  } else {
+    midiHeldNotes().set(normalizedPort, held);
   }
+  setMidiValue(`note:${normalizedNote}`, 0, normalizedPort);
+  setMidiValue(KEYS_KEY_CONTROL, held.size, normalizedPort);
 }
 
 /** Currently held note numbers for a port (unordered copy). */

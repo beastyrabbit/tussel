@@ -6,9 +6,9 @@ setcps(0.75);
 
 const groove = s('bd [hh hh] sd hh').bank('crate');
 const shuffle = s('~ rim ~ [hh rim]').bank('crate').mask('<1 0 1 1>/4');
-const bass = n('<0 0 3 5>/2').s('saw').attack(0.01).release(0.2).lpf(sine.range(220, 720).slow(8));
-const keys = n('<7 10 12 14>/4').s('triangle').slow(2).pan(sine.range(-0.5, 0.5).slow(8));
-const melody = n('<12 10 7 [5 7]>').s('square').fast(2).delay(0.25).room(0.35).mask('<1 1 0 1>/4');
+const bass = n('<60 60 63 65>/2').s('saw').attack(0.01).release(0.2).lpf(sine.range(220, 720).slow(8));
+const keys = n('<67 70 72 74>/4').s('triangle').slow(2).pan(sine.range(-0.5, 0.5).slow(8));
+const melody = n('<72 70 67 [65 67]>').s('square').fast(2).delay(0.25).room(0.35).mask('<1 1 0 1>/4');
 
 scene({
   master: {},

@@ -72,5 +72,5 @@ Runs in seconds. The full suite takes 25+ minutes due to audio rendering and Str
 - CSound integration is heuristic synthesis approximation, not real CSound execution
 - Hydra is out of scope (terminal-only product; no WebGL)
 - Tidal parser covers ~60 of 100+ methods (regex tokenizer, not AST)
-- `createParam()`/`createParams()` exported from DSL but throws at runtime
+- Live parameter values are process-local and are not persisted with canonical scene files
 - `punchcard()`, `_punchcard()`, `_scope()` are metadata-only stubs in terminal mode

@@ -2,7 +2,7 @@
  * Terminal punchcard: render queried events as an ASCII grid.
  *
  * Rows are distinct sound/note values, columns are time slices across the
- * rendered window. A block character marks an onset. Pure string output so
+ * rendered window. A block character marks a slice covered by an event. Pure string output so
  * both the CLI and tests can use it.
  */
 
@@ -13,7 +13,7 @@ export interface PunchcardOptions {
   cycles?: number;
   /** Grid width in characters per cycle (default: 16). */
   widthPerCycle?: number;
-  /** Character used to mark onsets (default: '█'). */
+  /** Character used to mark active event slices (default: '█'). */
   mark?: string;
 }
 
@@ -43,7 +43,7 @@ export function renderPunchcard(events: PlaybackEvent[], options: PunchcardOptio
   const totalColumns = cycles * widthPerCycle;
   const mark = options.mark ?? '█';
 
-  // Bucket events by label; mark columns whose slice contains an onset.
+  // Bucket events by label; mark every column covered by an event's duration.
   const rows = new Map<string, boolean[]>();
   for (const event of events) {
     const label = eventLabel(event);
@@ -64,7 +64,7 @@ export function renderPunchcard(events: PlaybackEvent[], options: PunchcardOptio
 
   const lines: string[] = [];
   for (const label of labels) {
-    const row = rows.get(label)!;
+    const row = rows.get(label) ?? [];
     const cells = row.map((on) => (on ? mark : '·')).join('');
     lines.push(`${label.padEnd(labelWidth)}${cells}`);
   }

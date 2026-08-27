@@ -732,18 +732,21 @@ async function playSample(
 ): Promise<LoadedVoice> {
   const env = createEnvelope(context, event, targetTime, cps, DEFAULT_SAMPLE_ENVELOPE);
   // Playback unit convention (SuperDirt-style):
-  // - 'c' (default): begin/end/speed are cycle fractions
-  // - 's': begin/end are seconds into the sample
-  // - 'r': relative — speed is scaled so speed=1 fits the whole sample in the event window
-  const unitMode = typeof event.payload.unit === 'string' ? event.payload.unit.trim().toLowerCase() : 'c';
+  // - 'r' (default): raw playback-rate ratio
+  // - 'c': speed is measured in cycles, so speed=1 fits the full sample into one cycle
+  // - 's': begin/end are seconds into the sample while speed remains a raw rate
+  const unitMode = typeof event.payload.unit === 'string' ? event.payload.unit.trim().toLowerCase() : 'r';
   const requestedSpeed = coerceFiniteNumber(event.payload.speed) ?? 1;
   const playbackWindow = Math.max(
     event.duration / Math.max(cps, MIN_CPS_DIVISOR),
     MIN_PLAYBACK_DURATION_SECONDS,
   );
   let playbackRate = Math.max(Math.abs(requestedSpeed), MIN_PLAYBACK_RATE);
-  if (unitMode === 'r') {
-    playbackRate = Math.max((Math.abs(requestedSpeed) * buffer.duration) / playbackWindow, MIN_PLAYBACK_RATE);
+  if (unitMode === 'c') {
+    playbackRate = Math.max(
+      Math.abs(requestedSpeed) * buffer.duration * Math.max(cps, MIN_CPS_DIVISOR),
+      MIN_PLAYBACK_RATE,
+    );
   }
   const reverse = requestedSpeed < 0;
   const sourceBuffer = reverse ? getReversedBuffer(context, buffer) : buffer;
@@ -776,10 +779,16 @@ async function playSample(
   });
   const availableDuration = Math.max(windowEndSeconds - windowBeginSeconds, MIN_PLAYBACK_DURATION_SECONDS);
   const offset = loopStart;
-  const sampleWindow = availableDuration / playbackRate;
+  const accelerate = coerceFiniteNumber(event.payload.accelerate);
+  const endPlaybackRate =
+    accelerate !== undefined && accelerate !== 0
+      ? Math.max(playbackRate * (1 + accelerate), MIN_PLAYBACK_RATE)
+      : playbackRate;
+  const averagePlaybackRate = (playbackRate + endPlaybackRate) / 2;
+  const sampleWindow = availableDuration / averagePlaybackRate;
   const duration = loopEnabled ? playbackWindow : Math.min(sampleWindow, playbackWindow);
-  const stopTime =
-    targetTime + Math.max(duration, MIN_NOTE_DURATION_SECONDS) + env.release + STOP_TIME_PADDING_SECONDS;
+  const playbackEndTime = targetTime + Math.max(duration, MIN_NOTE_DURATION_SECONDS);
+  const stopTime = playbackEndTime + env.release + STOP_TIME_PADDING_SECONDS;
   const destination = connectOutputChain(
     context,
     env,
@@ -790,15 +799,10 @@ async function playSample(
   );
   source.connect(destination);
   source.start(targetTime, offset);
-  const accelerate = coerceFiniteNumber(event.payload.accelerate);
   if (accelerate !== undefined && accelerate !== 0) {
-    // Playback-rate ramp: accelerate is in octaves per cycle.
-    const durationCycles = event.duration / Math.max(cps, MIN_CPS_DIVISOR);
+    // SuperDirt-compatible linear ramp: accelerate=1 doubles the rate by the event's end.
     source.playbackRate.setValueAtTime(playbackRate, targetTime);
-    source.playbackRate.linearRampToValueAtTime(
-      Math.max(playbackRate * 2 ** (accelerate * durationCycles), MIN_PLAYBACK_RATE),
-      stopTime,
-    );
+    source.playbackRate.linearRampToValueAtTime(endPlaybackRate, playbackEndTime);
   }
   source.stop(stopTime);
   return { gate: env, sources: [source] };
@@ -843,11 +847,8 @@ function playSynth(
   cps: number,
 ): LoadedVoice {
   const env = createEnvelope(context, event, targetTime, cps, DEFAULT_SYNTH_ENVELOPE);
-  const stopTime =
-    targetTime +
-    Math.max(event.duration / cps, MIN_NOTE_DURATION_SECONDS) +
-    env.release +
-    STOP_TIME_PADDING_SECONDS;
+  const noteEndTime = targetTime + Math.max(event.duration / cps, MIN_NOTE_DURATION_SECONDS);
+  const stopTime = noteEndTime + env.release + STOP_TIME_PADDING_SECONDS;
   const destination = connectOutputChain(
     context,
     env,
@@ -887,13 +888,9 @@ function playSynth(
   const sources: Array<AudioBufferSourceNode | OscillatorNode> = [oscillator];
   const accelerate = coerceFiniteNumber(event.payload.accelerate);
   if (accelerate !== undefined && accelerate !== 0) {
-    // Frequency ramp: accelerate is in octaves per cycle.
-    const durationCycles = event.duration / Math.max(cps, MIN_CPS_DIVISOR);
+    // SuperDirt-compatible linear ramp: accelerate=1 doubles the frequency by the event's end.
     oscillator.frequency.setValueAtTime(frequency, targetTime);
-    oscillator.frequency.linearRampToValueAtTime(
-      Math.max(frequency * 2 ** (accelerate * durationCycles), 1),
-      stopTime,
-    );
+    oscillator.frequency.linearRampToValueAtTime(Math.max(frequency * (1 + accelerate), 1), noteEndTime);
   }
   const fmAmount = coerceFiniteNumber(event.payload.fm);
   if (fmAmount !== undefined && fmAmount > 0) {
@@ -1235,7 +1232,7 @@ function resolveBaseFrequency(payload: Record<string, unknown>): number {
   }
 
   if (typeof note === 'number') {
-    return midiToFrequency(60 + note);
+    return midiToFrequency(note);
   }
 
   if (typeof note === 'string') {
@@ -1245,7 +1242,7 @@ function resolveBaseFrequency(payload: Record<string, unknown>): number {
     }
     const numeric = Number(note);
     if (Number.isFinite(numeric)) {
-      return midiToFrequency(60 + numeric);
+      return midiToFrequency(numeric);
     }
   }
 
@@ -2200,6 +2197,7 @@ export function resolveCacheDir(_fromUrl?: string | URL, projectRoot?: string): 
 
 export type { CircuitBreakerOptions, CircuitHealth, CircuitState } from './circuit-breaker.js';
 export { CircuitBreaker } from './circuit-breaker.js';
+export { applyMidiInputMessage, describeMidiMessage, MidiInputManager } from './midi-input.js';
 export type { MidiOutputFactory, MidiOutputPort, MidiPortInfo } from './midi-output.js';
 export { loadMidiOutputFactory, MidiOutputManager } from './midi-output.js';
 export type { OscArgument } from './osc-output.js';

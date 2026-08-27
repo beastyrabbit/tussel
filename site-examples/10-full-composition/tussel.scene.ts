@@ -12,10 +12,10 @@ export default defineScene({
       node: s('hh hh hh hh').gain(0.5),
     },
     bass: {
-      node: note('0 0 3 5').s('saw').slow(2).lpf(700).release(0.3),
+      node: note('60 60 63 65').s('saw').slow(2).lpf(700).release(0.3),
     },
     melody: {
-      node: note('7 5 3 0').s('triangle').gain(0.15),
+      node: note('67 65 63 60').s('triangle').gain(0.15),
     },
   },
 });

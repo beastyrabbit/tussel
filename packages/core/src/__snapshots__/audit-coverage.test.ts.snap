@@ -43,6 +43,7 @@ exports[`PROPERTY_METHODS sync > matches expected snapshot to catch unintentiona
   "miditouch",
   "midivalue",
   "mode",
+  "n",
   "note",
   "offset",
   "orbit",

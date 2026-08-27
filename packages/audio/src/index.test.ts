@@ -28,6 +28,31 @@ describe('audio engine defaults', () => {
     expect(maxSampleMagnitude(wav)).toBeGreaterThan(0);
   });
 
+  it('renders numeric notes as absolute MIDI values', async () => {
+    const renderNote = (pitch: number | string) =>
+      renderSceneToWavBuffer(
+        defineScene({
+          channels: {
+            lead: {
+              node: note(pitch).s('sine').attack(0.001).release(0.01),
+            },
+          },
+          samples: [],
+          transport: { cps: 1 },
+        }),
+        { seconds: 0.25 },
+      );
+
+    const [numberMidi, stringMidi, namedPitch] = await Promise.all([
+      renderNote(69),
+      renderNote('69'),
+      renderNote('a4'),
+    ]);
+
+    expect(numberMidi.equals(namedPitch)).toBe(true);
+    expect(stringMidi.equals(namedPitch)).toBe(true);
+  });
+
   it('treats bpm-only transport the same as the equivalent cps value offline', async () => {
     const sceneFromBpm = defineScene({
       channels: {
@@ -219,6 +244,49 @@ endin`;
     expect(maxAbsoluteDelta(fast, faster)).toBeGreaterThan(100);
   });
 
+  it('uses raw rate as the default sample unit', async () => {
+    const defaultRate = await renderSceneToWavBuffer(createSampleScene({ speed: 1 }), { seconds: 1 });
+    const explicitRate = await renderSceneToWavBuffer(createSampleScene({ speed: 1, unit: 'r' }), {
+      seconds: 1,
+    });
+
+    expect(defaultRate.equals(explicitRate)).toBe(true);
+  });
+
+  it('interprets unit c speed as samples per cycle', async () => {
+    const oneCycle = await renderSceneToWavBuffer(createSampleScene({ speed: 1, unit: 'c' }), {
+      seconds: 1,
+    });
+    const twoPerCycle = await renderSceneToWavBuffer(createSampleScene({ speed: 2, unit: 'c' }), {
+      seconds: 1,
+    });
+
+    expect(rmsWindow(oneCycle, 0.6, 0.9)).toBeGreaterThan(rmsWindow(twoPerCycle, 0.6, 0.9) * 2);
+  });
+
+  it('ramps accelerate linearly across the event duration', async () => {
+    const wav = await renderSceneToWavBuffer(
+      defineScene({
+        channels: {
+          lead: {
+            // A long release makes this catch ramps that incorrectly use the
+            // source stop time instead of the musical event boundary.
+            node: note(69).s('sine').attack(0.001).decay(0.001).sustain(1).release(1).accelerate(1),
+          },
+        },
+        samples: [],
+        transport: { cps: 1 },
+      }),
+      { seconds: 1 },
+    );
+
+    const earlyCrossings = zeroCrossings(monoWindowInt16(wav, 0.05, 0.15));
+    const lateCrossings = zeroCrossings(monoWindowInt16(wav, 0.85, 0.95));
+
+    expect(lateCrossings).toBeGreaterThan(earlyCrossings * 1.5);
+    expect(lateCrossings).toBeLessThan(earlyCrossings * 2);
+  });
+
   it('keeps looped samples audible after the original sample tail', async () => {
     const dry = await renderSceneToWavBuffer(createSampleScene(), { seconds: 1 });
     const looped = await renderSceneToWavBuffer(createSampleScene({ loop: true }), { seconds: 1 });
@@ -375,6 +443,7 @@ function createSampleScene(
     gain: number;
     loop: boolean;
     speed: number;
+    unit: string;
   }> = {},
   master: Partial<{
     gain: number;
@@ -386,6 +455,9 @@ function createSampleScene(
   }
   if (playback.loop !== undefined) {
     node = node.loop(playback.loop);
+  }
+  if (playback.unit !== undefined) {
+    node = node.unit(playback.unit);
   }
   return defineScene({
     channels: {

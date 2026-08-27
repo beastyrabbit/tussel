@@ -1,16 +1,8 @@
-import { type ExpressionNode, type ExpressionValue, isExpressionNode } from '@tussel/ir';
-import { queryMini } from '@tussel/mini';
-import { evaluateNumericValue, firstPayloadEntry, queryValueEvents } from './evaluate.js';
+import type { ExpressionValue } from '@tussel/ir';
+import { evaluateNumericValue, firstPayloadEntry } from './evaluate.js';
 import { type InternalQueryContext, queryPattern } from './index.js';
 import type { PlaybackEvent } from './types.js';
-import {
-  clampNumber,
-  normalizeCyclePhase,
-  positiveMod,
-  seededRandom,
-  shuffledIndices,
-  smoothNoise,
-} from './utils.js';
+import { clampNumber, normalizeCyclePhase, positiveMod } from './utils.js';
 
 export function transformFast(
   target: ExpressionValue,

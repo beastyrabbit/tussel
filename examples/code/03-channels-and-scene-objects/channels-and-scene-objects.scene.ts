@@ -1,6 +1,6 @@
 import { defineScene, n, s, sine } from '@tussel/dsl';
 
-const pulse = n('0 2 4 7').s('triangle').fast(2);
+const pulse = n('60 62 64 67').s('triangle').fast(2);
 
 export default defineScene({
   metadata: {
@@ -18,7 +18,7 @@ export default defineScene({
       orbit: 'drums',
     },
     bass: {
-      node: n('0 ~ 3 ~').s('saw').slow(2).lpf(220),
+      node: n('60 ~ 63 ~').s('saw').slow(2).lpf(220),
       gain: 0.14,
       mute: false,
       orbit: 'bass',

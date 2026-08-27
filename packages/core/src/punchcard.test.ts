@@ -17,7 +17,7 @@ describe('renderPunchcard', () => {
     expect(renderPunchcard([])).toBe('(no events)');
   });
 
-  it('marks onsets per row and time slice', () => {
+  it('marks event durations per row and time slice', () => {
     const out = renderPunchcard([event(0, 0.25, 'bd'), event(0.5, 0.75, 'sd'), event(0.25, 0.5, 'bd')], {
       cycles: 1,
       widthPerCycle: 8,

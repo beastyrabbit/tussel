@@ -27,9 +27,9 @@ async function main() {
 
   try {
     const loaded = await import(moduleUrl);
-    const { assertSceneSpec } = await loadDslModule();
+    const { assertSceneSpec, getParamSnapshot } = await loadDslModule();
     assertSceneSpec(loaded.default);
-    parentPort?.postMessage({ ok: true, scene: loaded.default });
+    parentPort?.postMessage({ ok: true, params: getParamSnapshot(), scene: loaded.default });
   } finally {
     tusselDsl.uninstallStringPrototypeExtensions();
     for (const [key, snapshot] of previousGlobals) {

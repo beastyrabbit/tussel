@@ -19,8 +19,8 @@ s("bd sd hh cp").fast(0.5)  // 2 events per cycle (same as slow(2))
 Stretches a pattern across more cycles:
 
 ```ts
-note("0 2 4 7").s("sine").slow(2)    // pattern takes 2 cycles to complete
-note("0 2 4 7").s("sine").slow(4)    // pattern takes 4 cycles
+note("60 62 64 67").s("sine").slow(2)    // pattern takes 2 cycles to complete
+note("60 62 64 67").s("sine").slow(4)    // pattern takes 4 cycles
 ```
 
 ## palindrome
@@ -28,10 +28,10 @@ note("0 2 4 7").s("sine").slow(4)    // pattern takes 4 cycles
 Reverses the pattern every other cycle:
 
 ```ts
-note("0 2 4 7").s("sine").palindrome()
-// cycle 1: 0 2 4 7
-// cycle 2: 7 4 2 0
-// cycle 3: 0 2 4 7
+note("60 62 64 67").s("sine").palindrome()
+// cycle 1: 60 62 64 67
+// cycle 2: 67 64 62 60
+// cycle 3: 60 62 64 67
 // ...
 ```
 

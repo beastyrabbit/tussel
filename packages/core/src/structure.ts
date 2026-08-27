@@ -1,6 +1,5 @@
-import { type ExpressionNode, type ExpressionValue, isExpressionNode, isPlainObject } from '@tussel/ir';
+import { type ExpressionValue, isExpressionNode, isPlainObject } from '@tussel/ir';
 import { inferMiniSteps, queryMini } from '@tussel/mini';
-import { annotateEvents } from './conditionals.js';
 import {
   coerceMiniValue,
   evaluateNumericValue,
@@ -28,8 +27,6 @@ import {
   normalizeWeightedEntry,
   positiveMod,
   seededRandom,
-  shuffledIndices,
-  smoothNoise,
 } from './utils.js';
 
 export function callPattern(

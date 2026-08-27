@@ -7,12 +7,14 @@ Tussel supports multiple ways to specify pitch: MIDI note numbers, note names, a
 
 ## Note Numbers
 
-The simplest approach — integers map to MIDI notes:
+Numbers are absolute MIDI notes, matching Strudel. MIDI 60 is C4 and MIDI 69 is A4:
 
 ```ts
-note("0 2 4 7")      // C, D, E, G (relative to base octave)
-note("60 62 64 67")  // absolute MIDI notes
+note("60 62 64 67")  // C4, D4, E4, G4
+note(69)              // A4 at 440 Hz
 ```
+
+Older Tussel versions treated numbers as semitone offsets from C4. Add 60 to those values when migrating, so `"0 2 4 7"` becomes `"60 62 64 67"`. Named pitches avoid numeric conventions altogether. For tuning-table steps that should stay relative to C4, use `i("0 2 4 7").tune("12edo")`.
 
 ## Note Names
 
@@ -28,7 +30,7 @@ note("a4")            // A440
 `n()` is an alias for `note()`:
 
 ```ts
-n("0 2 4 7").s("sine")
+n("60 62 64 67").s("sine")
 n("c3 e3 g3 b3").s("saw")
 ```
 
@@ -37,9 +39,10 @@ n("c3 e3 g3 b3").s("saw")
 Transform note patterns with scale and transposition:
 
 ```ts
-note("0 1 2 3 4 5 6 7")
+value("0 1 2 3 4 5 6 7")
   .scale("major")          // maps steps to major scale
-  .transpose(2)            // shift up by 2 steps
+  .scaleTranspose(2)       // shift up by 2 scale steps
+  .note()
 ```
 
 ## Chords
@@ -55,11 +58,11 @@ chord("C E G")             // C major chord
 Use `<>` to alternate notes or chords across cycles:
 
 ```ts
-note("<0 3 5 7>").s("sine").slow(2)
-// cycle 1-2: note 0
-// cycle 3-4: note 3
-// cycle 5-6: note 5
-// cycle 7-8: note 7
+note("<60 63 65 67>").s("sine").slow(2)
+// cycle 1-2: MIDI 60
+// cycle 3-4: MIDI 63
+// cycle 5-6: MIDI 65
+// cycle 7-8: MIDI 67
 ```
 
 ## Practical Example
@@ -69,10 +72,10 @@ setcps(0.75);
 
 stack(
   // Bass line — slow saw with filter
-  note("0 0 3 5").s("saw").slow(2).lpf(700).release(0.3),
+  note("60 60 63 65").s("saw").slow(2).lpf(700).release(0.3),
   // Melody — triangle, descending
-  note("7 5 3 0").s("triangle").gain(0.15),
+  note("67 65 63 60").s("triangle").gain(0.15),
   // Pad — alternating notes
-  note("<0 3 5 7>").s("sine").slow(4).release(0.5).gain(0.1)
+  note("<60 63 65 67>").s("sine").slow(4).release(0.5).gain(0.1)
 )
 ```

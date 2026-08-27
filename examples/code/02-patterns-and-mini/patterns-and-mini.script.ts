@@ -2,7 +2,7 @@
 // @guide 02-patterns-and-mini
 setcps(1);
 
-const lead = mini`0 [2 4] <7 9>`;
+const lead = mini`60 [62 64] <67 69>`;
 const pulse = m`noise ~ [noise noise] ~`;
 
 scene({
@@ -21,7 +21,7 @@ scene({
       orbit: 'lead',
     },
     bass: {
-      node: n('<0 3 5 7>/2').s('saw').slow(2).lpf(sine.range(300, 1400).slow(4)),
+      node: n('<60 63 65 67>/2').s('saw').slow(2).lpf(sine.range(300, 1400).slow(4)),
       gain: 0.08,
       mute: false,
       orbit: 'bass',

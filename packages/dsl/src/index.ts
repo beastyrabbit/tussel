@@ -18,6 +18,7 @@ import {
   normalizeChannelSpec,
   normalizeHydraSceneSpec,
   normalizeSampleSource,
+  type ParamValue,
   renderHydraTemplate,
   renderValue,
   type SampleSourceSpec,
@@ -59,6 +60,9 @@ export interface DslSceneInput {
   samples?: Array<SampleSourceSpec | string>;
   transport?: TransportSpec;
 }
+
+export type PatternTransform = (pattern: PatternBuilder) => PatternBuilder;
+type PatternTransformInput = PatternBuilder | PatternTransform;
 
 function isBuilderLike(value: unknown): value is BuilderLike {
   return (
@@ -182,7 +186,7 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('begin', [value]);
   }
 
-  chunk(size: unknown, transform: unknown): PatternBuilder {
+  chunk(size: unknown, transform: PatternTransformInput): PatternBuilder {
     return this.method('chunk', [size, normalizePatternTransform(this, transform)]);
   }
 
@@ -298,11 +302,11 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('hurry', [value]);
   }
 
-  almostAlways(transform: unknown): PatternBuilder {
+  almostAlways(transform: PatternTransformInput): PatternBuilder {
     return this.sometimesBy(0.9, transform);
   }
 
-  almostNever(transform: unknown): PatternBuilder {
+  almostNever(transform: PatternTransformInput): PatternBuilder {
     return this.sometimesBy(0.1, transform);
   }
 
@@ -328,7 +332,7 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('loop', [value]);
   }
 
-  layer(...transforms: unknown[]): PatternBuilder {
+  layer(...transforms: PatternTransformInput[]): PatternBuilder {
     return stack(...transforms.map((transform) => applyPatternTransform(this, transform)));
   }
 
@@ -388,11 +392,11 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('ccv', [value]);
   }
 
-  off(time: unknown, transform: unknown): PatternBuilder {
+  off(time: unknown, transform: PatternTransformInput): PatternBuilder {
     return stack(this, applyPatternTransform(this, transform).late(time));
   }
 
-  often(transform: unknown): PatternBuilder {
+  often(transform: PatternTransformInput): PatternBuilder {
     return this.sometimesBy(0.75, transform);
   }
 
@@ -440,19 +444,19 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('degradeBy', [value]);
   }
 
-  every(value: unknown, transform: unknown): PatternBuilder {
+  every(value: unknown, transform: PatternTransformInput): PatternBuilder {
     return this.method('every', [value, normalizePatternTransform(this, transform)]);
   }
 
-  jux(transform: unknown): PatternBuilder {
+  jux(transform: PatternTransformInput): PatternBuilder {
     return this.juxBy(1, transform);
   }
 
-  juxBy(value: unknown, transform: unknown): PatternBuilder {
+  juxBy(value: unknown, transform: PatternTransformInput): PatternBuilder {
     return stack(this.pan(mirrorPanValue(value)), applyPatternTransform(this, transform).pan(value));
   }
 
-  rarely(value?: unknown): PatternBuilder {
+  rarely(value?: PatternTransformInput): PatternBuilder {
     if (typeof value === 'function') {
       return this.sometimesBy(0.25, value);
     }
@@ -519,11 +523,11 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('slowGap', [value]);
   }
 
-  sometimes(transform: unknown): PatternBuilder {
+  sometimes(transform: PatternTransformInput): PatternBuilder {
     return this.sometimesBy(0.5, transform);
   }
 
-  sometimesBy(value: unknown, transform: unknown): PatternBuilder {
+  sometimesBy(value: unknown, transform: PatternTransformInput): PatternBuilder {
     return this.method('sometimesBy', [value, normalizePatternTransform(this, transform)]);
   }
 
@@ -632,8 +636,8 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('stut', args);
   }
 
-  whenmod(n: unknown, t: unknown, pattern: unknown): PatternBuilder {
-    return this.method('whenmod', [n, t, pattern]);
+  whenmod(n: unknown, t: unknown, pattern: PatternBuilder | PatternTransform): PatternBuilder {
+    return this.method('whenmod', [n, t, normalizePatternTransform(this, pattern)]);
   }
 
   velocity(value: unknown): PatternBuilder {
@@ -644,7 +648,7 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('vowel', [value]);
   }
 
-  superimpose(...transforms: unknown[]): PatternBuilder {
+  superimpose(...transforms: PatternTransformInput[]): PatternBuilder {
     return stack(this, ...transforms.map((transform) => applyPatternTransform(this, transform)));
   }
 
@@ -660,11 +664,11 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('tour', values);
   }
 
-  when(value: unknown, transform: unknown): PatternBuilder {
+  when(value: unknown, transform: PatternTransformInput): PatternBuilder {
     return this.method('when', [value, normalizePatternTransform(this, transform)]);
   }
 
-  within(begin: unknown, end: unknown, transform: unknown): PatternBuilder {
+  within(begin: unknown, end: unknown, transform: PatternTransformInput): PatternBuilder {
     return this.method('within', [begin, end, normalizePatternTransform(this, transform)]);
   }
 
@@ -716,14 +720,14 @@ export class PatternBuilder extends BaseBuilder<'pattern'> {
     return this.method('iterback', [value]);
   }
 
-  inside(factor: unknown, transform: unknown): PatternBuilder {
+  inside(factor: unknown, transform: PatternTransformInput): PatternBuilder {
     // inside(n, f) = pat.slow(n).f().fast(n)
     const slowed = this.slow(factor);
     const transformed = applyPatternTransform(slowed, transform);
     return transformed.fast(factor);
   }
 
-  outside(factor: unknown, transform: unknown): PatternBuilder {
+  outside(factor: unknown, transform: PatternTransformInput): PatternBuilder {
     // outside(n, f) = pat.fast(n).f().slow(n)
     const fasted = this.fast(factor);
     const transformed = applyPatternTransform(fasted, transform);
@@ -884,8 +888,6 @@ function mirrorPanValue(value: unknown): unknown {
   }
   return value;
 }
-
-type PatternTransform = (pattern: PatternBuilder) => PatternBuilder;
 
 function createPatternTransform(name: string): (...args: unknown[]) => PatternTransform {
   return (...args: unknown[]) =>
@@ -1085,6 +1087,11 @@ export function cc(control: unknown, port?: unknown): SignalBuilder {
   return signalCall('cc', port === undefined ? [control] : [control, port]);
 }
 
+/** Read a named live parameter, optionally falling back when it has not been set. */
+export function param(name: unknown, fallback?: unknown): SignalBuilder {
+  return signalCall('param', fallback === undefined ? [name] : [name, fallback]);
+}
+
 /** Latest MIDI note-on pitch for a port (see `setMidiNoteOn`). */
 export function midin(port?: unknown, fallback?: unknown): SignalBuilder {
   if (fallback === undefined) {
@@ -1209,17 +1216,17 @@ export const tri = signalCall('tri');
  * - `vol.get()` / `vol.set(v)` for imperative access
  */
 export interface ControlParam extends SignalBuilder {
-  (value?: unknown): SignalBuilder;
+  (value?: ParamValue): SignalBuilder;
   readonly name: string;
-  get(): unknown;
-  set(value: unknown): void;
+  get(): ParamValue;
+  set(value: ParamValue): void;
 }
 
 function createControlParam(name: string): ControlParam {
   const signal = signalCall('param', [name]) as unknown as BuilderLike & Record<string, unknown>;
-  const param = ((value?: unknown): SignalBuilder => {
+  const param = ((value?: ParamValue): SignalBuilder => {
     if (value !== undefined) {
-      setParamValue(name, value as never);
+      setParamValue(name, value);
     }
     // Return a fresh builder so chained mutations never alias the param itself.
     return signalCall('param', [name]);
@@ -1228,12 +1235,15 @@ function createControlParam(name: string): ControlParam {
   // normalizeValue unwraps it like any builder and SignalBuilder methods work.
   for (const key of Reflect.ownKeys(signal)) {
     if (key !== 'length' && key !== 'name') {
-      Object.defineProperty(param, key, Object.getOwnPropertyDescriptor(signal, key)!);
+      const descriptor = Object.getOwnPropertyDescriptor(signal, key);
+      if (descriptor) {
+        Object.defineProperty(param, key, descriptor);
+      }
     }
   }
   Object.defineProperty(param, 'name', { value: `param:${name}` });
   param.get = () => getParamValue(name);
-  param.set = (value: unknown) => setParamValue(name, value as never);
+  param.set = (value: ParamValue) => setParamValue(name, value);
   Object.setPrototypeOf(param, SignalBuilder.prototype as object);
   return param;
 }
@@ -1347,7 +1357,7 @@ export function installStringPrototypeExtensions(): void {
         if (typeof fn !== 'function') {
           throw new TypeError(`PatternBuilder.${method} is not callable`);
         }
-        return (fn as Function).apply(builder, args);
+        return (fn as (...values: unknown[]) => unknown).apply(builder, args);
       },
       writable: true,
     });

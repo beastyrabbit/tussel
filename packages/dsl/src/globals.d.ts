@@ -106,6 +106,7 @@ declare global {
   const mul: typeof import('./index.js').mul;
   const n: typeof import('./index.js').n;
   const note: typeof import('./index.js').note;
+  const param: typeof import('./index.js').param;
   const pace: typeof import('./index.js').pace;
   const perlin: SignalBuilder;
   const ply: typeof import('./index.js').ply;

@@ -15,6 +15,9 @@ const BINDING_LINE = /^([a-zA-Z_]\w*)\s*=\s*(.+)$/;
 const SET_CPS_LINE = /^setcps\s+(.+)$/i;
 const SET_BPM_LINE = /^setbpm\s+(.+)$/i;
 const SET_CPM_LINE = /^setcpm\s+(.+)$/i;
+const NUMERIC_LITERAL_SOURCE = String.raw`[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?`;
+const NUMERIC_LITERAL = new RegExp(`^${NUMERIC_LITERAL_SOURCE}$`);
+const NUMERIC_TOKEN = new RegExp(`^${NUMERIC_LITERAL_SOURCE}`);
 
 const BASE_CALLS = new Set(['chord', 'n', 'note', 's', 'sound', 'value']);
 const METHOD_NAMES = new Set([
@@ -121,8 +124,9 @@ const NO_ARG_METHODS = new Set(['degrade', 'palindrome', 'rev', 'voicing']);
 
 export function translateTidalToSceneModule(source: string, options: { entry?: string } = {}): string {
   const program = translateTidalToStrudelProgram(source, options);
+  const imports = collectSceneModuleImports(program.channels.map(({ expr }) => expr));
   return [
-    `import { defineScene, n, s } from '@tussel/dsl';`,
+    `import { ${imports.join(', ')} } from '@tussel/dsl';`,
     '',
     'export default defineScene({',
     '  transport: {',
@@ -138,6 +142,27 @@ export function translateTidalToSceneModule(source: string, options: { entry?: s
     '});',
     '',
   ].join('\n');
+}
+
+function collectSceneModuleImports(expressions: string[]): string[] {
+  const imports = new Set<string>(['defineScene']);
+  // Translated output is composed only from DSL calls and chained methods.
+  // Collect bare calls (including transform arguments such as `fast(2)`) while
+  // ignoring `.method()` calls, which need no module import.
+  const bareCall = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*\(/g;
+  for (const expression of expressions) {
+    for (const match of expression.matchAll(bareCall)) {
+      const name = match[1];
+      if (name) {
+        imports.add(name);
+      }
+    }
+  }
+  return [...imports].sort((left, right) => {
+    if (left === 'defineScene') return -1;
+    if (right === 'defineScene') return 1;
+    return left.localeCompare(right);
+  });
 }
 
 export function translateTidalToStrudelProgram(
@@ -309,12 +334,16 @@ function translateAtom(
 
   const [head, ...rest] = tokens;
   if (head && BASE_CALLS.has(head)) {
-    const callee = head === 'sound' ? 's' : head === 'note' ? 'n' : head;
+    const callee = head === 'sound' ? 's' : head;
     const argument = rest.join(' ').trim();
     if (!argument) {
       throw new TusselParseError(`Missing tidal argument for ${head}`);
     }
-    return `${callee}(${translateArgument(argument, bindings, visited)})`;
+    const translatedArgument =
+      head === 'note'
+        ? translateTidalNoteArgument(argument, bindings, visited)
+        : translateArgument(argument, bindings, visited);
+    return `${callee}(${translatedArgument})`;
   }
 
   // Bare method applications used as values, e.g. `whenmod 8 5 (fast 2)`.
@@ -383,6 +412,12 @@ function applyControl(
     if (head === 'sound' || head === 's') {
       return `${target}.s(${translateArgument(argument, bindings, visited)})`;
     }
+    if (head === 'note') {
+      return `${target}.note(${translateTidalNoteArgument(argument, bindings, visited)})`;
+    }
+    if (head === 'n') {
+      return `${target}.n(${translateArgument(argument, bindings, visited)})`;
+    }
     return `${target}.note(${translateArgument(argument, bindings, visited)})`;
   }
   if (!METHOD_NAMES.has(head)) {
@@ -421,7 +456,7 @@ function translateArgument(
     next.add(trimmed);
     return translateExpr(bindings.get(trimmed) ?? '', bindings, next);
   }
-  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
+  if (NUMERIC_LITERAL.test(trimmed)) {
     return trimmed;
   }
   // Bare pattern applications used as transform values, e.g.
@@ -431,19 +466,107 @@ function translateArgument(
   const [methodHead, ...methodRest] = tokens;
   if (methodHead && METHOD_NAMES.has(methodHead)) {
     if (NO_ARG_METHODS.has(methodHead) && methodRest.length === 0) {
-      return `${methodHead}()`;
+      return `((pattern) => pattern.${methodHead}())`;
     }
     if (methodRest.length > 0) {
       const args = methodRest.map((token) => translateArgument(token, bindings, visited));
-      return `${methodHead}(${args.join(', ')})`;
+      return `((pattern) => pattern.${methodHead}(${args.join(', ')}))`;
     }
   }
   if (methodHead && BASE_CALLS.has(methodHead)) {
-    const callee = methodHead === 'sound' ? 's' : methodHead === 'note' ? 'n' : methodHead;
+    if (methodHead === 'note') {
+      return `note(${translateTidalNoteArgument(methodRest.join(' '), bindings, visited)})`;
+    }
+    const callee = methodHead === 'sound' ? 's' : methodHead;
     const args = methodRest.map((token) => translateArgument(token, bindings, visited));
     return `${callee}(${args.join(', ')})`;
   }
   throw new TusselParseError(`Unsupported tidal argument: ${argument}`);
+}
+
+function translateTidalNoteArgument(
+  argument: string,
+  bindings: Map<string, string>,
+  visited: Set<string>,
+): string {
+  const trimmed = trimOuter(argument);
+  if (isQuoted(trimmed)) {
+    return JSON.stringify(offsetTidalNoteMini(unquote(trimmed)));
+  }
+  if (NUMERIC_LITERAL.test(trimmed)) {
+    return `${Number(trimmed) + 60}`;
+  }
+  if (bindings.has(trimmed)) {
+    if (visited.has(trimmed)) {
+      throw new TusselParseError(`Circular binding: ${trimmed}`);
+    }
+    const next = new Set(visited);
+    next.add(trimmed);
+    return translateTidalNoteArgument(bindings.get(trimmed) ?? '', bindings, next);
+  }
+  return translateArgument(argument, bindings, visited);
+}
+
+/** Convert Tidal's numeric note offsets while leaving mini-notation modifiers and named pitches intact. */
+function offsetTidalNoteMini(source: string): string {
+  let result = '';
+  let parenthesisDepth = 0;
+  let index = 0;
+  while (index < source.length) {
+    const char = source[index] ?? '';
+    if (char === '(') {
+      parenthesisDepth += 1;
+      result += char;
+      index += 1;
+      continue;
+    }
+    if (char === ')') {
+      parenthesisDepth = Math.max(0, parenthesisDepth - 1);
+      result += char;
+      index += 1;
+      continue;
+    }
+
+    const previous = source[index - 1];
+    const startsToken =
+      index === 0 ||
+      previous === undefined ||
+      /\s/.test(previous) ||
+      previous === '[' ||
+      previous === '<' ||
+      previous === '{' ||
+      previous === '|' ||
+      previous === ',';
+    if (parenthesisDepth === 0 && startsToken) {
+      const numeric = NUMERIC_TOKEN.exec(source.slice(index))?.[0];
+      const next = numeric === undefined ? undefined : source[index + numeric.length];
+      const endsToken =
+        next === undefined ||
+        /\s/.test(next) ||
+        next === ']' ||
+        next === '>' ||
+        next === '}' ||
+        next === ',' ||
+        next === '|' ||
+        next === '*' ||
+        next === '!' ||
+        next === '@' ||
+        next === '/' ||
+        next === '?' ||
+        next === '_' ||
+        next === ':' ||
+        next === '(';
+      if (numeric !== undefined && endsToken) {
+        result += `${Number(numeric) + 60}`;
+        index += numeric.length;
+        continue;
+      }
+    }
+
+    result += char;
+    index += 1;
+  }
+  return result;
 }
 
 function parseNumericLiteral(value: string, context: string): number {

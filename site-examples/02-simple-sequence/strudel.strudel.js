@@ -1,2 +1,2 @@
 setcps(0.5)
-note("0 2 4 7").s("sine").release(0.2)
+note("60 62 64 67").s("sine").release(0.2)

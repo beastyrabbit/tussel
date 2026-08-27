@@ -35,7 +35,7 @@ Optional keys:
         "kind": "call",
         "name": "n",
         "exprType": "pattern",
-        "args": ["0 2 4 7"]
+        "args": ["60 62 64 67"]
       },
       "gain": 0.1,
       "mute": false,
@@ -56,7 +56,7 @@ A call expression:
   "kind": "call",
   "name": "n",
   "exprType": "pattern",
-  "args": ["0 2 4 7"]
+  "args": ["60 62 64 67"]
 }
 ```
 
@@ -71,7 +71,7 @@ A method expression:
     "kind": "call",
     "name": "n",
     "exprType": "pattern",
-    "args": ["0 2 4 7"]
+    "args": ["60 62 64 67"]
   },
   "args": [2]
 }

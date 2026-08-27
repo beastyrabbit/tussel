@@ -26,6 +26,7 @@
     "parity:run": "pnpm parity run --save-artifacts",
     "prepare": "if [ -d .git ]; then lefthook install; else echo 'lefthook skipped: no git repo'; fi",
     "test": "vitest run",
+    "test:ci": "vitest run --exclude packages/parity/src/adapters/strudel.test.ts --exclude packages/parity/src/value-modifiers.test.ts --exclude packages/parity/src/learning-pages.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "user_audio_test": "pnpm exec tsx packages/cli/src/user-audio-test.ts",

@@ -10,7 +10,7 @@ export default {
   samplePack: 'reference/assets/basic-kit',
   sources: {
     strudel: {
-      code: `stack(s("bd").bank("crate").clip(0.5), s("hh hh hh hh").speed(2).cut(1), n("0 2 4 7").s("square").attack(0.02).release(0.2).pan(0.2).mask("1 0 1 1"), n("7 5 3 0").s("triangle").gain(0.12).hpf(200).rev())`,
+      code: `stack(s("bd").bank("crate").clip(0.5), s("hh hh hh hh").speed(2).cut(1), note("60 62 64 67").s("square").attack(0.02).release(0.2).pan(0.2).mask("1 0 1 1"), note("67 65 63 60").s("triangle").gain(0.12).hpf(200).rev())`,
       shape: 'script',
     },
     tidal: {

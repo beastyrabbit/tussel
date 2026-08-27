@@ -11,12 +11,17 @@ import { TusselInputError } from './errors.js';
 
 const PARAM_REGISTRY_KEY = Symbol.for('tussel.paramRegistry');
 
-type ParamValue = boolean | null | number | string;
+export type ParamValue = boolean | null | number | string;
 
 function paramRegistry(): Map<string, ParamValue> {
   const root = globalThis as typeof globalThis & { [PARAM_REGISTRY_KEY]?: Map<string, ParamValue> };
-  root[PARAM_REGISTRY_KEY] ??= new Map<string, ParamValue>();
-  return root[PARAM_REGISTRY_KEY]!;
+  const current = root[PARAM_REGISTRY_KEY];
+  if (current) {
+    return current;
+  }
+  const created = new Map<string, ParamValue>();
+  root[PARAM_REGISTRY_KEY] = created;
+  return created;
 }
 
 /** Canonical registry key for a parameter name. */
@@ -38,7 +43,8 @@ export function setParamValue(name: string | number, value: ParamValue): void {
 
 /** Read the live value of a named parameter, falling back when unset. */
 export function getParamValue(name: string | number, fallback: ParamValue = 0): ParamValue {
-  return paramRegistry().get(resolveParamKey(name)) ?? fallback;
+  const value = paramRegistry().get(resolveParamKey(name));
+  return value === undefined ? fallback : value;
 }
 
 export interface ParamSnapshotEntry {

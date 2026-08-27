@@ -37,11 +37,13 @@ import {
   isPlainObject,
   type MetadataSpec,
   normalizeHydraSceneSpec,
+  type ParamSnapshotEntry,
   renderValue,
   resolveProjectRoot,
   resolveTusselCacheDir,
   type SceneSpec,
   sceneSchema,
+  setParamValue,
   stableJson,
   TusselValidationError,
 } from '@tussel/ir';
@@ -360,6 +362,9 @@ export async function runScene(
   let reloadScheduled = false;
   let drainingReloads: Promise<void> | undefined;
   let shuttingDown = false;
+  let handleTerminationSignal: (() => void) | undefined;
+  let detachMixControls: (() => void) | undefined;
+  let shutdownPromise: Promise<void> | undefined;
 
   const refreshWatcher = async (pathsToWatch: string[]): Promise<void> => {
     if (watcher) {
@@ -373,15 +378,26 @@ export async function runScene(
     if (!watch || shuttingDown) {
       return;
     }
-    watcher = await watchDependencies(pathsToWatch, async () => {
+    const nextWatcher = await watchDependencies(pathsToWatch, async () => {
       await requestReload();
     });
+    if (shuttingDown) {
+      await nextWatcher.close();
+      return;
+    }
+    watcher = nextWatcher;
   };
 
   const loadAndApply = async (): Promise<void> => {
     try {
       const prepared = await prepareScene(absoluteEntry, { ...options, projectRoot });
+      if (shuttingDown) {
+        return;
+      }
       await engine.updateScene(prepared.scene);
+      if (shuttingDown) {
+        return;
+      }
       lastGoodScene = prepared;
       printSuccess(prepared);
       await refreshWatcher(prepared.dependencies);
@@ -410,35 +426,91 @@ export async function runScene(
     return drainingReloads;
   };
 
-  let detachMixControls: (() => void) | undefined;
-  const mixChannelNames = (): string[] => (lastGoodScene ? Object.keys(lastGoodScene.scene.channels) : []);
-  if (watch && options.interactive !== false && process.stdin.isTTY) {
-    detachMixControls = attachMixControls(process.stdin, mixChannelNames, (line: string) => {
-      runtimeLogger.info(line, { code: 'TUSSEL_MIX' });
-    });
-  }
+  const shutdown = (): Promise<void> => {
+    shuttingDown = true;
+    detachMixControls?.();
+    shutdownPromise ??= (async () => {
+      try {
+        await drainingReloads;
+      } catch (error) {
+        runtimeLogger.error(`Reload failed during shutdown: ${(error as Error).message}`, {
+          code: 'TUSSEL_SHUTDOWN_RELOAD_ERROR',
+        });
+      }
 
-  await requestReload();
-  if (!lastGoodScene) {
-    process.exitCode = 1;
-  }
-  detachMixControls?.();
+      const activeWatcher = watcher;
+      watcher = undefined;
+      try {
+        await activeWatcher?.close();
+      } catch (error) {
+        runtimeLogger.warn(`Unable to close file watcher: ${(error as Error).message}`, {
+          code: 'TUSSEL_WATCHER_CLOSE_ERROR',
+        });
+      }
+      try {
+        await engine.stop();
+      } catch (error) {
+        runtimeLogger.error(`Unable to stop audio engine: ${(error as Error).message}`, {
+          code: 'TUSSEL_ENGINE_STOP_ERROR',
+        });
+      }
+    })();
+    return shutdownPromise;
+  };
 
-  if (!watch) {
-    return;
-  }
-
-  await new Promise<void>((resolve) => {
-    const handleSignal = async () => {
-      shuttingDown = true;
-      await watcher?.close();
-      await engine.stop();
-      resolve();
+  let resolveTermination: (() => void) | undefined;
+  const termination = watch
+    ? new Promise<void>((resolve) => {
+        resolveTermination = resolve;
+      })
+    : undefined;
+  if (watch) {
+    handleTerminationSignal = () => {
+      if (shuttingDown) {
+        return;
+      }
+      void shutdown().then(
+        () => resolveTermination?.(),
+        (error: unknown) => {
+          runtimeLogger.error(`Unexpected shutdown failure: ${(error as Error).message}`, {
+            code: 'TUSSEL_SHUTDOWN_ERROR',
+          });
+          resolveTermination?.();
+        },
+      );
     };
+    process.once('SIGINT', handleTerminationSignal);
+    process.once('SIGTERM', handleTerminationSignal);
+  }
 
-    process.once('SIGINT', handleSignal);
-    process.once('SIGTERM', handleSignal);
-  });
+  const mixChannelNames = (): string[] => (lastGoodScene ? Object.keys(lastGoodScene.scene.channels) : []);
+  try {
+    if (watch && !shuttingDown && options.interactive !== false && process.stdin.isTTY) {
+      detachMixControls = attachMixControls(process.stdin, mixChannelNames, (line: string) => {
+        runtimeLogger.info(line, { code: 'TUSSEL_MIX' });
+      });
+    }
+
+    await requestReload();
+    if (!lastGoodScene && !shuttingDown) {
+      process.exitCode = 1;
+    }
+
+    if (!watch) {
+      return;
+    }
+
+    await termination;
+  } finally {
+    if (handleTerminationSignal) {
+      process.off('SIGINT', handleTerminationSignal);
+      process.off('SIGTERM', handleTerminationSignal);
+    }
+    detachMixControls?.();
+    if (watch) {
+      await shutdown();
+    }
+  }
 }
 
 export async function renderScene(
@@ -1071,9 +1143,9 @@ const BUILTIN_DSL_CALLS = new Set([
  * Every known pattern method (canonical names plus aliases), derived from the
  * shared PATTERN_METHOD_REGISTRY in @tussel/ir.
  *
- * Used to distinguish builtin pattern methods from user-defined params when
- * generating scene wrappers: any method name missing here would be miscompiled
- * into a createParam() prelude and crash at runtime (createParam throws).
+ * Used to distinguish builtin pattern methods from unknown custom methods when
+ * generating scene wrappers. Missing builtin names would otherwise be emitted
+ * through the legacy custom-method prelude and fail runtime preparation.
  */
 const BUILTIN_PATTERN_METHODS: ReadonlySet<string> = ALL_PATTERN_METHOD_NAMES;
 
@@ -1201,15 +1273,29 @@ async function executeSceneModule(modulePath: string, projectRoot: string): Prom
       stderr += chunk.toString();
     });
 
-    worker.on('message', (message: { message?: string; ok: boolean; scene?: SceneSpec; stack?: string }) => {
-      if (message.ok && message.scene) {
-        resolveOnce(message.scene);
-        return;
-      }
-      rejectOnce(
-        new TusselValidationError([message.message, message.stack, stderr.trim()].filter(Boolean).join('\n')),
-      );
-    });
+    worker.on(
+      'message',
+      (message: {
+        message?: string;
+        ok: boolean;
+        params?: ParamSnapshotEntry[];
+        scene?: SceneSpec;
+        stack?: string;
+      }) => {
+        if (message.ok && message.scene) {
+          for (const entry of message.params ?? []) {
+            setParamValue(entry.name, entry.value);
+          }
+          resolveOnce(message.scene);
+          return;
+        }
+        rejectOnce(
+          new TusselValidationError(
+            [message.message, message.stack, stderr.trim()].filter(Boolean).join('\n'),
+          ),
+        );
+      },
+    );
     worker.on('error', (error) => rejectOnce(error instanceof Error ? error : new Error(String(error))));
     worker.on('exit', (code) => {
       if (code !== 0) {
@@ -1401,8 +1487,7 @@ function assertSupportedScene(scene: SceneSpec): void {
   const customParams = [...collectCustomParamNames(scene)];
   if (customParams.length > 0) {
     throw new TusselValidationError(
-      `Unsupported custom params in runtime execution: ${customParams.sort().join(', ')}. ` +
-        'createParam() and createParams() are not executable yet.',
+      `Unsupported custom pattern methods in runtime execution: ${customParams.sort().join(', ')}.`,
     );
   }
 }

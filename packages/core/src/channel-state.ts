@@ -33,8 +33,17 @@ interface ChannelRuntimeState {
 
 function channelRuntimeState(): ChannelRuntimeState {
   const root = globalThis as typeof globalThis & { [CHANNEL_STATE_KEY]?: ChannelRuntimeState };
-  root[CHANNEL_STATE_KEY] ??= { hushed: false, muted: new Set<string>(), soloed: new Set<string>() };
-  return root[CHANNEL_STATE_KEY]!;
+  const current = root[CHANNEL_STATE_KEY];
+  if (current) {
+    return current;
+  }
+  const created = {
+    hushed: false,
+    muted: new Set<string>(),
+    soloed: new Set<string>(),
+  };
+  root[CHANNEL_STATE_KEY] = created;
+  return created;
 }
 
 /** Whether the channel currently produces audio, given mute/solo/hush state. */
@@ -98,9 +107,10 @@ export function isHushed(): boolean {
   return channelRuntimeState().hushed;
 }
 
-/** Clear every mute and solo flag (keeps hush untouched). */
+/** Clear hush plus every mute and solo flag. */
 export function clearMixState(): void {
   const state = channelRuntimeState();
+  state.hushed = false;
   state.muted.clear();
   state.soloed.clear();
 }

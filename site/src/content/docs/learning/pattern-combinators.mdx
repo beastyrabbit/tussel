@@ -12,7 +12,7 @@ Plays multiple patterns simultaneously:
 ```ts
 stack(
   s("bd hh sd hh"),             // drums
-  note("0 2 4 7").s("sine"),    // melody
+  note("60 62 64 67").s("sine"),    // melody
   s("noise ~ noise ~").hpf(5000).gain(0.03)  // texture
 )
 ```
@@ -27,7 +27,7 @@ For more control, use named channels via `scene()`:
 scene({
   channels: {
     drums: { node: s("bd hh sd hh"), gain: 0.8 },
-    melody: { node: note("0 2 4 7").s("sine"), gain: 0.3 },
+    melody: { node: note("60 62 64 67").s("sine"), gain: 0.3 },
     texture: { node: s("noise").hpf(5000), gain: 0.03 },
   },
   master: {},
@@ -61,10 +61,10 @@ s("bd sd hh cp").off(0.125, x => x.gain(0.3))
 Like `off` but without the time shift — layers a transformed copy at the same time:
 
 ```ts
-note("0 2 4 7").s("sine")
+note("60 62 64 67").s("sine")
   .superimpose(x => x.fast(2).gain(0.3))
-// original: 0 2 4 7
-// layered: 0 2 4 7 0 2 4 7 (at 30% volume)
+// original: 60 62 64 67
+// layered: 60 62 64 67 60 62 64 67 (at 30% volume)
 ```
 
 ## mask

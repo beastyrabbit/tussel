@@ -22,7 +22,30 @@ describe('Tidal dialect translation', () => {
 
   it('translates note patterns', () => {
     const result = translateTidalToStrudelProgram('d1 $ note "0 3 7"');
-    expect(result.channels[0]?.expr).toBe('n("0 3 7")');
+    expect(result.channels[0]?.expr).toBe('note("60 63 67")');
+  });
+
+  it('keeps Tidal n patterns as indexes and converts note controls', () => {
+    expect(translateTidalToStrudelProgram('d1 $ n "0 3 7"').channels[0]?.expr).toBe('n("0 3 7")');
+    expect(translateTidalToStrudelProgram('d1 $ s "sine" # note "0 3 7"').channels[0]?.expr).toBe(
+      's("sine").note("60 63 67")',
+    );
+  });
+
+  it('converts numeric note tokens without changing names or mini modifiers', () => {
+    expect(translateTidalToStrudelProgram('d1 $ note "<0 [3 7]*2 9(3,8)>/2"').channels[0]?.expr).toBe(
+      'note("<60 [63 67]*2 69(3,8)>/2")',
+    );
+    expect(translateTidalToStrudelProgram('d1 $ note "c4 eb4 g4"').channels[0]?.expr).toBe(
+      'note("c4 eb4 g4")',
+    );
+    expect(translateTidalToStrudelProgram('d1 $ note ".5 +3 1e1"').channels[0]?.expr).toBe(
+      'note("60.5 63 70")',
+    );
+    expect(translateTidalToStrudelProgram('d1 $ note "{0? 3_, 7:2 | 9}"').channels[0]?.expr).toBe(
+      'note("{60? 63_, 67:2 | 69}")',
+    );
+    expect(translateTidalToStrudelProgram('d1 $ note .5').channels[0]?.expr).toBe('note(60.5)');
   });
 
   it('translates sound as alias for s', () => {
@@ -75,7 +98,8 @@ describe('Tidal dialect translation', () => {
       ['d1 $ s "bd" # hcutoff 4000', 's("bd").hcutoff(4000)'],
       ['d1 $ loop 2 $ s "bd"', 's("bd").loop(2)'],
       ['d1 $ s "bd" # up 12', 's("bd").up(12)'],
-      ['d1 $ whenmod 8 5 (fast 2) $ s "bd"', 's("bd").whenmod(8, 5, fast(2))'],
+      ['d1 $ whenmod 8 5 (fast 2) $ s "bd"', 's("bd").whenmod(8, 5, ((pattern) => pattern.fast(2)))'],
+      ['d1 $ every 2 rev $ s "bd sd"', 's("bd sd").every(2, ((pattern) => pattern.rev()))'],
       ['d1 $ legato 0.7 $ s "bd sd"', 's("bd sd").legato(0.7)'],
       ['d1 $ chop 4 $ s "bd"', 's("bd").chop(4)'],
       ['d1 $ striate 8 $ s "bd"', 's("bd").striate(8)'],
@@ -147,6 +171,11 @@ describe('Tidal dialect translation', () => {
     expect(module).toContain('import { defineScene');
     expect(module).toContain('export default defineScene');
     expect(module).toContain('s("bd sd")');
+  });
+
+  it('imports every bare DSL call used by generated channel expressions', () => {
+    const module = translateTidalToSceneModule('d1 $ whenmod 8 5 (fast 2) $ s "bd"\nd2 $ chord "c3 major"');
+    expect(module).toContain('import { defineScene, chord, s }');
   });
 
   it('includes transport in scene module when cps is set', () => {

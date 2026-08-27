@@ -19,10 +19,10 @@ stack(
     .mask("1 1 0 1"),
   s("hh hh hh hh")
     .gain(0.5),
-  note("0 0 3 5").s("saw")
+  note("60 60 63 65").s("saw")
     .slow(2).lpf(700)
     .release(0.3),
-  note("7 5 3 0").s("triangle")
+  note("67 65 63 60").s("triangle")
     .gain(0.15)
 )
 ```
@@ -35,10 +35,10 @@ stack(
     .mask("1 1 0 1"),
   s("hh hh hh hh")
     .gain(0.5),
-  n("0 0 3 5").s("saw")
+  n("60 60 63 65").s("saw")
     .slow(2).lpf(700)
     .release(0.3),
-  n("7 5 3 0").s("triangle")
+  n("67 65 63 60").s("triangle")
     .gain(0.15)
 )
 ```
@@ -75,8 +75,8 @@ This piece has four channels working together:
 
 1. **Drums** — `"bd ~ rim sd"` with `.mask("1 1 0 1")` silencing the third beat for a syncopated feel
 2. **Hi-hats** — steady quarter notes at 50% volume
-3. **Bass** — saw wave playing `0 0 3 5` at half speed (one phrase per 2 cycles), filtered at 700Hz
-4. **Melody** — triangle wave descending `7 5 3 0` at low volume
+3. **Bass** — saw wave playing `60 60 63 65` at half speed (one phrase per 2 cycles), filtered at 700Hz
+4. **Melody** — triangle wave descending `67 65 63 60` at low volume
 
 Key techniques:
 - `.mask()` selectively silences events using a binary pattern

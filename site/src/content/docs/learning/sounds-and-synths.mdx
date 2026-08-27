@@ -20,9 +20,9 @@ Tussel includes built-in synthesizers that work without any sample files. Select
 Select a synth with the `.s()` method:
 
 ```ts
-note("0 2 4 7").s("sine")
-note("0 2 4 7").s("saw")
-note("0 2 4 7").s("triangle")
+note("60 62 64 67").s("sine")
+note("60 62 64 67").s("saw")
+note("60 62 64 67").s("triangle")
 ```
 
 ## Envelope Controls
@@ -30,7 +30,7 @@ note("0 2 4 7").s("triangle")
 Shape how each note fades in and out:
 
 ```ts
-note("0 2 4 7").s("sine")
+note("60 62 64 67").s("sine")
   .attack(0.02)    // 20ms fade in
   .release(0.2)    // 200ms fade out
 ```
@@ -44,10 +44,10 @@ Synths work with all pattern features:
 
 ```ts
 // Arpeggio with alternating synths per cycle
-note("0 2 4 7").s("<sine triangle saw>")
+note("60 62 64 67").s("<sine triangle saw>")
 
 // Fast saw bass with filter
-note("0 0 3 5").s("saw").fast(2).lpf(600)
+note("60 60 63 65").s("saw").fast(2).lpf(600)
 
 // Noise texture with high-pass filter
 s("noise ~ noise [~ noise]").hpf(5000)
@@ -57,4 +57,4 @@ s("noise ~ noise [~ noise]").hpf(5000)
 
 - Synths are generated mathematically — always available, no files needed
 - Samples play back audio files — see [Samples](/tussel/learning/samples/)
-- Use `s("bd hh sd")` for samples (by name) or `note("0 2 4").s("sine")` for synths (note + sound)
+- Use `s("bd hh sd")` for samples (by name) or `note("60 62 64").s("sine")` for synths (note + sound)

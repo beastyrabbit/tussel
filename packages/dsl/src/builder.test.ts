@@ -1,5 +1,6 @@
 import { queryScene } from '@tussel/core';
 import {
+  ALL_PATTERN_METHOD_NAMES,
   areStringPrototypeExtensionsInstalled,
   cat,
   cosine,
@@ -38,6 +39,25 @@ afterEach(() => {
 // PatternBuilder deep chaining
 // ---------------------------------------------------------------------------
 describe('PatternBuilder deep chaining', () => {
+  it('keeps the shared method registry synchronized with builder methods', () => {
+    const pattern = note(60);
+    const signal = sine;
+    const builderMethods = new Set(
+      [
+        ...Object.getOwnPropertyNames(PatternBuilder.prototype),
+        ...Object.getOwnPropertyNames(SignalBuilder.prototype),
+        ...Object.keys(pattern),
+      ].filter(
+        (name) =>
+          name !== 'constructor' &&
+          (typeof (pattern as unknown as Record<string, unknown>)[name] === 'function' ||
+            typeof (signal as unknown as Record<string, unknown>)[name] === 'function'),
+      ),
+    );
+
+    expect(builderMethods).toEqual(ALL_PATTERN_METHOD_NAMES);
+  });
+
   it('produces correct expression tree for s("bd").fast(2).slow(3).gain(0.5)', () => {
     const result = s('bd').fast(2).slow(3).gain(0.5);
     expect(result).toBeInstanceOf(PatternBuilder);
@@ -834,6 +854,12 @@ describe('createParam edge cases', () => {
     expect(toggle.get()).toBe(false);
   });
 
+  it('preserves an explicitly set null instead of treating it as unset', () => {
+    const nullable = createParam('nullable');
+    nullable(null);
+    expect(nullable.get()).toBeNull();
+  });
+
   it('supports SignalBuilder methods directly on the param', () => {
     const modParam = createParam('modulation').range(0, 1);
     const json = modParam.toJSON() as { kind: string; name: string; target: { kind: string; name: string } };
@@ -1167,12 +1193,13 @@ describe('N.04 — builder execution through queryScene', () => {
   it('MIDI DSL methods produce annotated events (Tier 0 fix 1.1)', () => {
     const events = buildAndQuery(s('bd').ccn(74).ccv(100).midicmd('start').midibend(8192).miditouch(64));
     expect(events).toHaveLength(1);
-    const p = events[0]!.payload;
-    expect(p.ccn).toBe(74);
-    expect(p.ccv).toBe(100);
-    expect(p.midicmd).toBe('start');
-    expect(p.midibend).toBe(8192);
-    expect(p.miditouch).toBe(64);
+    expect(events[0]?.payload).toMatchObject({
+      ccn: 74,
+      ccv: 100,
+      midibend: 8192,
+      midicmd: 'start',
+      miditouch: 64,
+    });
   });
 
   it('div by zero returns 0 (Tier 0 fix 1.3)', () => {

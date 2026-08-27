@@ -11,7 +11,7 @@ export default {
   sources: {
     strudel: {
       code: `setcps(0.5)
-stack(s("bd rim").bank("crate"), s("hh hh hh hh").gain(0.4).mask("1 0 1 0"), n("0 2 4 7").s("sine").slow(2).attack(0.02).release(0.2))`,
+stack(s("bd rim").bank("crate"), s("hh hh hh hh").gain(0.4).mask("1 0 1 0"), note("60 62 64 67").s("sine").attack(0.02).release(0.2).slow(2))`,
       shape: 'script',
     },
     tidal: {

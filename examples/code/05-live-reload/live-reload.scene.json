@@ -72,7 +72,7 @@
               "kind": "method",
               "name": "s",
               "target": {
-                "args": ["<7 5 4 2>"],
+                "args": ["<67 65 64 62>"],
                 "exprType": "pattern",
                 "kind": "call",
                 "name": "n"
@@ -107,7 +107,7 @@
               "kind": "method",
               "name": "s",
               "target": {
-                "args": ["0 2 4 7"],
+                "args": ["60 62 64 67"],
                 "exprType": "pattern",
                 "kind": "call",
                 "name": "n"

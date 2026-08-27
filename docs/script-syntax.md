@@ -25,7 +25,7 @@ Example:
 // @guide 05-live-reload
 setcps(0.7);
 
-const pulse = n('0 2 4 7').s('sine').attack(0.02).release(0.2);
+const pulse = n('60 62 64 67').s('sine').attack(0.02).release(0.2);
 
 scene({
   channels: {

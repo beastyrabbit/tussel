@@ -6,7 +6,7 @@ Tussel’s runtime model is structural. Every supported source format eventually
 
 - numbers, strings, booleans, `null`
 - arrays and plain objects
-- named DSL calls such as `n('0 2 4 7')` or `s('bd hh sd hh')`
+- named DSL calls such as `n('60 62 64 67')` or `s('bd hh sd hh')`
 - method chains on builders such as `.fast(2).pan(sine.range(-1, 1).slow(4))`
 - references to previously bound structural values
 - top-level `samples(...)`, `setcps(...)`, and `setbpm(...)` in `script-ts`
@@ -27,7 +27,7 @@ Tussel’s runtime model is structural. Every supported source format eventually
 ## Good Pattern
 
 ```ts
-const pulse = n('0 2 4 7').s('sine').attack(0.02).release(0.2);
+const pulse = n('60 62 64 67').s('sine').attack(0.02).release(0.2);
 
 scene({
   channels: {
@@ -43,7 +43,7 @@ scene({
 scene({
   channels: {
     pulse: {
-      node: n('0 2 4 7').rarely(() => fast(2)),
+      node: n('60 62 64 67').rarely(() => fast(2)),
     },
   },
   master: {},

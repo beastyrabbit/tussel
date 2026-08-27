@@ -10,8 +10,8 @@ Effects transform sounds after synthesis or sample playback. They chain left-to-
 Removes frequencies above the cutoff — makes sounds warmer and more muffled:
 
 ```ts
-note("0 2 4 7").s("saw").lpf(800)      // cut above 800Hz
-note("0 2 4 7").s("saw").lpf(200)      // very muffled
+note("60 62 64 67").s("saw").lpf(800)      // cut above 800Hz
+note("60 62 64 67").s("saw").lpf(200)      // very muffled
 ```
 
 ## High-Pass Filter
@@ -55,7 +55,7 @@ s("hh hh hh hh").pan(-1)              // hard left
 Effects chain naturally:
 
 ```ts
-note("0 3 5 7").s("saw")
+note("60 63 65 67").s("saw")
   .lpf(600)           // warm filter
   .room(0.3)          // add space
   .delay(0.25)        // rhythmic echo
@@ -68,7 +68,7 @@ note("0 3 5 7").s("saw")
 Use signals to modulate effect parameters over time:
 
 ```ts
-note("0 2 4 7").s("saw")
+note("60 62 64 67").s("saw")
   .lpf(sine.range(300, 1400).slow(4))  // filter sweeps slowly
 ```
 

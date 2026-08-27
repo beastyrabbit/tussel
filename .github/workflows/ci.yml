@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       full:
-        description: 'Run the full test suite (audio/parity included)'
+        description: 'Run all self-contained tests (external-oracle parity excluded)'
         type: boolean
         default: true
 
@@ -42,8 +42,8 @@ jobs:
       - name: Fast unit tests (core, dsl, mini, ir)
         run: npx vitest run packages/core/ packages/dsl/ packages/mini/ packages/ir/
 
-  full-tests:
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+  comprehensive-tests:
+    if: (github.event_name == 'workflow_dispatch' && inputs.full) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,14 +53,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Full test suite with coverage
-        run: pnpm test:coverage
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 14
+      - name: Self-contained test suite
+        run: pnpm test:ci
 
   gitleaks:
     runs-on: ubuntu-latest
