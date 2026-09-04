@@ -46,7 +46,7 @@ jobs:
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: arc-tussel
     permissions:
       pages: write
       id-token: write
