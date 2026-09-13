@@ -1,5 +1,15 @@
 # Tussel
 
+
+
+## At a glance
+
+A local-first TypeScript runtime for livecoding pattern-based music in the terminal.
+
+![Tussel](screenshot-example.png)
+
+![Tussel landing screen](screenshot-landing.png)
+
 > **This project is experimental and under active development. APIs will change without notice. Do not use in production.**
 
 Tussel is a local-first TypeScript livecoding runtime for pattern-based music, inspired by [TidalCycles](https://tidalcycles.org/) and [Strudel](https://strudel.cc/). It runs as a terminal daemon — no browser required.
