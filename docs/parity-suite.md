@@ -31,6 +31,17 @@ pnpm parity:level5
 
 CI runs the same contract in order: `pnpm parity:setup`, `pnpm parity:doctor`, then parity levels 1 through 5.
 
+The full test command also includes audio rendering and parity comparisons and
+can take more than 25 minutes on a development machine. For quick feedback
+while changing the core language packages, run the focused suite instead:
+
+```sh
+pnpm exec vitest run packages/core/ packages/dsl/ packages/mini/ packages/ir/
+```
+
+Run the complete suite before delivery so audio and parity regressions are
+covered.
+
 You can also call the runner directly:
 
 ```sh
